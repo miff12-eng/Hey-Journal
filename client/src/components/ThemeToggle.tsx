@@ -1,1 +1,42 @@
-import { useState, useEffect } from 'react'\nimport { Button } from '@/components/ui/button'\nimport { Moon, Sun } from 'lucide-react'\nimport { cn } from '@/lib/utils'\n\nexport default function ThemeToggle({ className }: { className?: string }) {\n  const [theme, setTheme] = useState<'light' | 'dark'>('light')\n\n  useEffect(() => {\n    // Check localStorage and system preference\n    const savedTheme = localStorage.getItem('theme') as 'light' | 'dark' | null\n    const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'\n    const initialTheme = savedTheme || systemTheme\n    \n    setTheme(initialTheme)\n    document.documentElement.classList.toggle('dark', initialTheme === 'dark')\n  }, [])\n\n  const toggleTheme = () => {\n    const newTheme = theme === 'light' ? 'dark' : 'light'\n    setTheme(newTheme)\n    localStorage.setItem('theme', newTheme)\n    document.documentElement.classList.toggle('dark', newTheme === 'dark')\n  }\n\n  return (\n    <Button\n      variant=\"ghost\"\n      size=\"icon\"\n      onClick={toggleTheme}\n      className={cn('h-9 w-9', className)}\n      data-testid=\"button-theme-toggle\"\n    >\n      {theme === 'light' ? (\n        <Moon className=\"h-4 w-4\" />\n      ) : (\n        <Sun className=\"h-4 w-4\" />\n      )}\n      <span className=\"sr-only\">Toggle theme</span>\n    </Button>\n  )\n}"
+import { useState, useEffect } from 'react'
+import { Button } from '@/components/ui/button'
+import { Moon, Sun } from 'lucide-react'
+import { cn } from '@/lib/utils'
+
+export default function ThemeToggle({ className }: { className?: string }) {
+  const [theme, setTheme] = useState<'light' | 'dark'>('light')
+
+  useEffect(() => {
+    // Check localStorage and system preference
+    const savedTheme = localStorage.getItem('theme') as 'light' | 'dark' | null
+    const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+    const initialTheme = savedTheme || systemTheme
+    
+    setTheme(initialTheme)
+    document.documentElement.classList.toggle('dark', initialTheme === 'dark')
+  }, [])
+
+  const toggleTheme = () => {
+    const newTheme = theme === 'light' ? 'dark' : 'light'
+    setTheme(newTheme)
+    localStorage.setItem('theme', newTheme)
+    document.documentElement.classList.toggle('dark', newTheme === 'dark')
+  }
+
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      onClick={toggleTheme}
+      className={cn('h-9 w-9', className)}
+      data-testid="button-theme-toggle"
+    >
+      {theme === 'light' ? (
+        <Moon className="h-4 w-4" />
+      ) : (
+        <Sun className="h-4 w-4" />
+      )}
+      <span className="sr-only">Toggle theme</span>
+    </Button>
+  )
+}

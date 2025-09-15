@@ -1,1 +1,66 @@
-import AiChatInterface from '@/components/AiChatInterface'\nimport ThemeToggle from '@/components/ThemeToggle'\nimport { AiChatMessage } from '@shared/schema'\nimport { useState } from 'react'\n\nexport default function Chat() {\n  const [messages, setMessages] = useState<AiChatMessage[]>([])\n  const [isLoading, setIsLoading] = useState(false)\n\n  const handleSendMessage = async (message: string) => {\n    const userMessage: AiChatMessage = {\n      id: Date.now().toString(),\n      role: 'user',\n      content: message,\n      timestamp: new Date().toISOString()\n    }\n    \n    setMessages(prev => [...prev, userMessage])\n    setIsLoading(true)\n    \n    // Simulate AI response - todo: replace with real AI integration\n    setTimeout(() => {\n      const aiResponse: AiChatMessage = {\n        id: (Date.now() + 1).toString(),\n        role: 'assistant',\n        content: `I understand you're asking about \"${message}\". Based on your journal entries, I can help you explore your thoughts and memories. This is a demo response - in the real app, I would analyze your actual journal content using OpenAI GPT-4 to provide meaningful insights.`,\n        timestamp: new Date().toISOString(),\n        relatedEntryIds: ['entry1', 'entry2']\n      }\n      \n      setMessages(prev => [...prev, aiResponse])\n      setIsLoading(false)\n    }, 1500)\n  }\n\n  const handleVoiceInput = () => {\n    console.log('Voice input for chat triggered')\n    // todo: implement voice input for chat\n  }\n\n  return (\n    <div className=\"flex flex-col h-screen bg-background\">\n      {/* Header */}\n      <header className=\"sticky top-0 z-40 bg-background border-b border-border px-4 py-3\">\n        <div className=\"flex items-center justify-between\">\n          <div>\n            <h1 className=\"text-lg font-semibold text-foreground\">AI Assistant</h1>\n            <p className=\"text-xs text-muted-foreground\">Chat about your journal entries</p>\n          </div>\n          <ThemeToggle />\n        </div>\n      </header>\n\n      {/* Chat interface */}\n      <div className=\"flex-1 pb-16\"> {/* Bottom padding for navigation */}\n        <AiChatInterface\n          messages={messages}\n          onSendMessage={handleSendMessage}\n          onVoiceInput={handleVoiceInput}\n          isLoading={isLoading}\n          className=\"h-full border-0 rounded-none\"\n        />\n      </div>\n    </div>\n  )\n}"
+import AiChatInterface from '@/components/AiChatInterface'
+import ThemeToggle from '@/components/ThemeToggle'
+import { AiChatMessage } from '@shared/schema'
+import { useState } from 'react'
+
+export default function Chat() {
+  const [messages, setMessages] = useState<AiChatMessage[]>([])
+  const [isLoading, setIsLoading] = useState(false)
+
+  const handleSendMessage = async (message: string) => {
+    const userMessage: AiChatMessage = {
+      id: Date.now().toString(),
+      role: 'user',
+      content: message,
+      timestamp: new Date().toISOString()
+    }
+    
+    setMessages(prev => [...prev, userMessage])
+    setIsLoading(true)
+    
+    // Simulate AI response - todo: replace with real AI integration
+    setTimeout(() => {
+      const aiResponse: AiChatMessage = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: `I understand you're asking about "${message}". Based on your journal entries, I can help you explore your thoughts and memories. This is a demo response - in the real app, I would analyze your actual journal content using OpenAI GPT-4 to provide meaningful insights.`,
+        timestamp: new Date().toISOString(),
+        relatedEntryIds: ['entry1', 'entry2']
+      }
+      
+      setMessages(prev => [...prev, aiResponse])
+      setIsLoading(false)
+    }, 1500)
+  }
+
+  const handleVoiceInput = () => {
+    console.log('Voice input for chat triggered')
+    // todo: implement voice input for chat
+  }
+
+  return (
+    <div className="flex flex-col h-screen bg-background">
+      {/* Header */}
+      <header className="sticky top-0 z-40 bg-background border-b border-border px-4 py-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-lg font-semibold text-foreground">AI Assistant</h1>
+            <p className="text-xs text-muted-foreground">Chat about your journal entries</p>
+          </div>
+          <ThemeToggle />
+        </div>
+      </header>
+
+      {/* Chat interface */}
+      <div className="flex-1 pb-16"> {/* Bottom padding for navigation */}
+        <AiChatInterface
+          messages={messages}
+          onSendMessage={handleSendMessage}
+          onVoiceInput={handleVoiceInput}
+          isLoading={isLoading}
+          className="h-full border-0 rounded-none"
+        />
+      </div>
+    </div>
+  )
+}

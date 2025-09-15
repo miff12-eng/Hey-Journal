@@ -1,1 +1,230 @@
-import { useState } from 'react'\nimport { Button } from '@/components/ui/button'\nimport { Card, CardContent } from '@/components/ui/card'\nimport { ScrollArea } from '@/components/ui/scroll-area'\nimport { Input } from '@/components/ui/input'\nimport { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'\nimport { Search, Plus, Bell, Filter, TrendingUp } from 'lucide-react'\nimport JournalEntryCard from '@/components/JournalEntryCard'\nimport ThemeToggle from '@/components/ThemeToggle'\nimport { JournalEntryWithUser } from '@shared/schema'\n\nexport default function Home() {\n  const [searchQuery, setSearchQuery] = useState('')\n  \n  // Mock data for demonstration - todo: replace with real data\n  const mockUser = {\n    id: 'current-user',\n    firstName: 'Alex',\n    lastName: 'Chen',\n    email: 'alex.chen@example.com',\n    profileImageUrl: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150'\n  }\n\n  const mockEntries: JournalEntryWithUser[] = [\n    {\n      id: '1',\n      userId: 'user1',\n      title: 'Morning Reflections',\n      content: 'Started the day with meditation and coffee. There\\'s something magical about those quiet morning moments before the world wakes up. I find my thoughts are clearest then, like a still lake reflecting the sky. Today I want to focus on being more present in each moment.',\n      audioUrl: 'https://example.com/audio1.mp3',\n      mediaUrls: ['https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400'],\n      tags: ['morning', 'meditation', 'mindfulness'],\n      privacy: 'public' as const,\n      sharedWith: [],\n      createdAt: new Date('2024-01-15T08:30:00Z'),\n      updatedAt: new Date('2024-01-15T08:30:00Z'),\n      user: {\n        id: 'user1',\n        email: 'sarah.wilson@example.com',\n        firstName: 'Sarah',\n        lastName: 'Wilson',\n        profileImageUrl: 'https://images.unsplash.com/photo-1494790108755-2616b2dc1193?w=150',\n        createdAt: new Date(),\n        updatedAt: new Date()\n      }\n    },\n    {\n      id: '2',\n      userId: 'user2',\n      title: '',\n      content: 'Had an incredible conversation with Mom today about her childhood stories. She told me about the time she and her siblings built a treehouse that lasted through three summers. Made me realize how important it is to document these family memories before they fade.',\n      audioUrl: undefined,\n      mediaUrls: [\n        'https://images.unsplash.com/photo-1491013516836-7db643ee125a?w=400',\n        'https://images.unsplash.com/photo-1576091160399-112ba8d25d1f?w=400'\n      ],\n      tags: ['family', 'memories', 'storytelling'],\n      privacy: 'shared' as const,\n      sharedWith: ['current-user'],\n      createdAt: new Date('2024-01-14T19:15:00Z'),\n      updatedAt: new Date('2024-01-14T19:15:00Z'),\n      user: {\n        id: 'user2',\n        email: 'mike.rodriguez@example.com',\n        firstName: 'Mike',\n        lastName: 'Rodriguez',\n        profileImageUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',\n        createdAt: new Date(),\n        updatedAt: new Date()\n      }\n    },\n    {\n      id: '3',\n      userId: 'current-user',\n      title: 'Weekend Adventure Planning',\n      content: 'Spent the evening researching hiking trails for this weekend. Found this amazing spot called Eagle Peak - 6 mile round trip with panoramic views. Weather looks perfect. Can\\'t wait to disconnect from screens and reconnect with nature.',\n      audioUrl: 'https://example.com/audio3.mp3',\n      mediaUrls: [],\n      tags: ['hiking', 'adventure', 'nature', 'planning'],\n      privacy: 'private' as const,\n      sharedWith: [],\n      createdAt: new Date('2024-01-14T16:45:00Z'),\n      updatedAt: new Date('2024-01-14T16:45:00Z'),\n      user: mockUser\n    }\n  ]\n\n  const handleEdit = (entryId: string) => {\n    console.log('Edit entry:', entryId)\n  }\n\n  const handleShare = (entryId: string) => {\n    console.log('Share entry:', entryId)\n  }\n\n  const handleDelete = (entryId: string) => {\n    console.log('Delete entry:', entryId)\n  }\n\n  const handlePlayAudio = (audioUrl: string) => {\n    console.log('Play audio:', audioUrl)\n  }\n\n  return (\n    <div className=\"flex flex-col h-screen bg-background\">\n      {/* Header */}\n      <header className=\"sticky top-0 z-40 bg-background border-b border-border px-4 py-3\">\n        <div className=\"flex items-center justify-between\">\n          <div className=\"flex items-center gap-3\">\n            <Avatar className=\"h-8 w-8\">\n              <AvatarImage src={mockUser.profileImageUrl} alt={mockUser.firstName} />\n              <AvatarFallback>{mockUser.firstName[0]}</AvatarFallback>\n            </Avatar>\n            <div>\n              <h1 className=\"text-lg font-semibold text-foreground\">Good morning, {mockUser.firstName}</h1>\n              <p className=\"text-xs text-muted-foreground\">Ready to capture today's thoughts?</p>\n            </div>\n          </div>\n          \n          <div className=\"flex items-center gap-2\">\n            <Button variant=\"ghost\" size=\"icon\" data-testid=\"button-notifications\">\n              <Bell className=\"h-4 w-4\" />\n            </Button>\n            <ThemeToggle />\n          </div>\n        </div>\n        \n        {/* Search bar */}\n        <div className=\"mt-3 relative\">\n          <Search className=\"absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground\" />\n          <Input\n            placeholder=\"Search your journal entries...\"\n            value={searchQuery}\n            onChange={(e) => setSearchQuery(e.target.value)}\n            className=\"pl-10 pr-4\"\n            data-testid=\"input-search-entries\"\n          />\n        </div>\n      </header>\n\n      {/* Quick stats */}\n      <div className=\"px-4 py-3 border-b border-border\">\n        <div className=\"grid grid-cols-3 gap-4\">\n          <Card className=\"p-3\">\n            <div className=\"flex items-center gap-2\">\n              <TrendingUp className=\"h-4 w-4 text-primary\" />\n              <div>\n                <p className=\"text-lg font-semibold text-foreground\">12</p>\n                <p className=\"text-xs text-muted-foreground\">This week</p>\n              </div>\n            </div>\n          </Card>\n          <Card className=\"p-3\">\n            <div className=\"flex items-center gap-2\">\n              <div className=\"h-2 w-2 bg-accent rounded-full\" />\n              <div>\n                <p className=\"text-lg font-semibold text-foreground\">5</p>\n                <p className=\"text-xs text-muted-foreground\">Recordings</p>\n              </div>\n            </div>\n          </Card>\n          <Card className=\"p-3\">\n            <div className=\"flex items-center gap-2\">\n              <div className=\"h-2 w-2 bg-primary rounded-full\" />\n              <div>\n                <p className=\"text-lg font-semibold text-foreground\">28</p>\n                <p className=\"text-xs text-muted-foreground\">Day streak</p>\n              </div>\n            </div>\n          </Card>\n        </div>\n      </div>\n\n      {/* Filter tabs */}\n      <div className=\"px-4 py-2 border-b border-border\">\n        <div className=\"flex items-center gap-2\">\n          <Button variant=\"ghost\" size=\"sm\" className=\"bg-primary/10 text-primary\" data-testid=\"filter-all\">\n            All\n          </Button>\n          <Button variant=\"ghost\" size=\"sm\" data-testid=\"filter-private\">\n            Private\n          </Button>\n          <Button variant=\"ghost\" size=\"sm\" data-testid=\"filter-shared\">\n            Shared\n          </Button>\n          <Button variant=\"ghost\" size=\"sm\" data-testid=\"filter-public\">\n            Public\n          </Button>\n          <Button variant=\"ghost\" size=\"icon\" className=\"ml-auto\" data-testid=\"button-filter-options\">\n            <Filter className=\"h-4 w-4\" />\n          </Button>\n        </div>\n      </div>\n\n      {/* Journal feed */}\n      <main className=\"flex-1\">\n        <ScrollArea className=\"h-full\">\n          <div className=\"p-4 space-y-4 pb-20\"> {/* Extra bottom padding for navigation */}\n            {mockEntries.map((entry) => (\n              <JournalEntryCard\n                key={entry.id}\n                entry={entry}\n                onEdit={handleEdit}\n                onShare={handleShare}\n                onDelete={handleDelete}\n                onPlayAudio={handlePlayAudio}\n              />\n            ))}\n            \n            {/* Empty state */}\n            {mockEntries.length === 0 && (\n              <div className=\"text-center py-12\">\n                <div className=\"h-16 w-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4\">\n                  <Plus className=\"h-8 w-8 text-muted-foreground\" />\n                </div>\n                <h3 className=\"text-lg font-medium text-foreground mb-2\">No entries yet</h3>\n                <p className=\"text-sm text-muted-foreground mb-4 max-w-sm mx-auto\">\n                  Start your journal journey by recording your first entry\n                </p>\n                <Button size=\"lg\" data-testid=\"button-create-first-entry\">\n                  Create Your First Entry\n                </Button>\n              </div>\n            )}\n          </div>\n        </ScrollArea>\n      </main>\n    </div>\n  )\n}"
+import { useState } from 'react'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { Input } from '@/components/ui/input'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { Search, Plus, Bell, Filter, TrendingUp } from 'lucide-react'
+import JournalEntryCard from '@/components/JournalEntryCard'
+import ThemeToggle from '@/components/ThemeToggle'
+import { JournalEntryWithUser } from '@shared/schema'
+
+export default function Home() {
+  const [searchQuery, setSearchQuery] = useState('')
+  
+  // Mock data for demonstration - todo: replace with real data
+  const mockUser = {
+    id: 'current-user',
+    firstName: 'Alex',
+    lastName: 'Chen',
+    email: 'alex.chen@example.com',
+    profileImageUrl: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150'
+  }
+
+  const mockEntries: JournalEntryWithUser[] = [
+    {
+      id: '1',
+      userId: 'user1',
+      title: 'Morning Reflections',
+      content: "Started the day with meditation and coffee. There's something magical about those quiet morning moments before the world wakes up. I find my thoughts are clearest then, like a still lake reflecting the sky. Today I want to focus on being more present in each moment.",
+      audioUrl: 'https://example.com/audio1.mp3',
+      mediaUrls: ['https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400'],
+      tags: ['morning', 'meditation', 'mindfulness'],
+      privacy: 'public' as const,
+      sharedWith: [],
+      createdAt: new Date('2024-01-15T08:30:00Z'),
+      updatedAt: new Date('2024-01-15T08:30:00Z'),
+      user: {
+        id: 'user1',
+        email: 'sarah.wilson@example.com',
+        firstName: 'Sarah',
+        lastName: 'Wilson',
+        profileImageUrl: 'https://images.unsplash.com/photo-1494790108755-2616b2dc1193?w=150',
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }
+    },
+    {
+      id: '2',
+      userId: 'user2',
+      title: '',
+      content: 'Had an incredible conversation with Mom today about her childhood stories. She told me about the time she and her siblings built a treehouse that lasted through three summers. Made me realize how important it is to document these family memories before they fade.',
+      audioUrl: undefined,
+      mediaUrls: [
+        'https://images.unsplash.com/photo-1491013516836-7db643ee125a?w=400',
+        'https://images.unsplash.com/photo-1576091160399-112ba8d25d1f?w=400'
+      ],
+      tags: ['family', 'memories', 'storytelling'],
+      privacy: 'shared' as const,
+      sharedWith: ['current-user'],
+      createdAt: new Date('2024-01-14T19:15:00Z'),
+      updatedAt: new Date('2024-01-14T19:15:00Z'),
+      user: {
+        id: 'user2',
+        email: 'mike.rodriguez@example.com',
+        firstName: 'Mike',
+        lastName: 'Rodriguez',
+        profileImageUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }
+    },
+    {
+      id: '3',
+      userId: 'current-user',
+      title: 'Weekend Adventure Planning',
+      content: "Spent the evening researching hiking trails for this weekend. Found this amazing spot called Eagle Peak - 6 mile round trip with panoramic views. Weather looks perfect. Can't wait to disconnect from screens and reconnect with nature.",
+      audioUrl: 'https://example.com/audio3.mp3',
+      mediaUrls: [],
+      tags: ['hiking', 'adventure', 'nature', 'planning'],
+      privacy: 'private' as const,
+      sharedWith: [],
+      createdAt: new Date('2024-01-14T16:45:00Z'),
+      updatedAt: new Date('2024-01-14T16:45:00Z'),
+      user: mockUser
+    }
+  ]
+
+  const handleEdit = (entryId: string) => {
+    console.log('Edit entry:', entryId)
+  }
+
+  const handleShare = (entryId: string) => {
+    console.log('Share entry:', entryId)
+  }
+
+  const handleDelete = (entryId: string) => {
+    console.log('Delete entry:', entryId)
+  }
+
+  const handlePlayAudio = (audioUrl: string) => {
+    console.log('Play audio:', audioUrl)
+  }
+
+  return (
+    <div className="flex flex-col h-screen bg-background">
+      {/* Header */}
+      <header className="sticky top-0 z-40 bg-background border-b border-border px-4 py-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Avatar className="h-8 w-8">
+              <AvatarImage src={mockUser.profileImageUrl} alt={mockUser.firstName} />
+              <AvatarFallback>{mockUser.firstName[0]}</AvatarFallback>
+            </Avatar>
+            <div>
+              <h1 className="text-lg font-semibold text-foreground">Good morning, {mockUser.firstName}</h1>
+              <p className="text-xs text-muted-foreground">Ready to capture today's thoughts?</p>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="icon" data-testid="button-notifications">
+              <Bell className="h-4 w-4" />
+            </Button>
+            <ThemeToggle />
+          </div>
+        </div>
+        
+        {/* Search bar */}
+        <div className="mt-3 relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search your journal entries..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-10 pr-4"
+            data-testid="input-search-entries"
+          />
+        </div>
+      </header>
+
+      {/* Quick stats */}
+      <div className="px-4 py-3 border-b border-border">
+        <div className="grid grid-cols-3 gap-4">
+          <Card className="p-3">
+            <div className="flex items-center gap-2">
+              <TrendingUp className="h-4 w-4 text-primary" />
+              <div>
+                <p className="text-lg font-semibold text-foreground">12</p>
+                <p className="text-xs text-muted-foreground">This week</p>
+              </div>
+            </div>
+          </Card>
+          <Card className="p-3">
+            <div className="flex items-center gap-2">
+              <div className="h-2 w-2 bg-accent rounded-full" />
+              <div>
+                <p className="text-lg font-semibold text-foreground">5</p>
+                <p className="text-xs text-muted-foreground">Recordings</p>
+              </div>
+            </div>
+          </Card>
+          <Card className="p-3">
+            <div className="flex items-center gap-2">
+              <div className="h-2 w-2 bg-primary rounded-full" />
+              <div>
+                <p className="text-lg font-semibold text-foreground">28</p>
+                <p className="text-xs text-muted-foreground">Day streak</p>
+              </div>
+            </div>
+          </Card>
+        </div>
+      </div>
+
+      {/* Filter tabs */}
+      <div className="px-4 py-2 border-b border-border">
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" className="bg-primary/10 text-primary" data-testid="filter-all">
+            All
+          </Button>
+          <Button variant="ghost" size="sm" data-testid="filter-private">
+            Private
+          </Button>
+          <Button variant="ghost" size="sm" data-testid="filter-shared">
+            Shared
+          </Button>
+          <Button variant="ghost" size="sm" data-testid="filter-public">
+            Public
+          </Button>
+          <Button variant="ghost" size="icon" className="ml-auto" data-testid="button-filter-options">
+            <Filter className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+
+      {/* Journal feed */}
+      <main className="flex-1">
+        <ScrollArea className="h-full">
+          <div className="p-4 space-y-4 pb-20"> {/* Extra bottom padding for navigation */}
+            {mockEntries.map((entry) => (
+              <JournalEntryCard
+                key={entry.id}
+                entry={entry}
+                onEdit={handleEdit}
+                onShare={handleShare}
+                onDelete={handleDelete}
+                onPlayAudio={handlePlayAudio}
+              />
+            ))}
+            
+            {/* Empty state */}
+            {mockEntries.length === 0 && (
+              <div className="text-center py-12">
+                <div className="h-16 w-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Plus className="h-8 w-8 text-muted-foreground" />
+                </div>
+                <h3 className="text-lg font-medium text-foreground mb-2">No entries yet</h3>
+                <p className="text-sm text-muted-foreground mb-4 max-w-sm mx-auto">
+                  Start your journal journey by recording your first entry
+                </p>
+                <Button size="lg" data-testid="button-create-first-entry">
+                  Create Your First Entry
+                </Button>
+              </div>
+            )}
+          </div>
+        </ScrollArea>
+      </main>
+    </div>
+  )
+}

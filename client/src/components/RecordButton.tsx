@@ -103,11 +103,11 @@ export default function RecordButton({
   const pulseScale = 1 + (amplitude * 0.3)
 
   return (
-    <div className=\"relative flex items-center justify-center\">
+    <div className="relative flex items-center justify-center">
       {/* Pulse animation background */}
       {isRecording && (
         <div 
-          className=\"absolute rounded-full bg-accent/30 animate-pulse\"
+          className="absolute rounded-full bg-accent/30 animate-pulse"
           style={{
             width: '120px',
             height: '120px',
@@ -128,20 +128,20 @@ export default function RecordButton({
             : 'bg-accent hover:bg-accent text-accent-foreground border-accent-border',
           className
         )}
-        data-testid={isRecording ? \"button-stop-recording\" : \"button-start-recording\"}
+        data-testid={isRecording ? "button-stop-recording" : "button-start-recording"}
       >
         {isProcessing ? (
-          <div className=\"animate-spin h-6 w-6 border-2 border-current border-t-transparent rounded-full\" />
+          <div className="animate-spin h-6 w-6 border-2 border-current border-t-transparent rounded-full" />
         ) : isRecording ? (
-          <Square className=\"h-6 w-6\" fill=\"currentColor\" />
+          <Square className="h-6 w-6" fill="currentColor" />
         ) : (
-          <Mic className=\"h-6 w-6\" />
+          <Mic className="h-6 w-6" />
         )}
       </Button>
 
       {/* Recording indicator */}
       {isRecording && (
-        <div className=\"absolute -top-2 -right-2 h-4 w-4 bg-destructive rounded-full animate-pulse border-2 border-background\" />
+        <div className="absolute -top-2 -right-2 h-4 w-4 bg-destructive rounded-full animate-pulse border-2 border-background" />
       )}
     </div>
   )
