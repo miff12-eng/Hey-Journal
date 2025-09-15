@@ -2,10 +2,14 @@ import AiChatInterface from '@/components/AiChatInterface'
 import ThemeToggle from '@/components/ThemeToggle'
 import { AiChatMessage } from '@shared/schema'
 import { useState } from 'react'
+import { apiRequest } from '@/lib/queryClient'
+import { useToast } from '@/hooks/use-toast'
 
 export default function Chat() {
   const [messages, setMessages] = useState<AiChatMessage[]>([])
   const [isLoading, setIsLoading] = useState(false)
+  const [conversationId, setConversationId] = useState<string | null>(null)
+  const { toast } = useToast()
 
   const handleSendMessage = async (message: string) => {
     const userMessage: AiChatMessage = {
@@ -18,19 +22,42 @@ export default function Chat() {
     setMessages(prev => [...prev, userMessage])
     setIsLoading(true)
     
-    // Simulate AI response - todo: replace with real AI integration
-    setTimeout(() => {
-      const aiResponse: AiChatMessage = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: `I understand you're asking about "${message}". Based on your journal entries, I can help you explore your thoughts and memories. This is a demo response - in the real app, I would analyze your actual journal content using OpenAI GPT-4 to provide meaningful insights.`,
-        timestamp: new Date().toISOString(),
-        relatedEntryIds: ['entry1', 'entry2']
+    try {
+      const response = await apiRequest('/api/ai/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          message,
+          conversationId
+        })
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setMessages(prev => [...prev, data.message])
+        
+        // Update conversation ID for future messages
+        if (data.conversationId && !conversationId) {
+          setConversationId(data.conversationId)
+        }
+      } else {
+        throw new Error('Failed to get AI response')
       }
+    } catch (error) {
+      console.error('AI Chat Error:', error)
+      toast({
+        title: "Error",
+        description: "Failed to get AI response. Please try again.",
+        variant: "destructive"
+      })
       
-      setMessages(prev => [...prev, aiResponse])
-      setIsLoading(false)
-    }, 1500)
+      // Remove the user message if AI response fails
+      setMessages(prev => prev.filter(msg => msg.id !== userMessage.id))
+    }
+    
+    setIsLoading(false)
   }
 
   const handleVoiceInput = () => {
