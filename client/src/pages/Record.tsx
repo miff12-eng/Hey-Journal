@@ -34,14 +34,35 @@ export default function Record() {
     setIsTranscribing(true)
     console.log('Recording stopped, processing...', audioBlob.size)
     
-    // Simulate transcription processing
-    setTimeout(() => {
-      const mockTranscription = 'This is a sample transcription of your voice recording. In a real app, this would be the actual transcribed text from your speech using Distil-Whisper or similar AI transcription service.'
-      setContent(prev => prev + (prev ? '\
-\
-' : '') + mockTranscription)
-      setIsTranscribing(false)
-    }, 2000)
+    // Call real OpenAI Whisper transcription API
+    const transcribeAudio = async () => {
+      try {
+        const formData = new FormData()
+        formData.append('audio', audioBlob, 'recording.wav')
+        
+        const response = await fetch('/api/ai/transcribe', {
+          method: 'POST',
+          body: formData,
+          credentials: 'include'
+        })
+        
+        if (response.ok) {
+          const data = await response.json()
+          const transcription = data.text || 'Unable to transcribe audio'
+          setContent(prev => prev + (prev ? '\n\n' : '') + transcription)
+        } else {
+          console.error('Transcription failed:', response.status)
+          setContent(prev => prev + (prev ? '\n\n' : '') + 'Transcription failed. Please try again.')
+        }
+      } catch (error) {
+        console.error('Transcription error:', error)
+        setContent(prev => prev + (prev ? '\n\n' : '') + 'Transcription error. Please check your connection.')
+      } finally {
+        setIsTranscribing(false)
+      }
+    }
+    
+    transcribeAudio()
   }
 
   const handleTranscriptionUpdate = (text: string) => {
