@@ -1,10 +1,19 @@
-import type { Express } from "express";
+import type { Express, Request } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { generateAIResponse, transcribeAudio, analyzeJournalEntry } from "./ai";
 import { insertJournalEntrySchema, insertAiChatSessionSchema } from "@shared/schema";
 import { z } from "zod";
 import multer from "multer";
+
+// Extend Express Request interface to include userId
+declare global {
+  namespace Express {
+    interface Request {
+      userId: string;
+    }
+  }
+}
 
 // Configure multer for file uploads
 const upload = multer({
@@ -13,8 +22,13 @@ const upload = multer({
 });
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Development authentication bypass
+  // Development authentication bypass (exclude public routes)
   app.use('/api', async (req, res, next) => {
+    // Skip authentication for public routes
+    if (req.originalUrl.startsWith('/api/public/')) {
+      return next();
+    }
+    
     // Development bypass - always authenticate as mock user
     req.userId = 'mock-user-id';
     
@@ -66,7 +80,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const entries = await storage.getJournalEntriesByUserId(req.userId, 10);
       
       // Get previous conversation if exists
-      let previousMessages = [];
+      let previousMessages: any[] = [];
       if (conversationId) {
         const session = await storage.getAiChatSession(conversationId);
         if (session) {
@@ -119,12 +133,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('AI Chat Error:', error);
       
       // Handle specific OpenAI errors
-      if (error.message && error.message.includes('insufficient_quota')) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage.includes('insufficient_quota')) {
         res.status(429).json({ 
           error: 'OpenAI API quota exceeded. Please check your OpenAI billing and usage limits.',
           type: 'quota_exceeded'
         });
-      } else if (error.message && error.message.includes('rate_limit')) {
+      } else if (errorMessage.includes('rate_limit')) {
         res.status(429).json({ 
           error: 'Rate limit reached. Please try again in a moment.',
           type: 'rate_limit'
@@ -199,6 +214,118 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Get Entries Error:', error);
       res.status(500).json({ error: 'Failed to fetch journal entries' });
+    }
+  });
+
+  // ========== PUBLIC API ROUTES (No Authentication Required) ==========
+  
+  // Public user search endpoint
+  app.get('/api/public/users/search', async (req, res) => {
+    try {
+      const query = req.query.q as string;
+      if (!query) {
+        return res.status(400).json({ error: 'Search query is required' });
+      }
+      
+      const limit = parseInt(req.query.limit as string) || 20;
+      const users = await storage.searchPublicUsers(query, limit);
+      
+      res.json(users);
+    } catch (error) {
+      console.error('Public Users Search Error:', error);
+      res.status(500).json({ error: 'Failed to search public users' });
+    }
+  });
+
+  // Public user profile endpoint
+  app.get('/api/public/users/:username', async (req, res) => {
+    try {
+      const { username } = req.params;
+      const user = await storage.getPublicUserByUsername(username);
+      
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+      
+      res.json(user);
+    } catch (error) {
+      console.error('Public User Profile Error:', error);
+      res.status(500).json({ error: 'Failed to fetch user profile' });
+    }
+  });
+
+  // Public user's entries endpoint
+  app.get('/api/public/users/:username/entries', async (req, res) => {
+    try {
+      const { username } = req.params;
+      const limit = parseInt(req.query.limit as string) || 20;
+      const cursor = req.query.cursor as string;
+      
+      // Validate cursor if provided
+      if (cursor && isNaN(Date.parse(cursor))) {
+        return res.status(400).json({ error: 'Invalid cursor format' });
+      }
+      
+      // First get the user to validate they exist and are public
+      const user = await storage.getPublicUserByUsername(username);
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+      
+      const entries = await storage.getPublicEntriesByUserId(user.id, limit, cursor);
+      
+      res.json({
+        entries,
+        nextCursor: entries.length === limit ? entries[entries.length - 1]?.createdAt.toISOString() : null
+      });
+    } catch (error) {
+      console.error('Public User Entries Error:', error);
+      res.status(500).json({ error: 'Failed to fetch user entries' });
+    }
+  });
+
+  // Public entry detail endpoint
+  app.get('/api/public/entries/:entryId', async (req, res) => {
+    try {
+      const { entryId } = req.params;
+      const entry = await storage.getPublicEntryById(entryId);
+      
+      if (!entry) {
+        return res.status(404).json({ error: 'Entry not found' });
+      }
+      
+      res.json(entry);
+    } catch (error) {
+      console.error('Public Entry Detail Error:', error);
+      res.status(500).json({ error: 'Failed to fetch entry' });
+    }
+  });
+
+  // Public entries search endpoint
+  app.get('/api/public/entries/search', async (req, res) => {
+    try {
+      const query = req.query.q as string;
+      if (!query) {
+        return res.status(400).json({ error: 'Search query is required' });
+      }
+      
+      const limit = parseInt(req.query.limit as string) || 20;
+      const cursor = req.query.cursor as string;
+      
+      // Validate cursor if provided
+      if (cursor && isNaN(Date.parse(cursor))) {
+        return res.status(400).json({ error: 'Invalid cursor format' });
+      }
+      
+      const entries = await storage.searchPublicEntries(query, limit, cursor);
+      
+      res.json({
+        entries,
+        nextCursor: entries.length === limit ? entries[entries.length - 1]?.createdAt.toISOString() : null
+      });
+    } catch (error) {
+      console.error('Public Entries Search Error:', error);
+      res.status(500).json({ error: 'Failed to search entries' });
     }
   });
 
