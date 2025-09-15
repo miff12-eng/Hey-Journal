@@ -14,9 +14,23 @@ const upload = multer({
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Development authentication bypass
-  app.use('/api', (req, res, next) => {
+  app.use('/api', async (req, res, next) => {
     // Development bypass - always authenticate as mock user
     req.userId = 'mock-user-id';
+    
+    // Ensure mock user exists in storage
+    let user = await storage.getUser(req.userId);
+    if (!user) {
+      console.log('🔧 Creating mock user in storage');
+      user = await storage.createUser({
+        id: req.userId,
+        email: 'user@example.com',
+        firstName: 'Demo',
+        lastName: 'User'
+      });
+      console.log('✅ Mock user created:', user.id);
+    }
+    
     next();
   });
 
@@ -178,7 +192,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/journal/entries', async (req, res) => {
     try {
       const limit = parseInt(req.query.limit as string) || 20;
+      console.log('📚 Fetching entries for userId:', req.userId);
       const entries = await storage.getJournalEntriesByUserId(req.userId, limit);
+      console.log('📚 Found', entries.length, 'entries');
       res.json(entries);
     } catch (error) {
       console.error('Get Entries Error:', error);

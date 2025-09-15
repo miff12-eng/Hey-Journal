@@ -9,6 +9,10 @@ import {
   type AiChatMessage
 } from "@shared/schema";
 import { randomUUID } from "crypto";
+import { drizzle } from "drizzle-orm/neon-http";
+import { neon } from "@neondatabase/serverless";
+import { eq, desc, and } from "drizzle-orm";
+import { users, journalEntries, aiChatSessions } from "@shared/schema";
 
 // modify the interface with any CRUD methods
 // you might need
@@ -31,6 +35,182 @@ export interface IStorage {
   getAiChatSessionsByUserId(userId: string): Promise<AiChatSession[]>;
   createAiChatSession(session: InsertAiChatSession, userId: string): Promise<AiChatSession>;
   updateAiChatSession(id: string, updates: Partial<{ messages: AiChatMessage[]; updatedAt: Date }>): Promise<AiChatSession>;
+}
+
+// Database storage using PostgreSQL
+class DbStorage implements IStorage {
+  private db: ReturnType<typeof drizzle>;
+  
+  constructor() {
+    const sql = neon(process.env.DATABASE_URL!);
+    this.db = drizzle(sql);
+  }
+
+  async getUser(id: string): Promise<User | undefined> {
+    const result = await this.db.select().from(users).where(eq(users.id, id));
+    return result[0];
+  }
+
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const result = await this.db.select().from(users).where(eq(users.email, email));
+    return result[0];
+  }
+
+  async createUser(insertUser: UpsertUser): Promise<User> {
+    const result = await this.db.insert(users).values({
+      id: insertUser.id || randomUUID(),
+      email: insertUser.email,
+      firstName: insertUser.firstName,
+      lastName: insertUser.lastName,
+      profileImageUrl: insertUser.profileImageUrl,
+      createdAt: insertUser.createdAt || new Date(),
+      updatedAt: insertUser.updatedAt || new Date(),
+    }).returning();
+    return result[0];
+  }
+
+  async getJournalEntry(id: string): Promise<JournalEntry | undefined> {
+    const result = await this.db.select().from(journalEntries).where(eq(journalEntries.id, id));
+    return result[0];
+  }
+
+  async getJournalEntriesByUserId(userId: string, limit = 20): Promise<JournalEntryWithUser[]> {
+    console.log('🗂️ [DB] Fetching entries for userId:', userId);
+    
+    const result = await this.db
+      .select({
+        // Journal entry fields
+        id: journalEntries.id,
+        userId: journalEntries.userId,
+        title: journalEntries.title,
+        content: journalEntries.content,
+        audioUrl: journalEntries.audioUrl,
+        mediaUrls: journalEntries.mediaUrls,
+        tags: journalEntries.tags,
+        privacy: journalEntries.privacy,
+        sharedWith: journalEntries.sharedWith,
+        createdAt: journalEntries.createdAt,
+        updatedAt: journalEntries.updatedAt,
+        // User fields
+        userEmail: users.email,
+        userFirstName: users.firstName,
+        userLastName: users.lastName,
+        userProfileImageUrl: users.profileImageUrl,
+        userCreatedAt: users.createdAt,
+        userUpdatedAt: users.updatedAt,
+      })
+      .from(journalEntries)
+      .leftJoin(users, eq(journalEntries.userId, users.id))
+      .where(eq(journalEntries.userId, userId))
+      .orderBy(desc(journalEntries.createdAt))
+      .limit(limit);
+
+    console.log('🗂️ [DB] Found', result.length, 'entries');
+    
+    const entriesWithUser: JournalEntryWithUser[] = result.map((row) => ({
+      id: row.id,
+      userId: row.userId,
+      title: row.title,
+      content: row.content,
+      audioUrl: row.audioUrl,
+      mediaUrls: row.mediaUrls || [],
+      tags: row.tags || [],
+      privacy: row.privacy as "private" | "shared" | "public",
+      sharedWith: row.sharedWith || [],
+      createdAt: row.createdAt!,
+      updatedAt: row.updatedAt!,
+      user: {
+        id: row.userId,
+        email: row.userEmail!,
+        firstName: row.userFirstName!,
+        lastName: row.userLastName!,
+        profileImageUrl: row.userProfileImageUrl,
+        createdAt: row.userCreatedAt!,
+        updatedAt: row.userUpdatedAt!,
+      }
+    }));
+
+    return entriesWithUser;
+  }
+
+  async createJournalEntry(entryData: InsertJournalEntry, userId: string): Promise<JournalEntry> {
+    console.log('🗂️ [DB] Creating entry for userId:', userId);
+    const result = await this.db.insert(journalEntries).values({
+      id: randomUUID(),
+      userId,
+      title: entryData.title,
+      content: entryData.content,
+      audioUrl: entryData.audioUrl,
+      mediaUrls: entryData.mediaUrls || [],
+      tags: entryData.tags || [],
+      privacy: entryData.privacy || "private",
+      sharedWith: entryData.sharedWith || [],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }).returning();
+    
+    console.log('🗂️ [DB] Created entry:', result[0].id);
+    return result[0];
+  }
+
+  async updateJournalEntry(id: string, updates: Partial<InsertJournalEntry>): Promise<JournalEntry> {
+    const result = await this.db
+      .update(journalEntries)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(journalEntries.id, id))
+      .returning();
+    
+    if (!result[0]) {
+      throw new Error('Journal entry not found');
+    }
+    return result[0];
+  }
+
+  async deleteJournalEntry(id: string): Promise<void> {
+    await this.db.delete(journalEntries).where(eq(journalEntries.id, id));
+  }
+
+  async getAiChatSession(id: string): Promise<AiChatSession | undefined> {
+    const result = await this.db.select().from(aiChatSessions).where(eq(aiChatSessions.id, id));
+    return result[0];
+  }
+
+  async getAiChatSessionsByUserId(userId: string): Promise<AiChatSession[]> {
+    const result = await this.db
+      .select()
+      .from(aiChatSessions)
+      .where(eq(aiChatSessions.userId, userId))
+      .orderBy(desc(aiChatSessions.updatedAt));
+    
+    return result;
+  }
+
+  async createAiChatSession(sessionData: InsertAiChatSession, userId: string): Promise<AiChatSession> {
+    const result = await this.db.insert(aiChatSessions).values({
+      id: randomUUID(),
+      userId,
+      title: sessionData.title,
+      messages: sessionData.messages || [],
+      relatedEntryIds: sessionData.relatedEntryIds || [],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }).returning();
+    
+    return result[0];
+  }
+
+  async updateAiChatSession(id: string, updates: Partial<{ messages: AiChatMessage[]; updatedAt: Date }>): Promise<AiChatSession> {
+    const result = await this.db
+      .update(aiChatSessions)
+      .set({ ...updates, updatedAt: updates.updatedAt || new Date() })
+      .where(eq(aiChatSessions.id, id))
+      .returning();
+    
+    if (!result[0]) {
+      throw new Error('AI chat session not found');
+    }
+    return result[0];
+  }
 }
 
 export class MemStorage implements IStorage {
@@ -88,19 +268,31 @@ export class MemStorage implements IStorage {
   }
 
   async getJournalEntriesByUserId(userId: string, limit = 20): Promise<JournalEntryWithUser[]> {
-    const entries = Array.from(this.journalEntries.values())
+    const allEntries = Array.from(this.journalEntries.values());
+    console.log('🗂️ Total entries in storage:', allEntries.length);
+    console.log('🗂️ Looking for userId:', userId);
+    
+    if (allEntries.length > 0) {
+      console.log('🗂️ Sample entry userIds:', allEntries.slice(0, 3).map(e => e.userId));
+    }
+    
+    const entries = allEntries
       .filter(entry => entry.userId === userId)
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
       .slice(0, limit);
 
+    console.log('🗂️ Filtered entries for user:', entries.length);
+
     const entriesWithUser: JournalEntryWithUser[] = [];
     for (const entry of entries) {
       const user = await this.getUser(entry.userId);
+      console.log('🗂️ User found for entry:', !!user, entry.id);
       if (user) {
         entriesWithUser.push({ ...entry, user });
       }
     }
     
+    console.log('🗂️ Final entries with user:', entriesWithUser.length);
     return entriesWithUser;
   }
 
@@ -186,4 +378,4 @@ export class MemStorage implements IStorage {
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DbStorage();

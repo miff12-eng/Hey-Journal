@@ -8,82 +8,32 @@ import { Search, Plus, Bell, Filter, TrendingUp } from 'lucide-react'
 import JournalEntryCard from '@/components/JournalEntryCard'
 import ThemeToggle from '@/components/ThemeToggle'
 import { JournalEntryWithUser } from '@shared/schema'
+import { useQuery } from '@tanstack/react-query'
 
 export default function Home() {
   const [searchQuery, setSearchQuery] = useState('')
   
-  // Mock data for demonstration - todo: replace with real data
+  // Fetch real journal entries
+  const { data: entries = [], isLoading, error, refetch } = useQuery({
+    queryKey: ['/api/journal/entries'],
+    refetchInterval: 30000, // Refresh every 30 seconds
+  })
+  
+  // Mock user data - replace with real auth when available
   const mockUser = {
-    id: 'current-user',
-    firstName: 'Alex',
-    lastName: 'Chen',
-    email: 'alex.chen@example.com',
+    id: 'mock-user-id',
+    firstName: 'Demo',
+    lastName: 'User', 
+    email: 'user@example.com',
     profileImageUrl: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150'
   }
 
-  const mockEntries: JournalEntryWithUser[] = [
-    {
-      id: '1',
-      userId: 'user1',
-      title: 'Morning Reflections',
-      content: "Started the day with meditation and coffee. There's something magical about those quiet morning moments before the world wakes up. I find my thoughts are clearest then, like a still lake reflecting the sky. Today I want to focus on being more present in each moment.",
-      audioUrl: 'https://example.com/audio1.mp3',
-      mediaUrls: ['https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400'],
-      tags: ['morning', 'meditation', 'mindfulness'],
-      privacy: 'public' as const,
-      sharedWith: [],
-      createdAt: new Date('2024-01-15T08:30:00Z'),
-      updatedAt: new Date('2024-01-15T08:30:00Z'),
-      user: {
-        id: 'user1',
-        email: 'sarah.wilson@example.com',
-        firstName: 'Sarah',
-        lastName: 'Wilson',
-        profileImageUrl: 'https://images.unsplash.com/photo-1494790108755-2616b2dc1193?w=150',
-        createdAt: new Date(),
-        updatedAt: new Date()
-      }
-    },
-    {
-      id: '2',
-      userId: 'user2',
-      title: '',
-      content: 'Had an incredible conversation with Mom today about her childhood stories. She told me about the time she and her siblings built a treehouse that lasted through three summers. Made me realize how important it is to document these family memories before they fade.',
-      audioUrl: undefined,
-      mediaUrls: [
-        'https://images.unsplash.com/photo-1491013516836-7db643ee125a?w=400',
-        'https://images.unsplash.com/photo-1576091160399-112ba8d25d1f?w=400'
-      ],
-      tags: ['family', 'memories', 'storytelling'],
-      privacy: 'shared' as const,
-      sharedWith: ['current-user'],
-      createdAt: new Date('2024-01-14T19:15:00Z'),
-      updatedAt: new Date('2024-01-14T19:15:00Z'),
-      user: {
-        id: 'user2',
-        email: 'mike.rodriguez@example.com',
-        firstName: 'Mike',
-        lastName: 'Rodriguez',
-        profileImageUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',
-        createdAt: new Date(),
-        updatedAt: new Date()
-      }
-    },
-    {
-      id: '3',
-      userId: 'current-user',
-      title: 'Weekend Adventure Planning',
-      content: "Spent the evening researching hiking trails for this weekend. Found this amazing spot called Eagle Peak - 6 mile round trip with panoramic views. Weather looks perfect. Can't wait to disconnect from screens and reconnect with nature.",
-      audioUrl: 'https://example.com/audio3.mp3',
-      mediaUrls: [],
-      tags: ['hiking', 'adventure', 'nature', 'planning'],
-      privacy: 'private' as const,
-      sharedWith: [],
-      createdAt: new Date('2024-01-14T16:45:00Z'),
-      updatedAt: new Date('2024-01-14T16:45:00Z'),
-      user: mockUser
-    }
-  ]
+  // Transform API entries to include user data for display
+  const displayEntries: JournalEntryWithUser[] = entries.map(entry => ({
+    ...entry,
+    user: mockUser, // For now, all entries show current user
+    audioUrl: entry.mediaUrls?.[0]?.endsWith('.mp3') ? entry.mediaUrls[0] : undefined
+  }))
 
   const handleEdit = (entryId: string) => {
     console.log('Edit entry:', entryId)
@@ -196,7 +146,32 @@ export default function Home() {
       <main className="flex-1">
         <ScrollArea className="h-full">
           <div className="p-4 space-y-4 pb-20"> {/* Extra bottom padding for navigation */}
-            {mockEntries.map((entry) => (
+            {/* Loading state */}
+            {isLoading && (
+              <div className="text-center py-12">
+                <div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full mx-auto mb-4" />
+                <p className="text-sm text-muted-foreground">Loading your journal entries...</p>
+              </div>
+            )}
+            
+            {/* Error state */}
+            {error && (
+              <div className="text-center py-12">
+                <div className="h-16 w-16 bg-destructive/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Plus className="h-8 w-8 text-destructive" />
+                </div>
+                <h3 className="text-lg font-medium text-foreground mb-2">Unable to load entries</h3>
+                <p className="text-sm text-muted-foreground mb-4 max-w-sm mx-auto">
+                  There was an error loading your journal entries
+                </p>
+                <Button onClick={() => refetch()} variant="outline">
+                  Try Again
+                </Button>
+              </div>
+            )}
+            
+            {/* Real entries */}
+            {!isLoading && !error && displayEntries.map((entry) => (
               <JournalEntryCard
                 key={entry.id}
                 entry={entry}
@@ -208,7 +183,7 @@ export default function Home() {
             ))}
             
             {/* Empty state */}
-            {mockEntries.length === 0 && (
+            {!isLoading && !error && displayEntries.length === 0 && (
               <div className="text-center py-12">
                 <div className="h-16 w-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
                   <Plus className="h-8 w-8 text-muted-foreground" />
