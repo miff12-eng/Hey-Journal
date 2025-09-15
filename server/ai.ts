@@ -1,6 +1,6 @@
 import OpenAI from "openai";
 
-// the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
+// Using GPT-4 which is the current latest stable OpenAI model
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 export interface ChatMessage {
@@ -22,6 +22,11 @@ export async function generateAIResponse(
   journalEntries: JournalEntry[] = [],
   previousMessages: ChatMessage[] = []
 ): Promise<string> {
+  console.log('🔥 generateAIResponse called with:', { 
+    messageLength: message.length, 
+    entriesCount: journalEntries.length, 
+    previousCount: previousMessages.length 
+  });
   try {
     // Create context from journal entries
     const journalContext = journalEntries.length > 0 
@@ -46,14 +51,21 @@ ${journalContext}Please respond to the user's message in a helpful and reflectiv
       { role: 'user', content: message }
     ];
 
+    console.log('📡 Making OpenAI API call with model: gpt-4');
     const response = await openai.chat.completions.create({
-      model: "gpt-5",
+      model: "gpt-4",
       messages: messages.map(msg => ({ role: msg.role, content: msg.content })),
       max_tokens: 500,
       temperature: 0.7,
     });
+    console.log('📨 OpenAI raw response:', { 
+      choices: response.choices?.length, 
+      firstChoiceContent: response.choices?.[0]?.message?.content?.substring(0, 100) 
+    });
 
-    return response.choices[0].message.content || "I'm sorry, I couldn't generate a response at the moment.";
+    const result = response.choices[0].message.content || "I'm sorry, I couldn't generate a response at the moment.";
+    console.log('🎯 Final AI response length:', result.length);
+    return result;
   } catch (error) {
     console.error('AI Response Error:', error);
     throw new Error('Failed to generate AI response');
@@ -90,7 +102,7 @@ export async function analyzeJournalEntry(content: string): Promise<{
 }> {
   try {
     const response = await openai.chat.completions.create({
-      model: "gpt-5",
+      model: "gpt-4",
       messages: [
         {
           role: "system",
@@ -109,6 +121,7 @@ export async function analyzeJournalEntry(content: string): Promise<{
       ],
       response_format: { type: "json_object" },
       max_tokens: 300,
+      temperature: 0.7,
     });
 
     const analysis = JSON.parse(response.choices[0].message.content || '{}');

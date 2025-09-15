@@ -40,6 +40,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // AI Chat endpoints
   app.post('/api/ai/chat', async (req, res) => {
+    console.log('🤖 AI Chat Request:', { message: req.body.message?.substring(0, 50), conversationId: req.body.conversationId });
     try {
       const { message, conversationId } = req.body;
       
@@ -59,7 +60,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
+      console.log('🔍 Calling OpenAI with:', { entriesCount: entries.length, previousCount: previousMessages.length });
       const aiResponse = await generateAIResponse(message, entries, previousMessages);
+      console.log('✅ OpenAI Response:', aiResponse ? aiResponse.substring(0, 100) + '...' : 'EMPTY RESPONSE');
       
       // Save the conversation
       const newMessage = {
