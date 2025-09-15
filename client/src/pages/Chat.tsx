@@ -23,15 +23,9 @@ export default function Chat() {
     setIsLoading(true)
     
     try {
-      const response = await apiRequest('/api/ai/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          message,
-          conversationId
-        })
+      const response = await apiRequest('POST', '/api/ai/chat', {
+        message,
+        conversationId
       })
 
       if (response.ok) {
@@ -43,7 +37,14 @@ export default function Chat() {
           setConversationId(data.conversationId)
         }
       } else {
-        throw new Error('Failed to get AI response')
+        const errorData = await response.json().catch(() => ({}));
+        if (errorData.type === 'quota_exceeded') {
+          throw new Error('OpenAI quota exceeded. Please check your API billing.');
+        } else if (errorData.type === 'rate_limit') {
+          throw new Error('Rate limit reached. Please try again in a moment.');
+        } else {
+          throw new Error(errorData.error || 'Failed to get AI response');
+        }
       }
     } catch (error) {
       console.error('AI Chat Error:', error)

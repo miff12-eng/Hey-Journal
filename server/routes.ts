@@ -13,11 +13,17 @@ const upload = multer({
 });
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Mock authentication middleware for now
+  // Development authentication bypass
   app.use('/api', (req, res, next) => {
-    // In a real app, this would validate the session
-    req.userId = 'mock-user-id'; // Mock user ID for development
+    // Development bypass - always authenticate as mock user
+    req.userId = 'mock-user-id';
     next();
+  });
+
+  // Development login endpoint bypass
+  app.post('/api/auth/login', async (req, res) => {
+    const mockUser = await storage.getUser('mock-user-id');
+    res.json({ user: mockUser, success: true });
   });
 
   // Health check
@@ -25,10 +31,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
   });
 
-  // Auth endpoint (mock for now)
-  app.get('/api/auth/user', (req, res) => {
-    // Return null for now to show landing page
-    res.json(null);
+  // Auth endpoint - return mock user for development
+  app.get('/api/auth/user', async (req, res) => {
+    // In development, return a mock authenticated user
+    const mockUser = await storage.getUser('mock-user-id');
+    res.json(mockUser);
   });
 
   // AI Chat endpoints
@@ -93,7 +100,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       console.error('AI Chat Error:', error);
-      res.status(500).json({ error: 'Failed to generate AI response' });
+      
+      // Handle specific OpenAI errors
+      if (error.message && error.message.includes('insufficient_quota')) {
+        res.status(429).json({ 
+          error: 'OpenAI API quota exceeded. Please check your OpenAI billing and usage limits.',
+          type: 'quota_exceeded'
+        });
+      } else if (error.message && error.message.includes('rate_limit')) {
+        res.status(429).json({ 
+          error: 'Rate limit reached. Please try again in a moment.',
+          type: 'rate_limit'
+        });
+      } else {
+        res.status(500).json({ error: 'Failed to generate AI response' });
+      }
     }
   });
 
