@@ -29,10 +29,16 @@ export const users = pgTable("users", {
   email: varchar("email").unique(),
   firstName: varchar("first_name"),
   lastName: varchar("last_name"),
+  username: varchar("username").unique(),
+  bio: varchar("bio"),
   profileImageUrl: varchar("profile_image_url"),
+  isProfilePublic: boolean("is_profile_public").default(true),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (table) => [
+  index("idx_users_username").on(table.username),
+  index("idx_users_is_profile_public").on(table.isProfilePublic),
+]);
 
 // Journal entries table
 export const journalEntries = pgTable(
