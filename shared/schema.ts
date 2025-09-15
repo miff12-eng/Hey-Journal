@@ -152,6 +152,30 @@ export type JournalEntryWithUser = JournalEntry & {
   mentions?: (JournalMention & { user: User })[];
 };
 
+// Public-safe DTO types (omit sensitive fields)
+export type PublicUser = {
+  id: string;
+  username: string;
+  firstName: string | null;
+  lastName: string | null;
+  bio: string | null;
+  profileImageUrl: string | null;
+  publicEntriesCount?: number;
+};
+
+export type PublicJournalEntry = {
+  id: string;
+  userId: string;
+  title: string | null;
+  content: string;
+  audioUrl: string | null;
+  mediaUrls: string[];
+  tags: string[];
+  createdAt: Date;
+  updatedAt: Date;
+  user: PublicUser;
+};
+
 export type AiChatMessage = {
   id: string;
   role: "user" | "assistant";

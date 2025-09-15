@@ -6,12 +6,14 @@ import {
   type JournalEntryWithUser,
   type AiChatSession,
   type InsertAiChatSession,
-  type AiChatMessage
+  type AiChatMessage,
+  type PublicUser,
+  type PublicJournalEntry
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { drizzle } from "drizzle-orm/neon-http";
 import { neon } from "@neondatabase/serverless";
-import { eq, desc, and } from "drizzle-orm";
+import { eq, desc, and, ilike, or } from "drizzle-orm";
 import { users, journalEntries, aiChatSessions } from "@shared/schema";
 
 // modify the interface with any CRUD methods
@@ -35,6 +37,13 @@ export interface IStorage {
   getAiChatSessionsByUserId(userId: string): Promise<AiChatSession[]>;
   createAiChatSession(session: InsertAiChatSession, userId: string): Promise<AiChatSession>;
   updateAiChatSession(id: string, updates: Partial<{ messages: AiChatMessage[]; updatedAt: Date }>): Promise<AiChatSession>;
+  
+  // Public-facing methods (no authentication required)
+  getPublicUserByUsername(username: string): Promise<PublicUser | undefined>;
+  searchPublicUsers(query: string, limit?: number): Promise<PublicUser[]>;
+  getPublicEntriesByUserId(userId: string, limit?: number, cursor?: string): Promise<PublicJournalEntry[]>;
+  getPublicEntryById(id: string): Promise<PublicJournalEntry | undefined>;
+  searchPublicEntries(query: string, limit?: number, cursor?: string): Promise<PublicJournalEntry[]>;
 }
 
 // Database storage using PostgreSQL
@@ -211,6 +220,226 @@ class DbStorage implements IStorage {
     }
     return result[0];
   }
+
+  // Public-facing methods (no authentication required)
+  async getPublicUserByUsername(username: string): Promise<PublicUser | undefined> {
+    const result = await this.db
+      .select({
+        id: users.id,
+        username: users.username,
+        firstName: users.firstName,
+        lastName: users.lastName,
+        bio: users.bio,
+        profileImageUrl: users.profileImageUrl,
+      })
+      .from(users)
+      .where(and(eq(users.username, username), eq(users.isProfilePublic, true)));
+    
+    if (!result[0]) return undefined;
+    
+    // Get public entries count
+    const countResult = await this.db
+      .select({ count: journalEntries.id })
+      .from(journalEntries)
+      .where(and(eq(journalEntries.userId, result[0].id), eq(journalEntries.privacy, 'public')));
+    
+    return {
+      ...result[0],
+      username: result[0].username!, // Assert non-null for public profiles
+      publicEntriesCount: countResult.length
+    };
+  }
+
+  async searchPublicUsers(query: string, limit = 20): Promise<PublicUser[]> {
+    const result = await this.db
+      .select({
+        id: users.id,
+        username: users.username,
+        firstName: users.firstName,
+        lastName: users.lastName,
+        bio: users.bio,
+        profileImageUrl: users.profileImageUrl,
+      })
+      .from(users)
+      .where(and(
+        eq(users.isProfilePublic, true),
+        or(
+          ilike(users.username, `%${query}%`),
+          ilike(users.firstName, `%${query}%`),
+          ilike(users.lastName, `%${query}%`),
+          ilike(users.bio, `%${query}%`)
+        )
+      ))
+      .limit(limit);
+    
+    return result.map(user => ({
+      ...user,
+      username: user.username!, // Assert non-null for public profiles  
+      publicEntriesCount: 0 // TODO: Could optimize with subquery
+    }));
+  }
+
+  async getPublicEntriesByUserId(userId: string, limit = 20, cursor?: string): Promise<PublicJournalEntry[]> {
+    let whereConditions = and(
+      eq(journalEntries.userId, userId),
+      eq(journalEntries.privacy, 'public')
+    );
+    
+    if (cursor) {
+      // TODO: Implement proper cursor pagination with createdAt comparison
+      // For now, skip cursor pagination
+    }
+
+    const result = await this.db
+      .select({
+        id: journalEntries.id,
+        userId: journalEntries.userId,
+        title: journalEntries.title,
+        content: journalEntries.content,
+        audioUrl: journalEntries.audioUrl,
+        mediaUrls: journalEntries.mediaUrls,
+        tags: journalEntries.tags,
+        createdAt: journalEntries.createdAt,
+        updatedAt: journalEntries.updatedAt,
+        // User fields
+        userUsername: users.username,
+        userFirstName: users.firstName,
+        userLastName: users.lastName,
+        userBio: users.bio,
+        userProfileImageUrl: users.profileImageUrl,
+      })
+      .from(journalEntries)
+      .leftJoin(users, eq(journalEntries.userId, users.id))
+      .where(whereConditions)
+      .orderBy(desc(journalEntries.createdAt))
+      .limit(limit);
+
+    return result.map(row => ({
+      id: row.id,
+      userId: row.userId,
+      title: row.title,
+      content: row.content,
+      audioUrl: row.audioUrl,
+      mediaUrls: row.mediaUrls || [],
+      tags: row.tags || [],
+      createdAt: row.createdAt!,
+      updatedAt: row.updatedAt!,
+      user: {
+        id: row.userId,
+        username: row.userUsername!,
+        firstName: row.userFirstName,
+        lastName: row.userLastName,
+        bio: row.userBio,
+        profileImageUrl: row.userProfileImageUrl,
+      }
+    }));
+  }
+
+  async getPublicEntryById(id: string): Promise<PublicJournalEntry | undefined> {
+    const result = await this.db
+      .select({
+        id: journalEntries.id,
+        userId: journalEntries.userId,
+        title: journalEntries.title,
+        content: journalEntries.content,
+        audioUrl: journalEntries.audioUrl,
+        mediaUrls: journalEntries.mediaUrls,
+        tags: journalEntries.tags,
+        createdAt: journalEntries.createdAt,
+        updatedAt: journalEntries.updatedAt,
+        // User fields
+        userUsername: users.username,
+        userFirstName: users.firstName,
+        userLastName: users.lastName,
+        userBio: users.bio,
+        userProfileImageUrl: users.profileImageUrl,
+      })
+      .from(journalEntries)
+      .leftJoin(users, eq(journalEntries.userId, users.id))
+      .where(and(eq(journalEntries.id, id), eq(journalEntries.privacy, 'public')));
+
+    if (!result[0]) return undefined;
+
+    const row = result[0];
+    return {
+      id: row.id,
+      userId: row.userId,
+      title: row.title,
+      content: row.content,
+      audioUrl: row.audioUrl,
+      mediaUrls: row.mediaUrls || [],
+      tags: row.tags || [],
+      createdAt: row.createdAt!,
+      updatedAt: row.updatedAt!,
+      user: {
+        id: row.userId,
+        username: row.userUsername!,
+        firstName: row.userFirstName,
+        lastName: row.userLastName,
+        bio: row.userBio,
+        profileImageUrl: row.userProfileImageUrl,
+      }
+    };
+  }
+
+  async searchPublicEntries(query: string, limit = 20, cursor?: string): Promise<PublicJournalEntry[]> {
+    let whereConditions = and(
+      eq(journalEntries.privacy, 'public'),
+      or(
+        ilike(journalEntries.title, `%${query}%`),
+        ilike(journalEntries.content, `%${query}%`)
+      )
+    );
+    
+    if (cursor) {
+      // TODO: Implement proper cursor pagination with createdAt comparison
+      // For now, skip cursor pagination
+    }
+
+    const result = await this.db
+      .select({
+        id: journalEntries.id,
+        userId: journalEntries.userId,
+        title: journalEntries.title,
+        content: journalEntries.content,
+        audioUrl: journalEntries.audioUrl,
+        mediaUrls: journalEntries.mediaUrls,
+        tags: journalEntries.tags,
+        createdAt: journalEntries.createdAt,
+        updatedAt: journalEntries.updatedAt,
+        // User fields
+        userUsername: users.username,
+        userFirstName: users.firstName,
+        userLastName: users.lastName,
+        userBio: users.bio,
+        userProfileImageUrl: users.profileImageUrl,
+      })
+      .from(journalEntries)
+      .leftJoin(users, eq(journalEntries.userId, users.id))
+      .where(whereConditions)
+      .orderBy(desc(journalEntries.createdAt))
+      .limit(limit);
+
+    return result.map(row => ({
+      id: row.id,
+      userId: row.userId,
+      title: row.title,
+      content: row.content,
+      audioUrl: row.audioUrl,
+      mediaUrls: row.mediaUrls || [],
+      tags: row.tags || [],
+      createdAt: row.createdAt!,
+      updatedAt: row.updatedAt!,
+      user: {
+        id: row.userId,
+        username: row.userUsername!,
+        firstName: row.userFirstName,
+        lastName: row.userLastName,
+        bio: row.userBio,
+        profileImageUrl: row.userProfileImageUrl,
+      }
+    }));
+  }
 }
 
 export class MemStorage implements IStorage {
@@ -375,6 +604,27 @@ export class MemStorage implements IStorage {
     
     this.aiChatSessions.set(id, updated);
     return updated;
+  }
+
+  // Public-facing methods (not implemented for MemStorage - use DbStorage for public features)
+  async getPublicUserByUsername(username: string): Promise<PublicUser | undefined> {
+    throw new Error('Public methods not implemented in MemStorage - use DbStorage');
+  }
+
+  async searchPublicUsers(query: string, limit?: number): Promise<PublicUser[]> {
+    throw new Error('Public methods not implemented in MemStorage - use DbStorage');
+  }
+
+  async getPublicEntriesByUserId(userId: string, limit?: number, cursor?: string): Promise<PublicJournalEntry[]> {
+    throw new Error('Public methods not implemented in MemStorage - use DbStorage');
+  }
+
+  async getPublicEntryById(id: string): Promise<PublicJournalEntry | undefined> {
+    throw new Error('Public methods not implemented in MemStorage - use DbStorage');
+  }
+
+  async searchPublicEntries(query: string, limit?: number, cursor?: string): Promise<PublicJournalEntry[]> {
+    throw new Error('Public methods not implemented in MemStorage - use DbStorage');
   }
 }
 
