@@ -10,8 +10,11 @@ import ThemeToggle from '@/components/ThemeToggle'
 import { JournalEntryWithUser } from '@shared/schema'
 import { useQuery } from '@tanstack/react-query'
 
+type PrivacyFilter = 'all' | 'private' | 'shared' | 'public'
+
 export default function Home() {
   const [searchQuery, setSearchQuery] = useState('')
+  const [activeFilter, setActiveFilter] = useState<PrivacyFilter>('all')
   
   // Fetch real journal entries
   const { data: entries = [], isLoading, error, refetch } = useQuery({
@@ -34,6 +37,28 @@ export default function Home() {
     user: mockUser, // For now, all entries show current user
     audioUrl: entry.mediaUrls?.[0]?.endsWith('.mp3') ? entry.mediaUrls[0] : undefined
   }))
+
+  // Filter entries based on active filter and search query
+  const filteredEntries = displayEntries.filter(entry => {
+    // Apply privacy filter
+    let matchesFilter = true
+    if (activeFilter !== 'all') {
+      matchesFilter = entry.privacy === activeFilter
+    }
+
+    // Apply search filter
+    let matchesSearch = true
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim()
+      matchesSearch = 
+        entry.title?.toLowerCase().includes(query) ||
+        entry.content.toLowerCase().includes(query) ||
+        entry.tags?.some(tag => tag.toLowerCase().includes(query)) ||
+        false
+    }
+
+    return matchesFilter && matchesSearch
+  })
 
   const handleEdit = (entryId: string) => {
     console.log('Edit entry:', entryId)
@@ -124,16 +149,40 @@ export default function Home() {
       {/* Filter tabs */}
       <div className="px-4 py-2 border-b border-border">
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" className="bg-primary/10 text-primary" data-testid="filter-all">
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={() => setActiveFilter('all')}
+            className={activeFilter === 'all' ? 'bg-primary/10 text-primary' : ''} 
+            data-testid="filter-all"
+          >
             All
           </Button>
-          <Button variant="ghost" size="sm" data-testid="filter-private">
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={() => setActiveFilter('private')}
+            className={activeFilter === 'private' ? 'bg-primary/10 text-primary' : ''} 
+            data-testid="filter-private"
+          >
             Private
           </Button>
-          <Button variant="ghost" size="sm" data-testid="filter-shared">
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={() => setActiveFilter('shared')}
+            className={activeFilter === 'shared' ? 'bg-primary/10 text-primary' : ''} 
+            data-testid="filter-shared"
+          >
             Shared
           </Button>
-          <Button variant="ghost" size="sm" data-testid="filter-public">
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={() => setActiveFilter('public')}
+            className={activeFilter === 'public' ? 'bg-primary/10 text-primary' : ''} 
+            data-testid="filter-public"
+          >
             Public
           </Button>
           <Button variant="ghost" size="icon" className="ml-auto" data-testid="button-filter-options">
@@ -171,7 +220,7 @@ export default function Home() {
             )}
             
             {/* Real entries */}
-            {!isLoading && !error && displayEntries.map((entry) => (
+            {!isLoading && !error && filteredEntries.map((entry) => (
               <JournalEntryCard
                 key={entry.id}
                 entry={entry}
