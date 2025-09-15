@@ -1,2 +1,238 @@
 import { useState } from 'react'
-import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card'\nimport { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'\nimport { Button } from '@/components/ui/button'\nimport { Badge } from '@/components/ui/badge'\nimport { Separator } from '@/components/ui/separator'\nimport { MoreHorizontal, Heart, MessageCircle, Share, Lock, Users, Globe, Play, Edit2 } from 'lucide-react'\nimport { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'\nimport { cn } from '@/lib/utils'\nimport { JournalEntryWithUser } from '@shared/schema'\n\ninterface JournalEntryCardProps {\n  entry: JournalEntryWithUser\n  onEdit?: (entryId: string) => void\n  onShare?: (entryId: string) => void\n  onDelete?: (entryId: string) => void\n  onPlayAudio?: (audioUrl: string) => void\n  className?: string\n}\n\nexport default function JournalEntryCard({\n  entry,\n  onEdit,\n  onShare,\n  onDelete,\n  onPlayAudio,\n  className\n}: JournalEntryCardProps) {\n  const [isExpanded, setIsExpanded] = useState(false)\n  const [isLiked, setIsLiked] = useState(false)\n  \n  const privacyIcon = {\n    private: <Lock className=\"h-3 w-3\" />,\n    shared: <Users className=\"h-3 w-3\" />,\n    public: <Globe className=\"h-3 w-3\" />\n  }[entry.privacy]\n\n  const privacyColor = {\n    private: 'bg-muted text-muted-foreground',\n    shared: 'bg-accent text-accent-foreground',\n    public: 'bg-primary text-primary-foreground'\n  }[entry.privacy]\n\n  const formatDate = (date: Date | string) => {\n    const d = new Date(date)\n    return d.toLocaleDateString('en-US', {\n      month: 'short',\n      day: 'numeric',\n      hour: '2-digit',\n      minute: '2-digit'\n    })\n  }\n\n  const truncateContent = (content: string, maxLength: number = 150) => {\n    if (content.length <= maxLength) return content\n    return content.slice(0, maxLength) + '...'\n  }\n\n  const hasMedia = entry.mediaUrls && entry.mediaUrls.length > 0\n  const shouldShowReadMore = entry.content.length > 150\n\n  return (\n    <Card className={cn('hover-elevate transition-all duration-200', className)} data-testid={`card-journal-entry-${entry.id}`}>\n      <CardHeader className=\"pb-3\">\n        <div className=\"flex items-start justify-between\">\n          <div className=\"flex items-center gap-3\">\n            <Avatar className=\"h-10 w-10\">\n              <AvatarImage \n                src={entry.user.profileImageUrl || ''} \n                alt={`${entry.user.firstName || 'User'} ${entry.user.lastName || ''}`}\n              />\n              <AvatarFallback>\n                {(entry.user.firstName?.[0] || entry.user.email?.[0] || 'U').toUpperCase()}\n              </AvatarFallback>\n            </Avatar>\n            <div className=\"flex-1 min-w-0\">\n              <div className=\"flex items-center gap-2\">\n                <p className=\"text-sm font-medium text-foreground truncate\">\n                  {entry.user.firstName || entry.user.email} {entry.user.lastName}\n                </p>\n                <Badge variant=\"secondary\" className={cn('h-5 px-1.5 gap-1', privacyColor)}>\n                  {privacyIcon}\n                  <span className=\"text-xs capitalize\">{entry.privacy}</span>\n                </Badge>\n              </div>\n              <p className=\"text-xs text-muted-foreground\">\n                {formatDate(entry.createdAt!)}\n              </p>\n            </div>\n          </div>\n          \n          <DropdownMenu>\n            <DropdownMenuTrigger asChild>\n              <Button variant=\"ghost\" size=\"icon\" className=\"h-8 w-8\" data-testid={`button-entry-menu-${entry.id}`}>\n                <MoreHorizontal className=\"h-4 w-4\" />\n              </Button>\n            </DropdownMenuTrigger>\n            <DropdownMenuContent align=\"end\">\n              <DropdownMenuItem onClick={() => onEdit?.(entry.id)} data-testid={`menu-edit-${entry.id}`}>\n                <Edit2 className=\"h-4 w-4 mr-2\" />\n                Edit\n              </DropdownMenuItem>\n              <DropdownMenuItem onClick={() => onShare?.(entry.id)} data-testid={`menu-share-${entry.id}`}>\n                <Share className=\"h-4 w-4 mr-2\" />\n                Share\n              </DropdownMenuItem>\n              <DropdownMenuItem \n                onClick={() => onDelete?.(entry.id)} \n                className=\"text-destructive focus:text-destructive\"\n                data-testid={`menu-delete-${entry.id}`}\n              >\n                Delete\n              </DropdownMenuItem>\n            </DropdownMenuContent>\n          </DropdownMenu>\n        </div>\n        \n        {entry.title && (\n          <h3 className=\"text-lg font-semibold text-foreground mt-2\" data-testid={`text-entry-title-${entry.id}`}>\n            {entry.title}\n          </h3>\n        )}\n      </CardHeader>\n\n      <CardContent className=\"pt-0\">\n        {/* Audio player */}\n        {entry.audioUrl && (\n          <div className=\"mb-4\">\n            <Button \n              variant=\"outline\" \n              size=\"sm\" \n              className=\"gap-2\"\n              onClick={() => onPlayAudio?.(entry.audioUrl!)}\n              data-testid={`button-play-audio-${entry.id}`}\n            >\n              <Play className=\"h-3 w-3\" />\n              Play Recording\n            </Button>\n          </div>\n        )}\n\n        {/* Content */}\n        <div className=\"space-y-3\">\n          <p className=\"text-foreground leading-relaxed whitespace-pre-wrap\" data-testid={`text-entry-content-${entry.id}`}>\n            {isExpanded || !shouldShowReadMore ? entry.content : truncateContent(entry.content)}\n          </p>\n          \n          {shouldShowReadMore && (\n            <Button \n              variant=\"ghost\" \n              size=\"sm\" \n              onClick={() => setIsExpanded(!isExpanded)}\n              className=\"h-auto p-0 text-primary hover:text-primary\"\n              data-testid={`button-read-more-${entry.id}`}\n            >\n              {isExpanded ? 'Show less' : 'Read more'}\n            </Button>\n          )}\n        </div>\n\n        {/* Media grid */}\n        {hasMedia && (\n          <div className=\"mt-4 grid gap-2 grid-cols-2 sm:grid-cols-3\">\n            {entry.mediaUrls!.slice(0, 6).map((url, index) => (\n              <div \n                key={index} \n                className=\"relative aspect-square rounded-md overflow-hidden bg-muted hover-elevate cursor-pointer\"\n                data-testid={`media-${entry.id}-${index}`}\n              >\n                <img \n                  src={url} \n                  alt={`Media ${index + 1}`}\n                  className=\"object-cover w-full h-full transition-transform hover:scale-105\"\n                />\n                {entry.mediaUrls!.length > 6 && index === 5 && (\n                  <div className=\"absolute inset-0 bg-black/50 flex items-center justify-center\">\n                    <span className=\"text-white font-medium text-sm\">\n                      +{entry.mediaUrls!.length - 6}\n                    </span>\n                  </div>\n                )}\n              </div>\n            ))}\n          </div>\n        )}\n\n        {/* Tags */}\n        {entry.tags && entry.tags.length > 0 && (\n          <div className=\"mt-4 flex flex-wrap gap-1\">\n            {entry.tags.map((tag, index) => (\n              <Badge key={index} variant=\"outline\" className=\"text-xs\" data-testid={`tag-${entry.id}-${index}`}>\n                #{tag}\n              </Badge>\n            ))}\n          </div>\n        )}\n      </CardContent>\n\n      <CardFooter className=\"pt-0\">\n        <Separator className=\"mb-3\" />\n        <div className=\"flex items-center justify-between w-full\">\n          <div className=\"flex items-center gap-4\">\n            <Button \n              variant=\"ghost\" \n              size=\"sm\" \n              className=\"gap-2 text-muted-foreground hover:text-foreground\"\n              onClick={() => setIsLiked(!isLiked)}\n              data-testid={`button-like-${entry.id}`}\n            >\n              <Heart className={cn('h-4 w-4', isLiked && 'fill-red-500 text-red-500')} />\n              <span className=\"text-sm\">24</span>\n            </Button>\n            \n            <Button \n              variant=\"ghost\" \n              size=\"sm\" \n              className=\"gap-2 text-muted-foreground hover:text-foreground\"\n              data-testid={`button-comment-${entry.id}`}\n            >\n              <MessageCircle className=\"h-4 w-4\" />\n              <span className=\"text-sm\">3</span>\n            </Button>\n          </div>\n          \n          <Button \n            variant=\"ghost\" \n            size=\"sm\" \n            onClick={() => onShare?.(entry.id)}\n            className=\"text-muted-foreground hover:text-foreground\"\n            data-testid={`button-share-${entry.id}`}\n          >\n            <Share className=\"h-4 w-4\" />\n          </Button>\n        </div>\n      </CardFooter>\n    </Card>\n  )\n}"
+import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Separator } from '@/components/ui/separator'
+import { MoreHorizontal, Heart, MessageCircle, Share, Lock, Users, Globe, Play, Edit2 } from 'lucide-react'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { cn } from '@/lib/utils'
+import { JournalEntryWithUser } from '@shared/schema'
+
+interface JournalEntryCardProps {
+  entry: JournalEntryWithUser
+  onEdit?: (entryId: string) => void
+  onShare?: (entryId: string) => void
+  onDelete?: (entryId: string) => void
+  onPlayAudio?: (audioUrl: string) => void
+  className?: string
+}
+
+export default function JournalEntryCard({
+  entry,
+  onEdit,
+  onShare,
+  onDelete,
+  onPlayAudio,
+  className
+}: JournalEntryCardProps) {
+  const [isExpanded, setIsExpanded] = useState(false)
+  const [isLiked, setIsLiked] = useState(false)
+  
+  const privacyIcon = {
+    private: <Lock className="h-3 w-3" />,
+    shared: <Users className="h-3 w-3" />,
+    public: <Globe className="h-3 w-3" />
+  }[entry.privacy]
+
+  const privacyColor = {
+    private: 'bg-muted text-muted-foreground',
+    shared: 'bg-accent text-accent-foreground',
+    public: 'bg-primary text-primary-foreground'
+  }[entry.privacy]
+
+  const formatDate = (date: Date | string) => {
+    const d = new Date(date)
+    return d.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    })
+  }
+
+  const truncateContent = (content: string, maxLength: number = 150) => {
+    if (content.length <= maxLength) return content
+    return content.slice(0, maxLength) + '...'
+  }
+
+  const hasMedia = entry.mediaUrls && entry.mediaUrls.length > 0
+  const shouldShowReadMore = entry.content.length > 150
+
+  return (
+    <Card className={cn('hover-elevate transition-all duration-200', className)} data-testid={`card-journal-entry-${entry.id}`}>
+      <CardHeader className="pb-3">
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-3">
+            <Avatar className="h-10 w-10">
+              <AvatarImage 
+                src={entry.user.profileImageUrl || ''} 
+                alt={`${entry.user.firstName || 'User'} ${entry.user.lastName || ''}`}
+              />
+              <AvatarFallback>
+                {(entry.user.firstName?.[0] || entry.user.email?.[0] || 'U').toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-medium text-foreground truncate">
+                  {entry.user.firstName || entry.user.email} {entry.user.lastName}
+                </p>
+                <Badge variant="secondary" className={cn('h-5 px-1.5 gap-1', privacyColor)}>
+                  {privacyIcon}
+                  <span className="text-xs capitalize">{entry.privacy}</span>
+                </Badge>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {formatDate(entry.createdAt!)}
+              </p>
+            </div>
+          </div>
+          
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-8 w-8" data-testid={`button-entry-menu-${entry.id}`}>
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => onEdit?.(entry.id)} data-testid={`menu-edit-${entry.id}`}>
+                <Edit2 className="h-4 w-4 mr-2" />
+                Edit
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onShare?.(entry.id)} data-testid={`menu-share-${entry.id}`}>
+                <Share className="h-4 w-4 mr-2" />
+                Share
+              </DropdownMenuItem>
+              <DropdownMenuItem 
+                onClick={() => onDelete?.(entry.id)} 
+                className="text-destructive focus:text-destructive"
+                data-testid={`menu-delete-${entry.id}`}
+              >
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+        
+        {entry.title && (
+          <h3 className="text-lg font-semibold text-foreground mt-2" data-testid={`text-entry-title-${entry.id}`}>
+            {entry.title}
+          </h3>
+        )}
+      </CardHeader>
+
+      <CardContent className="pt-0">
+        {/* Audio player */}
+        {entry.audioUrl && (
+          <div className="mb-4">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="gap-2"
+              onClick={() => onPlayAudio?.(entry.audioUrl!)}
+              data-testid={`button-play-audio-${entry.id}`}
+            >
+              <Play className="h-3 w-3" />
+              Play Recording
+            </Button>
+          </div>
+        )}
+
+        {/* Content */}
+        <div className="space-y-3">
+          <p className="text-foreground leading-relaxed whitespace-pre-wrap" data-testid={`text-entry-content-${entry.id}`}>
+            {isExpanded || !shouldShowReadMore ? entry.content : truncateContent(entry.content)}
+          </p>
+          
+          {shouldShowReadMore && (
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={() => setIsExpanded(!isExpanded)}
+              className="h-auto p-0 text-primary hover:text-primary"
+              data-testid={`button-read-more-${entry.id}`}
+            >
+              {isExpanded ? 'Show less' : 'Read more'}
+            </Button>
+          )}
+        </div>
+
+        {/* Media grid */}
+        {hasMedia && (
+          <div className="mt-4 grid gap-2 grid-cols-2 sm:grid-cols-3">
+            {entry.mediaUrls!.slice(0, 6).map((url, index) => (
+              <div 
+                key={index} 
+                className="relative aspect-square rounded-md overflow-hidden bg-muted hover-elevate cursor-pointer"
+                data-testid={`media-${entry.id}-${index}`}
+              >
+                <img 
+                  src={url} 
+                  alt={`Media ${index + 1}`}
+                  className="object-cover w-full h-full transition-transform hover:scale-105"
+                />
+                {entry.mediaUrls!.length > 6 && index === 5 && (
+                  <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                    <span className="text-white font-medium text-sm">
+                      +{entry.mediaUrls!.length - 6}
+                    </span>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Tags */}
+        {entry.tags && entry.tags.length > 0 && (
+          <div className="mt-4 flex flex-wrap gap-1">
+            {entry.tags.map((tag, index) => (
+              <Badge key={index} variant="outline" className="text-xs" data-testid={`tag-${entry.id}-${index}`}>
+                #{tag}
+              </Badge>
+            ))}
+          </div>
+        )}
+      </CardContent>
+
+      <CardFooter className="pt-0">
+        <Separator className="mb-3" />
+        <div className="flex items-center justify-between w-full">
+          <div className="flex items-center gap-4">
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="gap-2 text-muted-foreground hover:text-foreground"
+              onClick={() => setIsLiked(!isLiked)}
+              data-testid={`button-like-${entry.id}`}
+            >
+              <Heart className={cn('h-4 w-4', isLiked && 'fill-red-500 text-red-500')} />
+              <span className="text-sm">24</span>
+            </Button>
+            
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="gap-2 text-muted-foreground hover:text-foreground"
+              data-testid={`button-comment-${entry.id}`}
+            >
+              <MessageCircle className="h-4 w-4" />
+              <span className="text-sm">3</span>
+            </Button>
+          </div>
+          
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={() => onShare?.(entry.id)}
+            className="text-muted-foreground hover:text-foreground"
+            data-testid={`button-share-${entry.id}`}
+          >
+            <Share className="h-4 w-4" />
+          </Button>
+        </div>
+      </CardFooter>
+    </Card>
+  )
+}

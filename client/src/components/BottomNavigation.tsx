@@ -1,1 +1,66 @@
-import { Link, useLocation } from 'wouter'\nimport { Button } from '@/components/ui/button'\nimport { Home, Mic, Search, MessageSquare, User } from 'lucide-react'\nimport { cn } from '@/lib/utils'\n\ninterface NavItem {\n  icon: React.ComponentType<{ className?: string }>\n  label: string\n  path: string\n  testId: string\n}\n\nconst navItems: NavItem[] = [\n  { icon: Home, label: 'Feed', path: '/', testId: 'nav-feed' },\n  { icon: Mic, label: 'Record', path: '/record', testId: 'nav-record' },\n  { icon: Search, label: 'Search', path: '/search', testId: 'nav-search' },\n  { icon: MessageSquare, label: 'AI Chat', path: '/chat', testId: 'nav-chat' },\n  { icon: User, label: 'Profile', path: '/profile', testId: 'nav-profile' }\n]\n\nexport default function BottomNavigation() {\n  const [location] = useLocation()\n\n  return (\n    <nav className=\"fixed bottom-0 left-0 right-0 bg-background border-t border-border safe-area-pb z-50\">\n      <div className=\"flex items-center justify-around px-2 py-1\">\n        {navItems.map((item) => {\n          const isActive = location === item.path || (item.path !== '/' && location.startsWith(item.path))\n          const Icon = item.icon\n          \n          return (\n            <Link key={item.path} href={item.path}>\n              <Button\n                variant=\"ghost\"\n                size=\"sm\"\n                className={cn(\n                  'flex flex-col items-center gap-1 h-auto py-2 px-3 rounded-lg transition-colors',\n                  isActive \n                    ? 'text-primary bg-primary/10' \n                    : 'text-muted-foreground hover:text-foreground'\n                )}\n                data-testid={item.testId}\n              >\n                <Icon className={cn('h-5 w-5', isActive && 'text-primary')} />\n                <span className=\"text-xs font-medium\">{item.label}</span>\n              </Button>\n            </Link>\n          )\n        })}\n      </div>\n    </nav>\n  )\n}\n\n// Add safe area padding for iOS devices\nconst style = `\n  .safe-area-pb {\n    padding-bottom: env(safe-area-inset-bottom);\n  }\n`\n\nif (typeof document !== 'undefined') {\n  const styleElement = document.createElement('style')\n  styleElement.textContent = style\n  document.head.appendChild(styleElement)\n}"
+import { Link, useLocation } from 'wouter'
+import { Button } from '@/components/ui/button'
+import { Home, Mic, Search, MessageSquare, User } from 'lucide-react'
+import { cn } from '@/lib/utils'
+
+interface NavItem {
+  icon: React.ComponentType<{ className?: string }>
+  label: string
+  path: string
+  testId: string
+}
+
+const navItems: NavItem[] = [
+  { icon: Home, label: 'Feed', path: '/', testId: 'nav-feed' },
+  { icon: Mic, label: 'Record', path: '/record', testId: 'nav-record' },
+  { icon: Search, label: 'Search', path: '/search', testId: 'nav-search' },
+  { icon: MessageSquare, label: 'AI Chat', path: '/chat', testId: 'nav-chat' },
+  { icon: User, label: 'Profile', path: '/profile', testId: 'nav-profile' }
+]
+
+export default function BottomNavigation() {
+  const [location] = useLocation()
+
+  return (
+    <nav className="fixed bottom-0 left-0 right-0 bg-background border-t border-border safe-area-pb z-50">
+      <div className="flex items-center justify-around px-2 py-1">
+        {navItems.map((item) => {
+          const isActive = location === item.path || (item.path !== '/' && location.startsWith(item.path))
+          const Icon = item.icon
+          
+          return (
+            <Link key={item.path} href={item.path}>
+              <Button
+                variant="ghost"
+                size="sm"
+                className={cn(
+                  'flex flex-col items-center gap-1 h-auto py-2 px-3 rounded-lg transition-colors',
+                  isActive 
+                    ? 'text-primary bg-primary/10' 
+                    : 'text-muted-foreground hover:text-foreground'
+                )}
+                data-testid={item.testId}
+              >
+                <Icon className={cn('h-5 w-5', isActive && 'text-primary')} />
+                <span className="text-xs font-medium">{item.label}</span>
+              </Button>
+            </Link>
+          )
+        })}
+      </div>
+    </nav>
+  )
+}
+
+// Add safe area padding for iOS devices
+const style = `
+  .safe-area-pb {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+`
+
+if (typeof document !== 'undefined') {
+  const styleElement = document.createElement('style')
+  styleElement.textContent = style
+  document.head.appendChild(styleElement)
+}

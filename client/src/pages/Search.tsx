@@ -1,1 +1,200 @@
-import { useState } from 'react'\nimport { Card, CardContent } from '@/components/ui/card'\nimport { Input } from '@/components/ui/input'\nimport { Button } from '@/components/ui/button'\nimport { Badge } from '@/components/ui/badge'\nimport { ScrollArea } from '@/components/ui/scroll-area'\nimport { Search as SearchIcon, Filter, Calendar, Hash, User, Clock } from 'lucide-react'\nimport JournalEntryCard from '@/components/JournalEntryCard'\nimport ThemeToggle from '@/components/ThemeToggle'\nimport { JournalEntryWithUser } from '@shared/schema'\n\nexport default function Search() {\n  const [searchQuery, setSearchQuery] = useState('')\n  const [activeFilter, setActiveFilter] = useState<'all' | 'text' | 'tags' | 'date' | 'people'>('all')\n  \n  // Mock search results - todo: replace with real search\n  const mockResults: JournalEntryWithUser[] = [\n    {\n      id: '1',\n      userId: 'user1',\n      title: 'Mindful Morning',\n      content: 'Started with meditation and gratitude practice...',\n      audioUrl: undefined,\n      mediaUrls: [],\n      tags: ['meditation', 'morning', 'gratitude'],\n      privacy: 'public' as const,\n      sharedWith: [],\n      createdAt: new Date('2024-01-10T08:00:00Z'),\n      updatedAt: new Date('2024-01-10T08:00:00Z'),\n      user: {\n        id: 'user1',\n        email: 'user@example.com',\n        firstName: 'Sarah',\n        lastName: 'Wilson',\n        profileImageUrl: 'https://images.unsplash.com/photo-1494790108755-2616b2dc1193?w=150',\n        createdAt: new Date(),\n        updatedAt: new Date()\n      }\n    }\n  ]\n\n  const recentSearches = ['morning routine', 'family time', 'travel memories', 'work reflections']\n  const suggestedTags = ['meditation', 'gratitude', 'family', 'travel', 'work', 'goals', 'reflection']\n\n  const filters = [\n    { key: 'all' as const, label: 'All', icon: SearchIcon },\n    { key: 'text' as const, label: 'Text', icon: SearchIcon },\n    { key: 'tags' as const, label: 'Tags', icon: Hash },\n    { key: 'date' as const, label: 'Date', icon: Calendar },\n    { key: 'people' as const, label: 'People', icon: User }\n  ]\n\n  return (\n    <div className=\"flex flex-col h-screen bg-background\">\n      {/* Header */}\n      <header className=\"sticky top-0 z-40 bg-background border-b border-border px-4 py-3\">\n        <div className=\"flex items-center justify-between mb-3\">\n          <h1 className=\"text-lg font-semibold text-foreground\">Search</h1>\n          <ThemeToggle />\n        </div>\n        \n        {/* Search input */}\n        <div className=\"relative\">\n          <SearchIcon className=\"absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground\" />\n          <Input\n            placeholder=\"Search your journal...\"\n            value={searchQuery}\n            onChange={(e) => setSearchQuery(e.target.value)}\n            className=\"pl-10 pr-4\"\n            data-testid=\"input-search\"\n          />\n        </div>\n        \n        {/* Filter buttons */}\n        <div className=\"flex gap-2 mt-3 overflow-x-auto\">\n          {filters.map((filter) => {\n            const Icon = filter.icon\n            return (\n              <Button\n                key={filter.key}\n                variant={activeFilter === filter.key ? 'default' : 'outline'}\n                size=\"sm\"\n                onClick={() => setActiveFilter(filter.key)}\n                className=\"flex-shrink-0\"\n                data-testid={`filter-${filter.key}`}\n              >\n                <Icon className=\"h-3 w-3 mr-1\" />\n                {filter.label}\n              </Button>\n            )\n          })}\n        </div>\n      </header>\n\n      <ScrollArea className=\"flex-1\">\n        <div className=\"p-4 space-y-6 pb-20\">\n          {/* Recent searches */}\n          {!searchQuery && (\n            <div className=\"space-y-4\">\n              <div>\n                <h3 className=\"text-sm font-medium text-foreground mb-3 flex items-center gap-2\">\n                  <Clock className=\"h-4 w-4\" />\n                  Recent Searches\n                </h3>\n                <div className=\"flex flex-wrap gap-2\">\n                  {recentSearches.map((search) => (\n                    <Badge \n                      key={search}\n                      variant=\"outline\" \n                      className=\"cursor-pointer hover-elevate\"\n                      onClick={() => setSearchQuery(search)}\n                      data-testid={`recent-search-${search.replace(/\\s+/g, '-')}`}\n                    >\n                      {search}\n                    </Badge>\n                  ))}\n                </div>\n              </div>\n              \n              <div>\n                <h3 className=\"text-sm font-medium text-foreground mb-3 flex items-center gap-2\">\n                  <Hash className=\"h-4 w-4\" />\n                  Popular Tags\n                </h3>\n                <div className=\"flex flex-wrap gap-2\">\n                  {suggestedTags.map((tag) => (\n                    <Badge \n                      key={tag}\n                      variant=\"secondary\" \n                      className=\"cursor-pointer hover-elevate\"\n                      onClick={() => setSearchQuery(`#${tag}`)}\n                      data-testid={`suggested-tag-${tag}`}\n                    >\n                      #{tag}\n                    </Badge>\n                  ))}\n                </div>\n              </div>\n            </div>\n          )}\n          \n          {/* Search results */}\n          {searchQuery && (\n            <div className=\"space-y-4\">\n              <div className=\"flex items-center justify-between\">\n                <h3 className=\"text-sm font-medium text-foreground\">\n                  {mockResults.length} result{mockResults.length !== 1 ? 's' : ''} for \"{searchQuery}\"\n                </h3>\n                <Button variant=\"outline\" size=\"sm\" data-testid=\"button-advanced-search\">\n                  <Filter className=\"h-3 w-3 mr-1\" />\n                  Filters\n                </Button>\n              </div>\n              \n              {mockResults.length > 0 ? (\n                <div className=\"space-y-4\">\n                  {mockResults.map((entry) => (\n                    <JournalEntryCard\n                      key={entry.id}\n                      entry={entry}\n                      onEdit={(id) => console.log('Edit:', id)}\n                      onShare={(id) => console.log('Share:', id)}\n                      onDelete={(id) => console.log('Delete:', id)}\n                      onPlayAudio={(url) => console.log('Play:', url)}\n                    />\n                  ))}\n                </div>\n              ) : (\n                <Card className=\"p-8 text-center\">\n                  <SearchIcon className=\"h-12 w-12 text-muted-foreground mx-auto mb-4\" />\n                  <h3 className=\"text-lg font-medium text-foreground mb-2\">No results found</h3>\n                  <p className=\"text-sm text-muted-foreground max-w-sm mx-auto\">\n                    Try adjusting your search terms or filters to find what you're looking for.\n                  </p>\n                </Card>\n              )}\n            </div>\n          )}\n          \n          {/* Empty state when no search */}\n          {!searchQuery && (\n            <Card className=\"p-8 text-center mt-8\">\n              <SearchIcon className=\"h-16 w-16 text-muted-foreground mx-auto mb-4\" />\n              <h3 className=\"text-xl font-medium text-foreground mb-2\">Search Your Journal</h3>\n              <p className=\"text-sm text-muted-foreground max-w-md mx-auto mb-6\">\n                Find specific entries, explore themes, or discover patterns in your writing. Search by keywords, tags, dates, or people mentioned.\n              </p>\n              <div className=\"space-y-2 text-xs text-muted-foreground max-w-sm mx-auto\">\n                <p><strong>Pro tips:</strong></p>\n                <p>• Use #tags to find entries with specific themes</p>\n                <p>• Search @mentions to find entries about people</p>\n                <p>• Type dates like \"January 2024\" to find entries from specific periods</p>\n              </div>\n            </Card>\n          )}\n        </div>\n      </ScrollArea>\n    </div>\n  )\n}"
+import { useState } from 'react'
+import { Card, CardContent } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { Search as SearchIcon, Filter, Calendar, Hash, User, Clock } from 'lucide-react'
+import JournalEntryCard from '@/components/JournalEntryCard'
+import ThemeToggle from '@/components/ThemeToggle'
+import { JournalEntryWithUser } from '@shared/schema'
+
+export default function Search() {
+  const [searchQuery, setSearchQuery] = useState('')
+  const [activeFilter, setActiveFilter] = useState<'all' | 'text' | 'tags' | 'date' | 'people'>('all')
+  
+  // Mock search results - todo: replace with real search
+  const mockResults: JournalEntryWithUser[] = [
+    {
+      id: '1',
+      userId: 'user1',
+      title: 'Mindful Morning',
+      content: 'Started with meditation and gratitude practice...',
+      audioUrl: undefined,
+      mediaUrls: [],
+      tags: ['meditation', 'morning', 'gratitude'],
+      privacy: 'public' as const,
+      sharedWith: [],
+      createdAt: new Date('2024-01-10T08:00:00Z'),
+      updatedAt: new Date('2024-01-10T08:00:00Z'),
+      user: {
+        id: 'user1',
+        email: 'user@example.com',
+        firstName: 'Sarah',
+        lastName: 'Wilson',
+        profileImageUrl: 'https://images.unsplash.com/photo-1494790108755-2616b2dc1193?w=150',
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }
+    }
+  ]
+
+  const recentSearches = ['morning routine', 'family time', 'travel memories', 'work reflections']
+  const suggestedTags = ['meditation', 'gratitude', 'family', 'travel', 'work', 'goals', 'reflection']
+
+  const filters = [
+    { key: 'all' as const, label: 'All', icon: SearchIcon },
+    { key: 'text' as const, label: 'Text', icon: SearchIcon },
+    { key: 'tags' as const, label: 'Tags', icon: Hash },
+    { key: 'date' as const, label: 'Date', icon: Calendar },
+    { key: 'people' as const, label: 'People', icon: User }
+  ]
+
+  return (
+    <div className="flex flex-col h-screen bg-background">
+      {/* Header */}
+      <header className="sticky top-0 z-40 bg-background border-b border-border px-4 py-3">
+        <div className="flex items-center justify-between mb-3">
+          <h1 className="text-lg font-semibold text-foreground">Search</h1>
+          <ThemeToggle />
+        </div>
+        
+        {/* Search input */}
+        <div className="relative">
+          <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search your journal..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-10 pr-4"
+            data-testid="input-search"
+          />
+        </div>
+        
+        {/* Filter buttons */}
+        <div className="flex gap-2 mt-3 overflow-x-auto">
+          {filters.map((filter) => {
+            const Icon = filter.icon
+            return (
+              <Button
+                key={filter.key}
+                variant={activeFilter === filter.key ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setActiveFilter(filter.key)}
+                className="flex-shrink-0"
+                data-testid={`filter-${filter.key}`}
+              >
+                <Icon className="h-3 w-3 mr-1" />
+                {filter.label}
+              </Button>
+            )
+          })}
+        </div>
+      </header>
+
+      <ScrollArea className="flex-1">
+        <div className="p-4 space-y-6 pb-20">
+          {/* Recent searches */}
+          {!searchQuery && (
+            <div className="space-y-4">
+              <div>
+                <h3 className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
+                  <Clock className="h-4 w-4" />
+                  Recent Searches
+                </h3>
+                <div className="flex flex-wrap gap-2">
+                  {recentSearches.map((search) => (
+                    <Badge 
+                      key={search}
+                      variant="outline" 
+                      className="cursor-pointer hover-elevate"
+                      onClick={() => setSearchQuery(search)}
+                      data-testid={`recent-search-${search.replace(/\\s+/g, '-')}`}
+                    >
+                      {search}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+              
+              <div>
+                <h3 className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
+                  <Hash className="h-4 w-4" />
+                  Popular Tags
+                </h3>
+                <div className="flex flex-wrap gap-2">
+                  {suggestedTags.map((tag) => (
+                    <Badge 
+                      key={tag}
+                      variant="secondary" 
+                      className="cursor-pointer hover-elevate"
+                      onClick={() => setSearchQuery(`#${tag}`)}
+                      data-testid={`suggested-tag-${tag}`}
+                    >
+                      #{tag}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {/* Search results */}
+          {searchQuery && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-medium text-foreground">
+                  {mockResults.length} result{mockResults.length !== 1 ? 's' : ''} for "{searchQuery}"
+                </h3>
+                <Button variant="outline" size="sm" data-testid="button-advanced-search">
+                  <Filter className="h-3 w-3 mr-1" />
+                  Filters
+                </Button>
+              </div>
+              
+              {mockResults.length > 0 ? (
+                <div className="space-y-4">
+                  {mockResults.map((entry) => (
+                    <JournalEntryCard
+                      key={entry.id}
+                      entry={entry}
+                      onEdit={(id) => console.log('Edit:', id)}
+                      onShare={(id) => console.log('Share:', id)}
+                      onDelete={(id) => console.log('Delete:', id)}
+                      onPlayAudio={(url) => console.log('Play:', url)}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <Card className="p-8 text-center">
+                  <SearchIcon className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-foreground mb-2">No results found</h3>
+                  <p className="text-sm text-muted-foreground max-w-sm mx-auto">
+                    Try adjusting your search terms or filters to find what you are looking for.
+                  </p>
+                </Card>
+              )}
+            </div>
+          )}
+          
+          {/* Empty state when no search */}
+          {!searchQuery && (
+            <Card className="p-8 text-center mt-8">
+              <SearchIcon className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+              <h3 className="text-xl font-medium text-foreground mb-2">Search Your Journal</h3>
+              <p className="text-sm text-muted-foreground max-w-md mx-auto mb-6">
+                Find specific entries, explore themes, or discover patterns in your writing. Search by keywords, tags, dates, or people mentioned.
+              </p>
+              <div className="space-y-2 text-xs text-muted-foreground max-w-sm mx-auto">
+                <p><strong>Pro tips:</strong></p>
+                <p>• Use #tags to find entries with specific themes</p>
+                <p>• Search @mentions to find entries about people</p>
+                <p>• Type dates like "January 2024" to find entries from specific periods</p>
+              </div>
+            </Card>
+          )}
+        </div>
+      </ScrollArea>
+    </div>
+  )
+}
