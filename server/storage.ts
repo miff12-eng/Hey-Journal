@@ -13,7 +13,7 @@ import {
 import { randomUUID } from "crypto";
 import { drizzle } from "drizzle-orm/neon-http";
 import { neon } from "@neondatabase/serverless";
-import { eq, desc, and, ilike, or } from "drizzle-orm";
+import { eq, desc, and, ilike, or, sql } from "drizzle-orm";
 import { users, journalEntries, aiChatSessions } from "@shared/schema";
 
 // modify the interface with any CRUD methods
@@ -237,16 +237,16 @@ class DbStorage implements IStorage {
     
     if (!result[0]) return undefined;
     
-    // Get public entries count
+    // Get public entries count using proper SQL COUNT
     const countResult = await this.db
-      .select({ count: journalEntries.id })
+      .select({ count: sql<number>`count(*)` })
       .from(journalEntries)
       .where(and(eq(journalEntries.userId, result[0].id), eq(journalEntries.privacy, 'public')));
     
     return {
       ...result[0],
       username: result[0].username!, // Assert non-null for public profiles
-      publicEntriesCount: countResult.length
+      publicEntriesCount: countResult[0]?.count || 0
     };
   }
 
@@ -286,8 +286,8 @@ class DbStorage implements IStorage {
     );
     
     if (cursor) {
-      // TODO: Implement proper cursor pagination with createdAt comparison
-      // For now, skip cursor pagination
+      const cursorDate = new Date(cursor);
+      whereConditions = and(whereConditions, sql`${journalEntries.createdAt} < ${cursorDate}`);
     }
 
     const result = await this.db
@@ -301,12 +301,13 @@ class DbStorage implements IStorage {
         tags: journalEntries.tags,
         createdAt: journalEntries.createdAt,
         updatedAt: journalEntries.updatedAt,
-        // User fields
+        // User fields with privacy check
         userUsername: users.username,
         userFirstName: users.firstName,
         userLastName: users.lastName,
         userBio: users.bio,
         userProfileImageUrl: users.profileImageUrl,
+        userIsProfilePublic: users.isProfilePublic,
       })
       .from(journalEntries)
       .leftJoin(users, eq(journalEntries.userId, users.id))
@@ -314,25 +315,30 @@ class DbStorage implements IStorage {
       .orderBy(desc(journalEntries.createdAt))
       .limit(limit);
 
-    return result.map(row => ({
-      id: row.id,
-      userId: row.userId,
-      title: row.title,
-      content: row.content,
-      audioUrl: row.audioUrl,
-      mediaUrls: row.mediaUrls || [],
-      tags: row.tags || [],
-      createdAt: row.createdAt!,
-      updatedAt: row.updatedAt!,
-      user: {
-        id: row.userId,
-        username: row.userUsername!,
-        firstName: row.userFirstName,
-        lastName: row.userLastName,
-        bio: row.userBio,
-        profileImageUrl: row.userProfileImageUrl,
-      }
-    }));
+    return result.map(row => {
+      const isProfilePublic = row.userIsProfilePublic === true;
+      
+      return {
+        id: row.id,
+        userId: row.userId,
+        title: row.title,
+        content: row.content,
+        audioUrl: row.audioUrl,
+        mediaUrls: row.mediaUrls || [],
+        tags: row.tags || [],
+        createdAt: row.createdAt!,
+        updatedAt: row.updatedAt!,
+        user: {
+          id: row.userId,
+          username: row.userUsername!,
+          // Only expose profile details if user profile is public
+          firstName: isProfilePublic ? row.userFirstName : null,
+          lastName: isProfilePublic ? row.userLastName : null,
+          bio: isProfilePublic ? row.userBio : null,
+          profileImageUrl: isProfilePublic ? row.userProfileImageUrl : null,
+        }
+      };
+    });
   }
 
   async getPublicEntryById(id: string): Promise<PublicJournalEntry | undefined> {
@@ -347,12 +353,13 @@ class DbStorage implements IStorage {
         tags: journalEntries.tags,
         createdAt: journalEntries.createdAt,
         updatedAt: journalEntries.updatedAt,
-        // User fields
+        // User fields with privacy check
         userUsername: users.username,
         userFirstName: users.firstName,
         userLastName: users.lastName,
         userBio: users.bio,
         userProfileImageUrl: users.profileImageUrl,
+        userIsProfilePublic: users.isProfilePublic,
       })
       .from(journalEntries)
       .leftJoin(users, eq(journalEntries.userId, users.id))
@@ -361,6 +368,8 @@ class DbStorage implements IStorage {
     if (!result[0]) return undefined;
 
     const row = result[0];
+    const isProfilePublic = row.userIsProfilePublic === true;
+    
     return {
       id: row.id,
       userId: row.userId,
@@ -374,10 +383,11 @@ class DbStorage implements IStorage {
       user: {
         id: row.userId,
         username: row.userUsername!,
-        firstName: row.userFirstName,
-        lastName: row.userLastName,
-        bio: row.userBio,
-        profileImageUrl: row.userProfileImageUrl,
+        // Only expose profile details if user profile is public
+        firstName: isProfilePublic ? row.userFirstName : null,
+        lastName: isProfilePublic ? row.userLastName : null,
+        bio: isProfilePublic ? row.userBio : null,
+        profileImageUrl: isProfilePublic ? row.userProfileImageUrl : null,
       }
     };
   }
@@ -392,8 +402,8 @@ class DbStorage implements IStorage {
     );
     
     if (cursor) {
-      // TODO: Implement proper cursor pagination with createdAt comparison
-      // For now, skip cursor pagination
+      const cursorDate = new Date(cursor);
+      whereConditions = and(whereConditions, sql`${journalEntries.createdAt} < ${cursorDate}`);
     }
 
     const result = await this.db
@@ -407,12 +417,13 @@ class DbStorage implements IStorage {
         tags: journalEntries.tags,
         createdAt: journalEntries.createdAt,
         updatedAt: journalEntries.updatedAt,
-        // User fields
+        // User fields with privacy check
         userUsername: users.username,
         userFirstName: users.firstName,
         userLastName: users.lastName,
         userBio: users.bio,
         userProfileImageUrl: users.profileImageUrl,
+        userIsProfilePublic: users.isProfilePublic,
       })
       .from(journalEntries)
       .leftJoin(users, eq(journalEntries.userId, users.id))
@@ -420,25 +431,30 @@ class DbStorage implements IStorage {
       .orderBy(desc(journalEntries.createdAt))
       .limit(limit);
 
-    return result.map(row => ({
-      id: row.id,
-      userId: row.userId,
-      title: row.title,
-      content: row.content,
-      audioUrl: row.audioUrl,
-      mediaUrls: row.mediaUrls || [],
-      tags: row.tags || [],
-      createdAt: row.createdAt!,
-      updatedAt: row.updatedAt!,
-      user: {
-        id: row.userId,
-        username: row.userUsername!,
-        firstName: row.userFirstName,
-        lastName: row.userLastName,
-        bio: row.userBio,
-        profileImageUrl: row.userProfileImageUrl,
-      }
-    }));
+    return result.map(row => {
+      const isProfilePublic = row.userIsProfilePublic === true;
+      
+      return {
+        id: row.id,
+        userId: row.userId,
+        title: row.title,
+        content: row.content,
+        audioUrl: row.audioUrl,
+        mediaUrls: row.mediaUrls || [],
+        tags: row.tags || [],
+        createdAt: row.createdAt!,
+        updatedAt: row.updatedAt!,
+        user: {
+          id: row.userId,
+          username: row.userUsername!,
+          // Only expose profile details if user profile is public
+          firstName: isProfilePublic ? row.userFirstName : null,
+          lastName: isProfilePublic ? row.userLastName : null,
+          bio: isProfilePublic ? row.userBio : null,
+          profileImageUrl: isProfilePublic ? row.userProfileImageUrl : null,
+        }
+      };
+    });
   }
 }
 
