@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Camera, Image, Users, Globe, Lock, Save, X, Upload } from 'lucide-react'
+import { useToast } from '@/hooks/use-toast'
 import RecordButton from '@/components/RecordButton'
 import ThemeToggle from '@/components/ThemeToggle'
 import { cn } from '@/lib/utils'
@@ -23,6 +24,8 @@ export default function Record() {
   const [isRecording, setIsRecording] = useState(false)
   const [isTranscribing, setIsTranscribing] = useState(false)
   const [attachedFiles, setAttachedFiles] = useState<File[]>([])
+  const [isSaving, setIsSaving] = useState(false)
+  const { toast } = useToast()
 
   const handleRecordingStart = () => {
     setIsRecording(true)
@@ -98,7 +101,7 @@ export default function Record() {
     setAttachedFiles(prev => prev.filter((_, i) => i !== index))
   }
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const entry = {
       title: title.trim(),
       content: content.trim(),
@@ -107,7 +110,65 @@ export default function Record() {
       attachedFiles
     }
     console.log('Saving entry:', entry)
-    // In a real app, this would save to the backend
+    
+    setIsSaving(true)
+    try {
+      const response = await fetch('/api/journal/entries', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          title: entry.title || undefined,
+          content: entry.content,
+          tags: entry.tags,
+          privacy: entry.privacy
+        })
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        // Success! Clear the form and show success message
+        setTitle('')
+        setContent('')
+        setTags([])
+        setPrivacy('private')
+        setAttachedFiles([])
+        
+        toast({
+          title: "Entry saved!",
+          description: "Your journal entry has been saved successfully.",
+        })
+        
+        console.log('Entry saved successfully:', data)
+        
+        // Show AI-suggested tags if any were added
+        if (data.analysis?.suggestedTags?.length > 0) {
+          toast({
+            title: "AI suggestions added",
+            description: `Added suggested tags: ${data.analysis.suggestedTags.join(', ')}`,
+          })
+        }
+      } else {
+        const errorData = await response.json().catch(() => ({}))
+        toast({
+          title: "Save failed",
+          description: errorData.error || 'Unable to save entry. Please try again.',
+          variant: "destructive"
+        })
+        console.error('Failed to save entry:', errorData.error || 'Unknown error')
+      }
+    } catch (error) {
+      toast({
+        title: "Connection error",
+        description: 'Unable to connect to server. Please check your connection.',
+        variant: "destructive"
+      })
+      console.error('Error saving entry:', error)
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   const privacyOptions = [
@@ -126,12 +187,21 @@ export default function Record() {
             <ThemeToggle />
             <Button 
               onClick={handleSave}
-              disabled={!content.trim()}
+              disabled={!content.trim() || isSaving}
               size="sm"
               data-testid="button-save-entry"
             >
-              <Save className="h-4 w-4 mr-2" />
-              Save
+              {isSaving ? (
+                <>
+                  <div className="animate-spin h-4 w-4 mr-2 border-2 border-current border-t-transparent rounded-full" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Save className="h-4 w-4 mr-2" />
+                  Save
+                </>
+              )}
             </Button>
           </div>
         </div>
