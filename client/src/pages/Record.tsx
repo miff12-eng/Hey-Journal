@@ -10,6 +10,7 @@ import { Separator } from '@/components/ui/separator'
 import { Camera, Image, Users, Globe, Lock, Save, X, Upload } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import RecordButton from '@/components/RecordButton'
+import { ObjectUploader } from '@/components/ObjectUploader'
 import ThemeToggle from '@/components/ThemeToggle'
 import { cn } from '@/lib/utils'
 
@@ -23,7 +24,7 @@ export default function Record() {
   const [privacy, setPrivacy] = useState<PrivacyLevel>('private')
   const [isRecording, setIsRecording] = useState(false)
   const [isTranscribing, setIsTranscribing] = useState(false)
-  const [attachedFiles, setAttachedFiles] = useState<File[]>([])
+  const [mediaUrls, setMediaUrls] = useState<string[]>([])
   const [isSaving, setIsSaving] = useState(false)
   const { toast } = useToast()
 
@@ -90,15 +91,16 @@ export default function Record() {
     }
   }
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      const newFiles = Array.from(e.target.files)
-      setAttachedFiles(prev => [...prev, ...newFiles])
-    }
+  const handlePhotoUpload = (uploadedUrls: string[]) => {
+    setMediaUrls(prev => [...prev, ...uploadedUrls])
+    toast({
+      title: "Photos uploaded!",
+      description: `${uploadedUrls.length} photo${uploadedUrls.length > 1 ? 's' : ''} added to your entry.`,
+    })
   }
 
-  const removeFile = (index: number) => {
-    setAttachedFiles(prev => prev.filter((_, i) => i !== index))
+  const removePhoto = (index: number) => {
+    setMediaUrls(prev => prev.filter((_, i) => i !== index))
   }
 
   const handleSave = async () => {
@@ -107,7 +109,7 @@ export default function Record() {
       content: content.trim(),
       tags,
       privacy,
-      attachedFiles
+      mediaUrls
     }
     console.log('Saving entry:', entry)
     
@@ -123,7 +125,8 @@ export default function Record() {
           title: entry.title || undefined,
           content: entry.content,
           tags: entry.tags,
-          privacy: entry.privacy
+          privacy: entry.privacy,
+          mediaUrls: mediaUrls
         })
       })
       
@@ -134,7 +137,7 @@ export default function Record() {
         setContent('')
         setTags([])
         setPrivacy('private')
-        setAttachedFiles([])
+        setMediaUrls([])
         
         toast({
           title: "Entry saved!",
@@ -272,70 +275,39 @@ export default function Record() {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              <div className="flex gap-2">
-                <input
-                  type="file"
-                  id="photo-upload"
-                  accept="image/*"
-                  multiple
-                  onChange={handleFileUpload}
-                  className="hidden"
-                />
-                <input
-                  type="file"
-                  id="video-upload"
-                  accept="video/*"
-                  multiple
-                  onChange={handleFileUpload}
-                  className="hidden"
-                />
-                
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={() => document.getElementById('photo-upload')?.click()}
-                  data-testid="button-add-photo"
-                >
-                  <Camera className="h-4 w-4 mr-2" />
-                  Add Photo
-                </Button>
-                
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={() => document.getElementById('video-upload')?.click()}
-                  data-testid="button-add-video"
-                >
-                  <Upload className="h-4 w-4 mr-2" />
-                  Add Video
-                </Button>
-              </div>
+              <ObjectUploader
+                maxNumberOfFiles={5}
+                maxFileSize={10485760} // 10MB
+                onComplete={handlePhotoUpload}
+                buttonClassName="w-full"
+              >
+                <div className="flex items-center gap-2">
+                  <Camera className="h-4 w-4" />
+                  Add Photos
+                </div>
+              </ObjectUploader>
               
-              {attachedFiles.length > 0 && (
+              {mediaUrls.length > 0 && (
                 <div className="grid grid-cols-3 gap-2">
-                  {attachedFiles.map((file, index) => (
+                  {mediaUrls.map((url, index) => (
                     <div key={index} className="relative">
                       <div className="aspect-square bg-muted rounded-md flex items-center justify-center relative overflow-hidden">
-                        {file.type.startsWith('image/') ? (
-                          <img 
-                            src={URL.createObjectURL(file)} 
-                            alt={file.name}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <Upload className="h-6 w-6 text-muted-foreground" />
-                        )}
+                        <img 
+                          src={url} 
+                          alt={`Photo ${index + 1}`}
+                          className="w-full h-full object-cover"
+                          data-testid={`photo-${index}`}
+                        />
                         <Button
                           variant="destructive"
                           size="icon"
                           className="absolute top-1 right-1 h-6 w-6"
-                          onClick={() => removeFile(index)}
-                          data-testid={`button-remove-file-${index}`}
+                          onClick={() => removePhoto(index)}
+                          data-testid={`button-remove-photo-${index}`}
                         >
                           <X className="h-3 w-3" />
                         </Button>
                       </div>
-                      <p className="text-xs text-muted-foreground mt-1 truncate">{file.name}</p>
                     </div>
                   ))}
                 </div>

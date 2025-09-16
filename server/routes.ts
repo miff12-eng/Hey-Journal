@@ -5,6 +5,11 @@ import { generateAIResponse, transcribeAudio, analyzeJournalEntry } from "./ai";
 import { insertJournalEntrySchema, insertAiChatSessionSchema } from "@shared/schema";
 import { z } from "zod";
 import multer from "multer";
+import {
+  ObjectStorageService,
+  ObjectNotFoundError,
+} from "./objectStorage";
+import { ObjectPermission } from "./objectAcl";
 
 // Extend Express Request interface to include userId
 declare global {
@@ -326,6 +331,75 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Public Entry Detail Error:', error);
       res.status(500).json({ error: 'Failed to fetch entry' });
+    }
+  });
+
+  // Object Storage endpoints for photo uploads
+  
+  // Serve uploaded photos from object storage
+  app.get("/objects/:objectPath(*)", async (req, res) => {
+    const objectStorageService = new ObjectStorageService();
+    try {
+      const objectFile = await objectStorageService.getObjectEntityFile(
+        req.path,
+      );
+      
+      // Check if user can access this object
+      const canAccess = await objectStorageService.canAccessObjectEntity({
+        objectFile,
+        userId: req.userId,
+        requestedPermission: ObjectPermission.READ,
+      });
+      
+      if (!canAccess) {
+        return res.sendStatus(401);
+      }
+      
+      objectStorageService.downloadObject(objectFile, res);
+    } catch (error) {
+      console.error("Error accessing object:", error);
+      if (error instanceof ObjectNotFoundError) {
+        return res.sendStatus(404);
+      }
+      return res.sendStatus(500);
+    }
+  });
+
+  // Get upload URL for a new photo
+  app.post("/api/photos/upload", async (req, res) => {
+    try {
+      const objectStorageService = new ObjectStorageService();
+      const uploadURL = await objectStorageService.getObjectEntityUploadURL();
+      res.json({ uploadURL });
+    } catch (error) {
+      console.error("Error generating upload URL:", error);
+      res.status(500).json({ error: "Failed to generate upload URL" });
+    }
+  });
+
+  // Set ACL policy after photo upload
+  app.put("/api/photos", async (req, res) => {
+    if (!req.body.photoURL) {
+      return res.status(400).json({ error: "photoURL is required" });
+    }
+
+    try {
+      const objectStorageService = new ObjectStorageService();
+      const objectPath = await objectStorageService.trySetObjectEntityAclPolicy(
+        req.body.photoURL,
+        {
+          owner: req.userId,
+          // Photos are private by default but can be viewed when entry is public
+          visibility: "private",
+        },
+      );
+
+      res.status(200).json({
+        objectPath: objectPath,
+      });
+    } catch (error) {
+      console.error("Error setting photo ACL:", error);
+      res.status(500).json({ error: "Internal server error" });
     }
   });
 
