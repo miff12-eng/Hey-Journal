@@ -45,9 +45,18 @@ Preferred communication style: Simple, everyday language.
 
 ### Voice & AI Features
 - **Voice Recording**: Browser-based audio capture with real-time processing
-- **Transcription**: Placeholder for AI transcription integration (Distil-Whisper recommended)
+- **Transcription**: OpenAI Whisper integration for real-time voice-to-text conversion
 - **AI Chat**: Conversational interface for exploring journal entries and patterns
 - **Audio Visualization**: Real-time waveform display during recording
+
+### Camera & Photo Features
+- **Native Camera Access**: Direct device camera integration using Web APIs (getUserMedia)
+- **Live Camera Preview**: Real-time video stream with capture functionality
+- **Apple Photos Integration**: Seamless access to device photo library including Apple Photos
+- **Dual Upload Options**: "Take Photo" (camera) and "Choose from Photos" (library) buttons
+- **Smart Camera Selection**: Automatic preference for back camera on mobile devices
+- **High-Quality Capture**: 1280x720 resolution with optimized JPEG compression
+- **Cross-Platform Support**: Works on iOS, Android, and desktop browsers with graceful fallbacks
 
 ## External Dependencies
 
