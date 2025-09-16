@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { X, Upload, CheckCircle } from "lucide-react";
+import { X, Upload, CheckCircle, Camera, Image } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface ObjectUploaderProps {
@@ -196,7 +196,7 @@ export function ObjectUploader({
 
           {selectedFiles.length === 0 ? (
             <div className="space-y-4">
-              <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-8 text-center">
+              <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-6 text-center">
                 <Upload className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
                 <p className="text-sm text-muted-foreground mb-2">
                   Select up to {maxNumberOfFiles} photo{maxNumberOfFiles > 1 ? 's' : ''}
@@ -204,19 +204,41 @@ export function ObjectUploader({
                 <p className="text-xs text-muted-foreground mb-4">
                   Max {Math.round(maxFileSize / 1024 / 1024)}MB per file
                 </p>
+                
+                {/* Hidden file inputs for different sources */}
                 <input
                   type="file"
                   accept="image/*"
                   multiple={maxNumberOfFiles > 1}
                   onChange={handleFileSelect}
                   className="hidden"
-                  id="file-input"
+                  id="camera-input"
+                  capture="environment"
                 />
-                <Button asChild variant="outline">
-                  <label htmlFor="file-input" data-testid="button-select-files">
-                    Select Files
-                  </label>
-                </Button>
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple={maxNumberOfFiles > 1}
+                  onChange={handleFileSelect}
+                  className="hidden"
+                  id="photos-input"
+                />
+                
+                {/* Photo source options */}
+                <div className="flex flex-col gap-2">
+                  <Button asChild variant="outline" className="w-full">
+                    <label htmlFor="camera-input" data-testid="button-take-photo">
+                      <Camera className="w-4 h-4 mr-2" />
+                      Take Photo
+                    </label>
+                  </Button>
+                  <Button asChild variant="outline" className="w-full">
+                    <label htmlFor="photos-input" data-testid="button-choose-from-photos">
+                      <Image className="w-4 h-4 mr-2" />
+                      Choose from Photos
+                    </label>
+                  </Button>
+                </div>
               </div>
             </div>
           ) : (
