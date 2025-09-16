@@ -345,14 +345,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
       
       // Check if user can access this object
+      // For public objects, allow access without authentication
+      // For private objects, require authentication and proper permissions
       const canAccess = await objectStorageService.canAccessObjectEntity({
         objectFile,
-        userId: req.userId,
+        userId: req.userId || null, // Allow undefined userId for public objects
         requestedPermission: ObjectPermission.READ,
       });
       
       if (!canAccess) {
-        return res.sendStatus(401);
+        return res.sendStatus(403); // Use 403 instead of 401 for better semantics
       }
       
       objectStorageService.downloadObject(objectFile, res);
@@ -441,8 +443,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         req.body.photoURL,
         {
           owner: req.userId,
-          // Photos are private by default but can be viewed when entry is public
-          visibility: "private",
+          // Photos are public so they can be displayed in browser without authentication
+          visibility: "public",
         },
       );
 
