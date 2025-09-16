@@ -369,8 +369,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/photos/upload", async (req, res) => {
     try {
       const objectStorageService = new ObjectStorageService();
-      const uploadURL = await objectStorageService.getObjectEntityUploadURL();
-      res.json({ uploadURL });
+      const { uploadURL, objectPath } = await objectStorageService.getObjectEntityUploadURL();
+      res.json({ uploadURL, objectPath });
     } catch (error) {
       console.error("Error generating upload URL:", error);
       res.status(500).json({ error: "Failed to generate upload URL" });
@@ -385,7 +385,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     try {
       const objectStorageService = new ObjectStorageService();
-      const objectPath = await objectStorageService.trySetObjectEntityAclPolicy(
+      
+      // First normalize the path to get the canonical object path
+      const objectPath = objectStorageService.normalizeObjectEntityPath(req.body.photoURL);
+      
+      // Security validation: Ensure the path is a valid object path
+      if (!objectPath.startsWith("/objects/")) {
+        return res.status(400).json({ error: "Invalid object path" });
+      }
+
+      // Security validation: Ensure the object path is under uploads/ directory
+      // (this ensures it's in the expected user upload directory structure)
+      const objectId = objectPath.replace("/objects/", "");
+      if (!objectId.startsWith("uploads/")) {
+        return res.status(403).json({ error: "Access denied: Object not in user upload directory" });
+      }
+
+      // Get the object file to validate it exists and check current ownership
+      let objectFile;
+      try {
+        objectFile = await objectStorageService.getObjectEntityFile(objectPath);
+      } catch (error) {
+        if (error instanceof ObjectNotFoundError) {
+          return res.status(404).json({ error: "Object not found" });
+        }
+        throw error;
+      }
+
+      // Security validation: Check if user has permission to modify this object
+      // Since this is right after upload, we check if the user can access it with WRITE permission
+      const canModify = await objectStorageService.canAccessObjectEntity({
+        userId: req.userId,
+        objectFile,
+        requestedPermission: ObjectPermission.WRITE,
+      });
+
+      // If user can't already access it with WRITE permission, they can set initial ACL
+      // This handles the case where the object was just uploaded and has no ACL yet
+      if (!canModify) {
+        // For newly uploaded objects, we allow setting the initial ACL policy
+        // but only if the object was uploaded recently (within last 15 minutes)
+        const [metadata] = await objectFile.getMetadata();
+        const uploadTime = new Date(metadata.timeCreated);
+        const now = new Date();
+        const timeDiff = now.getTime() - uploadTime.getTime();
+        const fifteenMinutes = 15 * 60 * 1000;
+
+        if (timeDiff > fifteenMinutes) {
+          return res.status(403).json({ error: "Access denied: Cannot modify object ACL" });
+        }
+      }
+
+      // Set the ACL policy
+      const finalObjectPath = await objectStorageService.trySetObjectEntityAclPolicy(
         req.body.photoURL,
         {
           owner: req.userId,
@@ -395,10 +447,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
 
       res.status(200).json({
-        objectPath: objectPath,
+        objectPath: finalObjectPath,
       });
     } catch (error) {
       console.error("Error setting photo ACL:", error);
+      if (error instanceof ObjectNotFoundError) {
+        return res.status(404).json({ error: "Object not found" });
+      }
       res.status(500).json({ error: "Internal server error" });
     }
   });

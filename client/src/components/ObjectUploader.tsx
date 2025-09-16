@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { X, Upload, CheckCircle } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 interface ObjectUploaderProps {
   maxNumberOfFiles?: number;
@@ -16,7 +17,7 @@ interface UploadingFile {
   file: File;
   progress: number;
   status: 'uploading' | 'completed' | 'error';
-  url?: string;
+  objectPath?: string;
   error?: string;
 }
 
@@ -39,6 +40,7 @@ export function ObjectUploader({
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [uploadingFiles, setUploadingFiles] = useState<UploadingFile[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const { toast } = useToast();
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
@@ -47,7 +49,11 @@ export function ObjectUploader({
       // Validate file size
       const validFiles = files.filter(file => {
         if (file.size > maxFileSize) {
-          alert(`File ${file.name} is too large. Maximum size is ${Math.round(maxFileSize / 1024 / 1024)}MB`);
+          toast({
+            title: "File too large",
+            description: `File ${file.name} is too large. Maximum size is ${Math.round(maxFileSize / 1024 / 1024)}MB`,
+            variant: "destructive"
+          });
           return false;
         }
         return true;
@@ -74,7 +80,7 @@ export function ObjectUploader({
     }));
     setUploadingFiles(uploads);
 
-    const uploadedUrls: string[] = [];
+    const uploadedObjectPaths: string[] = [];
 
     try {
       // Upload each file
@@ -82,7 +88,7 @@ export function ObjectUploader({
         const upload = uploads[i];
         
         try {
-          // Get upload URL
+          // Get upload URL and object path
           const uploadResponse = await fetch('/api/photos/upload', {
             method: 'POST',
             credentials: 'include'
@@ -92,7 +98,7 @@ export function ObjectUploader({
             throw new Error('Failed to get upload URL');
           }
           
-          const { uploadURL } = await uploadResponse.json();
+          const { uploadURL, objectPath } = await uploadResponse.json();
           
           // Upload file to presigned URL
           const xhr = new XMLHttpRequest();
@@ -110,9 +116,9 @@ export function ObjectUploader({
             xhr.addEventListener('load', () => {
               if (xhr.status === 200) {
                 setUploadingFiles(prev => prev.map((item, idx) => 
-                  idx === i ? { ...item, status: 'completed', url: uploadURL } : item
+                  idx === i ? { ...item, status: 'completed', objectPath } : item
                 ));
-                uploadedUrls.push(uploadURL);
+                uploadedObjectPaths.push(objectPath);
                 resolve();
               } else {
                 reject(new Error(`Upload failed with status ${xhr.status}`));
@@ -148,9 +154,9 @@ export function ObjectUploader({
         }
       }
 
-      // Call completion callback with successful uploads
-      if (uploadedUrls.length > 0) {
-        onComplete?.(uploadedUrls);
+      // Call completion callback with successful uploads (permanent object paths)
+      if (uploadedObjectPaths.length > 0) {
+        onComplete?.(uploadedObjectPaths);
       }
 
     } finally {
