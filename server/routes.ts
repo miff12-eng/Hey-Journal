@@ -1,7 +1,7 @@
 import type { Express, Request } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { generateAIResponse, transcribeAudio, analyzeJournalEntry } from "./ai";
+import { generateAIResponse, transcribeAudio } from "./ai";
 import { analyzeEntry, semanticRank } from "./services/openai";
 import { insertJournalEntrySchema, insertAiChatSessionSchema } from "@shared/schema";
 import { z } from "zod";
@@ -181,25 +181,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const entryData = insertJournalEntrySchema.parse(req.body);
       
-      // Analyze entry with AI if content exists
-      let analysis = null;
-      if (entryData.content) {
-        analysis = await analyzeJournalEntry(entryData.content);
-        
-        // Add AI-suggested tags to existing tags
-        const existingTags = entryData.tags || [];
-        const suggestedTags = analysis.suggestedTags.filter(
-          tag => !existingTags.includes(tag)
-        ).slice(0, 3); // Limit to 3 suggestions
-        
-        entryData.tags = [...existingTags, ...suggestedTags];
+      // Analyze entry with AI if content or media exists
+      let aiInsights = null;
+      if (entryData.content || (entryData.mediaUrls && entryData.mediaUrls.length > 0)) {
+        console.log('🤖 Analyzing journal entry with AI...');
+        try {
+          // Analyze entry content (text + media)
+          aiInsights = await analyzeEntry(
+            entryData.content, 
+            entryData.title, 
+            entryData.mediaUrls || []
+          );
+          
+          // CRITICAL: Store AI insights in the entry data for database persistence
+          entryData.aiInsights = aiInsights;
+          
+          console.log('✨ AI Analysis completed:', { 
+            summary: aiInsights.summary?.substring(0, 50) + '...',
+            keywordsCount: aiInsights.keywords?.length || 0,
+            sentiment: aiInsights.sentiment 
+          });
+        } catch (error) {
+          console.error('❗ AI Analysis failed:', error);
+          // Continue without AI insights if analysis fails
+        }
       }
 
       const entry = await storage.createJournalEntry(entryData, req.userId);
       
       res.json({
         entry,
-        analysis
+        aiInsights
       });
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -259,6 +271,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if (existingEntry.userId !== req.userId) {
         return res.status(403).json({ error: 'Not authorized to update this entry' });
+      }
+      
+      // Analyze updated content with AI if content or media changed
+      if (updates.content !== undefined || updates.mediaUrls !== undefined) {
+        console.log('🤖 Re-analyzing updated journal entry with AI...');
+        try {
+          const aiInsights = await analyzeEntry(
+            updates.content, 
+            updates.title ?? existingEntry.title, 
+            updates.mediaUrls ?? (existingEntry.mediaUrls || [])
+          );
+          
+          // Include AI insights in the update
+          updates.aiInsights = aiInsights;
+          
+          console.log('✨ AI Re-analysis completed:', { 
+            summary: aiInsights.summary?.substring(0, 50) + '...',
+            keywordsCount: aiInsights.keywords?.length || 0,
+            sentiment: aiInsights.sentiment 
+          });
+        } catch (error) {
+          console.error('⚠️ AI Re-analysis failed:', error);
+          // Continue with update even if AI analysis fails
+        }
       }
       
       const updatedEntry = await storage.updateJournalEntry(id, updates);
