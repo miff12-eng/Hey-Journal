@@ -95,7 +95,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       console.log('🔍 Calling OpenAI with:', { entriesCount: entries.length, previousCount: previousMessages.length });
-      const aiResponse = await generateAIResponse(message, entries, previousMessages);
+      const aiResponse = await generateAIResponse(message, entries as any[], previousMessages);
       console.log('✅ OpenAI Response:', aiResponse ? aiResponse.substring(0, 100) + '...' : 'EMPTY RESPONSE');
       
       // Save the conversation
@@ -188,13 +188,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         try {
           // Analyze entry content (text + media)
           aiInsights = await analyzeEntry(
-            entryData.content, 
-            entryData.title, 
-            entryData.mediaUrls || []
+            entryData.content ?? '', 
+            entryData.title ?? undefined, 
+            entryData.mediaUrls ?? []
           );
           
-          // CRITICAL: Store AI insights in the entry data for database persistence
-          entryData.aiInsights = aiInsights;
+          // Store AI insights separately after entry creation
+          // Note: aiInsights will be saved via updateAiInsights after createJournalEntry
           
           console.log('✨ AI Analysis completed:', { 
             summary: aiInsights.summary?.substring(0, 50) + '...',
@@ -208,6 +208,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const entry = await storage.createJournalEntry(entryData, req.userId);
+      
+      // Update AI insights separately if analysis was successful
+      if (aiInsights) {
+        await storage.updateAiInsights(entry.id, aiInsights);
+      }
       
       res.json({
         entry,
@@ -555,6 +560,69 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       console.error('Search Error:', error);
       res.status(500).json({ error: 'Search failed' });
+    }
+  });
+
+  // Analyze existing entries that don't have AI insights
+  app.post('/api/journal/analyze-missing', async (req, res) => {
+    const userId = req.userId; // Use authenticated user ID for security
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    try {
+      console.log('🔄 Starting analysis of existing entries without AI insights...');
+      
+      // Get entries that have media but no AI insights
+      const entriesNeedingAnalysis = await storage.getJournalEntriesByUserId(userId);
+      const entriesToAnalyze = entriesNeedingAnalysis.filter((entry: any) => 
+        !entry.aiInsights && entry.mediaUrls && entry.mediaUrls.length > 0
+      );
+
+      console.log(`📊 Found ${entriesToAnalyze.length} entries that need AI analysis`);
+
+      let analyzed = 0;
+      let errors = 0;
+
+      // Analyze entries one by one to avoid rate limits
+      for (const entry of entriesToAnalyze) {
+        try {
+          console.log(`🤖 Analyzing entry: "${entry.title || entry.id.substring(0, 8)}"...`);
+          
+          const aiInsights = await analyzeEntry(
+            entry.content ?? '', 
+            entry.title ?? undefined, 
+            entry.mediaUrls ?? []
+          );
+
+          // Update the entry with AI insights
+          await storage.updateAiInsights(entry.id, aiInsights);
+          
+          analyzed++;
+          console.log(`✅ Successfully analyzed "${entry.title || entry.id.substring(0, 8)}"`);
+          
+          // Small delay to respect rate limits
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          
+        } catch (error) {
+          console.error(`❌ Failed to analyze entry ${entry.id}:`, error);
+          errors++;
+        }
+      }
+
+      console.log(`🎉 Analysis complete: ${analyzed} analyzed, ${errors} errors`);
+      
+      return res.json({ 
+        message: 'Analysis completed', 
+        analyzed, 
+        errors,
+        totalFound: entriesToAnalyze.length 
+      });
+      
+    } catch (error) {
+      console.error('❗ Error analyzing existing entries:', error);
+      return res.status(500).json({ error: 'Failed to analyze entries' });
     }
   });
 
