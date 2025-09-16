@@ -102,7 +102,17 @@ export async function analyzeMediaContent(mediaUrls: string[]): Promise<{ labels
 
   try {
     // Analyze first media item (could be extended to handle multiple)
-    const mediaUrl = mediaUrls[0];
+    let mediaUrl = mediaUrls[0];
+    
+    // Convert relative URLs to full URLs for OpenAI access
+    if (mediaUrl.startsWith('/')) {
+      const baseUrl = process.env.REPL_DOMAINS ? 
+        `https://${process.env.REPL_DOMAINS.split(',')[0]}` : 
+        'http://localhost:5000';
+      mediaUrl = `${baseUrl}${mediaUrl}`;
+    }
+    
+    console.log('📸 Analyzing image URL:', mediaUrl);
     
     const completion = await openai.chat.completions.create({
       model: "gpt-4o", // Use vision model for image analysis
