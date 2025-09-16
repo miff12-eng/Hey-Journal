@@ -2,6 +2,7 @@ import type { Express, Request } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { generateAIResponse, transcribeAudio, analyzeJournalEntry } from "./ai";
+import { analyzeEntry, semanticRank } from "./services/openai";
 import { insertJournalEntrySchema, insertAiChatSessionSchema } from "@shared/schema";
 import { z } from "zod";
 import multer from "multer";
@@ -88,8 +89,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let previousMessages: any[] = [];
       if (conversationId) {
         const session = await storage.getAiChatSession(conversationId);
-        if (session) {
-          previousMessages = session.messages || [];
+        if (session && session.messages) {
+          previousMessages = Array.isArray(session.messages) ? session.messages : [];
         }
       }
 
@@ -291,6 +292,229 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Delete Entry Error:', error);
       res.status(500).json({ error: 'Failed to delete journal entry' });
+    }
+  });
+
+  // Search journal entries endpoint  
+  app.post('/api/search', async (req, res) => {
+    try {
+      const searchSchema = z.object({
+        query: z.string().min(1, 'Search query is required'),
+        mode: z.enum(['keyword', 'semantic']).default('keyword'),
+        filters: z.object({
+          privacy: z.array(z.enum(['private', 'shared', 'public'])).optional(),
+          tags: z.array(z.string()).optional(),
+          dateRange: z.object({
+            from: z.string().datetime().optional(),
+            to: z.string().datetime().optional()
+          }).optional(),
+          sentiment: z.enum(['positive', 'negative', 'neutral']).optional()
+        }).optional(),
+        limit: z.number().int().min(1).max(50).default(20)
+      });
+
+      const { query, mode, filters = {}, limit } = searchSchema.parse(req.body);
+      
+      console.log('🔍 Search request:', { query, mode, userId: req.userId });
+
+      // Get user's journal entries 
+      const allEntries = await storage.getJournalEntriesByUserId(req.userId, 100); // Get more for filtering
+      
+      let filteredEntries = allEntries;
+
+      // Apply privacy filters if specified
+      if (filters.privacy && filters.privacy.length > 0) {
+        filteredEntries = filteredEntries.filter(entry => 
+          filters.privacy!.includes(entry.privacy as any)
+        );
+      }
+
+      // Apply tag filters if specified
+      if (filters.tags && filters.tags.length > 0) {
+        filteredEntries = filteredEntries.filter(entry =>
+          filters.tags!.some(tag => 
+            (entry.tags || []).some(entryTag => 
+              entryTag.toLowerCase().includes(tag.toLowerCase())
+            )
+          )
+        );
+      }
+
+      // Apply date range filters if specified
+      if (filters.dateRange) {
+        if (filters.dateRange.from) {
+          const fromDate = new Date(filters.dateRange.from);
+          filteredEntries = filteredEntries.filter(entry => 
+            entry.createdAt && new Date(entry.createdAt) >= fromDate
+          );
+        }
+        if (filters.dateRange.to) {
+          const toDate = new Date(filters.dateRange.to);
+          filteredEntries = filteredEntries.filter(entry => 
+            entry.createdAt && new Date(entry.createdAt) <= toDate
+          );
+        }
+      }
+
+      // Apply sentiment filter if specified  
+      if (filters.sentiment) {
+        filteredEntries = filteredEntries.filter(entry =>
+          entry.aiInsights?.sentiment === filters.sentiment
+        );
+      }
+
+      let searchResults = [];
+
+      if (mode === 'keyword') {
+        // Keyword-based search
+        const queryLower = query.toLowerCase();
+        const queryWords = queryLower.split(/\s+/).filter(word => word.length > 0);
+
+        for (const entry of filteredEntries) {
+          const matches = [];
+          let totalScore = 0;
+
+          // Search in title
+          if (entry.title && entry.title.toLowerCase().includes(queryLower)) {
+            matches.push({ field: 'title', snippet: entry.title, score: 0.9 });
+            totalScore += 0.9;
+          }
+
+          // Search in content
+          const contentLower = entry.content.toLowerCase();
+          if (contentLower.includes(queryLower)) {
+            const snippetStart = Math.max(0, contentLower.indexOf(queryLower) - 50);
+            const snippetEnd = Math.min(entry.content.length, snippetStart + 200);
+            const snippet = entry.content.substring(snippetStart, snippetEnd);
+            matches.push({ field: 'content', snippet: `...${snippet}...`, score: 0.8 });
+            totalScore += 0.8;
+          }
+
+          // Search in tags
+          const matchingTags = (entry.tags || []).filter(tag => 
+            queryWords.some(word => tag.toLowerCase().includes(word))
+          );
+          if (matchingTags.length > 0) {
+            matches.push({ 
+              field: 'tags', 
+              snippet: matchingTags.join(', '), 
+              score: 0.7 * matchingTags.length 
+            });
+            totalScore += 0.7 * matchingTags.length;
+          }
+
+          // Search in AI insights if available
+          if (entry.aiInsights) {
+            // Search keywords
+            const matchingKeywords = entry.aiInsights.keywords?.filter(keyword =>
+              queryWords.some(word => keyword.toLowerCase().includes(word))
+            ) || [];
+            
+            if (matchingKeywords.length > 0) {
+              matches.push({
+                field: 'keywords',
+                snippet: matchingKeywords.join(', '),
+                score: 0.6 * matchingKeywords.length
+              });
+              totalScore += 0.6 * matchingKeywords.length;
+            }
+
+            // Search entities
+            const matchingEntities = entry.aiInsights.entities?.filter(entity =>
+              queryWords.some(word => entity.toLowerCase().includes(word))
+            ) || [];
+            
+            if (matchingEntities.length > 0) {
+              matches.push({
+                field: 'entities',
+                snippet: matchingEntities.join(', '),
+                score: 0.6 * matchingEntities.length
+              });
+              totalScore += 0.6 * matchingEntities.length;
+            }
+
+            // Search labels (for media content)
+            const matchingLabels = entry.aiInsights.labels?.filter(label =>
+              queryWords.some(word => label.toLowerCase().includes(word))
+            ) || [];
+            
+            if (matchingLabels.length > 0) {
+              matches.push({
+                field: 'labels',
+                snippet: matchingLabels.join(', '),
+                score: 0.5 * matchingLabels.length
+              });
+              totalScore += 0.5 * matchingLabels.length;
+            }
+
+            // Search people mentions
+            const matchingPeople = entry.aiInsights.people?.filter(person =>
+              queryWords.some(word => person.toLowerCase().includes(word))
+            ) || [];
+            
+            if (matchingPeople.length > 0) {
+              matches.push({
+                field: 'people',
+                snippet: matchingPeople.join(', '),
+                score: 0.5 * matchingPeople.length
+              });
+              totalScore += 0.5 * matchingPeople.length;
+            }
+          }
+
+          if (matches.length > 0) {
+            searchResults.push({
+              entry,
+              matches,
+              confidence: Math.min(totalScore, 1.0), // Cap at 1.0
+              matchReason: `Found ${matches.length} matches: ${matches.map(m => m.field).join(', ')}`
+            });
+          }
+        }
+
+        // Sort by confidence score (highest first)
+        searchResults.sort((a, b) => b.confidence - a.confidence);
+
+      } else {
+        // Semantic search mode
+        console.log('🧠 Performing semantic search');
+        
+        // For now, use semantic ranking placeholder
+        const rankedEntries = await semanticRank(query, filteredEntries as any[]);
+        
+        // Convert to search results format with basic matching
+        const queryLower = query.toLowerCase();
+        searchResults = rankedEntries.slice(0, limit).map(entry => ({
+          entry,
+          matches: [{
+            field: 'semantic',
+            snippet: entry.aiInsights?.summary || entry.content.substring(0, 200) + '...',
+            score: 0.8
+          }],
+          confidence: 0.8, // Placeholder confidence
+          matchReason: 'Semantic similarity match'
+        }));
+      }
+
+      // Apply limit and return results
+      const limitedResults = searchResults.slice(0, limit);
+
+      console.log(`🔍 Search completed: ${limitedResults.length} results for "${query}" (${mode} mode)`);
+
+      res.json({
+        query,
+        mode,
+        totalResults: limitedResults.length,
+        results: limitedResults,
+        executionTime: Date.now() - Date.now() // Placeholder
+      });
+
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: 'Invalid search parameters', details: error.errors });
+      }
+      console.error('Search Error:', error);
+      res.status(500).json({ error: 'Search failed' });
     }
   });
 
