@@ -6,11 +6,13 @@ import { Input } from '@/components/ui/input'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
-import { Search, Plus, Bell, Filter, TrendingUp, Copy, Share2, ExternalLink, Trash2 } from 'lucide-react'
+import { Search, Plus, Bell, Filter, TrendingUp, Copy, Share2, ExternalLink, Trash2, Users } from 'lucide-react'
 import JournalEntryCard from '@/components/JournalEntryCard'
 import ThemeToggle from '@/components/ThemeToggle'
+import UserSelector from '@/components/UserSelector'
 import { JournalEntryWithUser } from '@shared/schema'
 import { useQuery } from '@tanstack/react-query'
+import { queryClient } from '@/lib/queryClient'
 import { useLocation } from 'wouter'
 import { useToast } from '@/hooks/use-toast'
 
@@ -25,6 +27,8 @@ export default function Home() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [deletingEntryId, setDeletingEntryId] = useState<string | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [selectedUsersForSharing, setSelectedUsersForSharing] = useState<{id: string, email: string, username?: string, firstName?: string, lastName?: string, profileImageUrl?: string}[]>([])
+  const [isLoadingSharing, setIsLoadingSharing] = useState(false)
   const { toast } = useToast()
   
   // Fetch real journal entries
@@ -81,9 +85,28 @@ export default function Home() {
     setLocation(`/record?edit=${entryId}`)
   }
 
-  const handleShare = (entryId: string) => {
+  const handleShare = async (entryId: string) => {
     setSharingEntryId(entryId)
     setShareModalOpen(true)
+    
+    // Load existing sharing information
+    setIsLoadingSharing(true)
+    try {
+      const response = await fetch(`/api/journal/entries/${entryId}/sharing`, {
+        credentials: 'include'
+      })
+      if (response.ok) {
+        const sharingData = await response.json()
+        setSelectedUsersForSharing(sharingData.sharedWith || [])
+      } else {
+        setSelectedUsersForSharing([])
+      }
+    } catch (error) {
+      console.error('Failed to load sharing info:', error)
+      setSelectedUsersForSharing([])
+    } finally {
+      setIsLoadingSharing(false)
+    }
   }
   
   const copyPublicUrl = async (entryId: string) => {
@@ -186,6 +209,46 @@ export default function Home() {
       setIsDeleting(false)
       setDeleteDialogOpen(false)
       setDeletingEntryId(null)
+    }
+  }
+  
+  // Handle updating sharing permissions
+  const handleSaveSharing = async () => {
+    if (!sharingEntryId) return
+    
+    try {
+      const userIds = selectedUsersForSharing.map(user => user.id)
+      const response = await fetch(`/api/journal/entries/${sharingEntryId}/share`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include',
+        body: JSON.stringify({ userIds })
+      })
+      
+      if (response.ok) {
+        toast({
+          title: "Sharing updated!",
+          description: "Your sharing permissions have been saved successfully.",
+        })
+        
+        // Refresh entries to show updated sharing status
+        queryClient.invalidateQueries({ queryKey: ['/api/journal/entries'] })
+        setShareModalOpen(false)
+      } else {
+        toast({
+          title: "Update failed",
+          description: 'Unable to update sharing permissions. Please try again.',
+          variant: "destructive"
+        })
+      }
+    } catch (error) {
+      toast({
+        title: "Connection error",
+        description: 'Unable to connect to server. Please check your connection.',
+        variant: "destructive"
+      })
     }
   }
 
@@ -393,6 +456,38 @@ export default function Home() {
                 <Copy className="h-4 w-4 mr-2" />
                 Copy Public URL
               </Button>
+            </div>
+            
+            {/* Direct User Sharing */}
+            <div>
+              <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
+                <Users className="h-4 w-4" />
+                Share with Users
+              </h4>
+              {isLoadingSharing ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <div className="animate-spin h-4 w-4 border-2 border-current border-t-transparent rounded-full" />
+                  Loading sharing information...
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <UserSelector
+                    selectedUsers={selectedUsersForSharing}
+                    onUsersChange={setSelectedUsersForSharing}
+                    placeholder="Search by email or name to add users..."
+                    className=""
+                  />
+                  {selectedUsersForSharing.length > 0 && (
+                    <Button 
+                      onClick={handleSaveSharing}
+                      className="w-full"
+                      data-testid="button-save-sharing"
+                    >
+                      Save Sharing Changes
+                    </Button>
+                  )}
+                </div>
+              )}
             </div>
             
             {/* Social Media Sharing */}
