@@ -257,7 +257,7 @@ export async function semanticRank(query: string, entries: any[]): Promise<any[]
     // AI insights matching (this is the key for semantic search)
     if (entry.aiInsights) {
       // Keywords matching
-      const matchingKeywords = (entry.aiInsights.keywords || []).filter(keyword =>
+      const matchingKeywords = (entry.aiInsights.keywords || []).filter((keyword: string) =>
         queryWords.some(word => keyword.toLowerCase().includes(word)) ||
         keyword.toLowerCase().includes(queryLower)
       );
@@ -267,7 +267,7 @@ export async function semanticRank(query: string, entries: any[]): Promise<any[]
       }
       
       // Entities matching
-      const matchingEntities = (entry.aiInsights.entities || []).filter(entity =>
+      const matchingEntities = (entry.aiInsights.entities || []).filter((entity: string) =>
         queryWords.some(word => entity.toLowerCase().includes(word)) ||
         entity.toLowerCase().includes(queryLower)
       );
@@ -277,7 +277,7 @@ export async function semanticRank(query: string, entries: any[]): Promise<any[]
       }
       
       // Labels matching (for image content)
-      const matchingLabels = (entry.aiInsights.labels || []).filter(label =>
+      const matchingLabels = (entry.aiInsights.labels || []).filter((label: string) =>
         queryWords.some(word => label.toLowerCase().includes(word)) ||
         label.toLowerCase().includes(queryLower)
       );
@@ -287,7 +287,7 @@ export async function semanticRank(query: string, entries: any[]): Promise<any[]
       }
       
       // People matching
-      const matchingPeople = (entry.aiInsights.people || []).filter(person =>
+      const matchingPeople = (entry.aiInsights.people || []).filter((person: string) =>
         queryWords.some(word => person.toLowerCase().includes(word)) ||
         person.toLowerCase().includes(queryLower)
       );
@@ -308,7 +308,7 @@ export async function semanticRank(query: string, entries: any[]): Promise<any[]
     }
     
     // Tag matching
-    const matchingTags = (entry.tags || []).filter(tag =>
+    const matchingTags = (entry.tags || []).filter((tag: string) =>
       queryWords.some(word => tag.toLowerCase().includes(word)) ||
       tag.toLowerCase().includes(queryLower)
     );
@@ -331,10 +331,9 @@ export async function semanticRank(query: string, entries: any[]): Promise<any[]
   const rankedEntries = relevantEntries.sort((a, b) => b._semanticScore - a._semanticScore);
   
   console.log(`🎯 Semantic ranking: ${rankedEntries.length}/${entries.length} relevant entries found`);
-  rankedEntries.forEach((entry, index) => {
-    if (index < 3) { // Log top 3 for debugging
-      console.log(`  ${index + 1}. "${entry.title || entry.id}" - Score: ${entry._semanticScore.toFixed(2)} - ${entry._matchReasons.join(', ')}`);
-    }
+  console.log(`🔍 DEBUG: All entries with scores:`);
+  scoredEntries.forEach((entry, index) => {
+    console.log(`  ${index + 1}. "${entry.title || entry.id.substring(0, 8)}" - Score: ${entry._semanticScore.toFixed(2)} - AI Insights: ${entry.aiInsights ? 'YES' : 'NO'} - Reasons: [${entry._matchReasons.join(', ')}]`);
   });
   
   return rankedEntries;
