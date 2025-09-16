@@ -32,6 +32,12 @@ export default function Home() {
     queryKey: ['/api/journal/entries'],
     refetchInterval: 30000, // Refresh every 30 seconds
   })
+
+  // Fetch usage statistics
+  const { data: stats } = useQuery({
+    queryKey: ['/api/journal/stats'],
+    refetchInterval: 60000, // Refresh every minute
+  })
   
   // Mock user data - replace with real auth when available
   const mockUser = {
@@ -231,7 +237,7 @@ export default function Home() {
             <div className="flex items-center gap-2">
               <TrendingUp className="h-4 w-4 text-primary" />
               <div>
-                <p className="text-lg font-semibold text-foreground">12</p>
+                <p className="text-lg font-semibold text-foreground">{stats?.entriesThisWeek ?? 0}</p>
                 <p className="text-xs text-muted-foreground">This week</p>
               </div>
             </div>
@@ -240,8 +246,8 @@ export default function Home() {
             <div className="flex items-center gap-2">
               <div className="h-2 w-2 bg-accent rounded-full" />
               <div>
-                <p className="text-lg font-semibold text-foreground">5</p>
-                <p className="text-xs text-muted-foreground">Recordings</p>
+                <p className="text-lg font-semibold text-foreground">{stats?.daysSinceLastEntry ?? 0}</p>
+                <p className="text-xs text-muted-foreground">Days since last entry</p>
               </div>
             </div>
           </Card>
@@ -249,7 +255,7 @@ export default function Home() {
             <div className="flex items-center gap-2">
               <div className="h-2 w-2 bg-primary rounded-full" />
               <div>
-                <p className="text-lg font-semibold text-foreground">28</p>
+                <p className="text-lg font-semibold text-foreground">{stats?.dayStreak ?? 0}</p>
                 <p className="text-xs text-muted-foreground">Day streak</p>
               </div>
             </div>
