@@ -30,8 +30,8 @@ const upload = multer({
 export async function registerRoutes(app: Express): Promise<Server> {
   // Development authentication bypass (exclude public routes)
   app.use('/api', async (req, res, next) => {
-    // Skip authentication for public routes
-    if (req.originalUrl.startsWith('/api/public/')) {
+    // Skip authentication for public routes and object uploads (for OpenAI access)
+    if (req.originalUrl.startsWith('/api/public/') || req.originalUrl.startsWith('/objects/uploads/')) {
       return next();
     }
     
@@ -563,6 +563,75 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Convert localhost image URLs to public Replit URLs for OpenAI access
+  app.post('/api/journal/convert-image-urls', async (req, res) => {
+    const userId = req.userId;
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    try {
+      console.log('🔗 Converting localhost URLs to public Replit URLs...');
+
+      // Get all entries with images
+      const entries = await storage.getJournalEntriesByUserId(userId);
+      const entriesWithImages = entries.filter(entry => 
+        entry.mediaUrls && entry.mediaUrls.length > 0
+      );
+
+      console.log(`📸 Found ${entriesWithImages.length} entries with images to convert`);
+
+      let convertedCount = 0;
+      // Get the current Replit domain from environment variables
+      const replitDomain = process.env.REPLIT_DEV_DOMAIN || 'localhost:5000';
+      const protocol = replitDomain.includes('.replit.dev') ? 'https' : 'http';
+
+      for (const entry of entriesWithImages) {
+        if (!entry.mediaUrls) continue;
+
+        const newMediaUrls = [];
+        let hasChanges = false;
+
+        for (const mediaUrl of entry.mediaUrls) {
+          if (mediaUrl.startsWith('/objects/uploads/')) {
+            // Convert to full public URL
+            const publicUrl = `${protocol}://${replitDomain}${mediaUrl}`;
+            console.log(`🔄 Converting ${mediaUrl} → ${publicUrl}`);
+            newMediaUrls.push(publicUrl);
+            hasChanges = true;
+          } else {
+            // Keep URLs that are already public or external
+            newMediaUrls.push(mediaUrl);
+          }
+        }
+
+        // Update the entry if we have changes
+        if (hasChanges) {
+          await storage.updateJournalEntry(entry.id, { mediaUrls: newMediaUrls }, userId);
+          convertedCount++;
+          console.log(`🎯 Updated entry: "${entry.title}" with public URLs`);
+        }
+      }
+
+      console.log(`🎉 Successfully converted ${convertedCount} entries to use public URLs`);
+
+      res.json({
+        message: 'Image URLs converted to public Replit URLs successfully',
+        entriesProcessed: entriesWithImages.length,
+        entriesConverted: convertedCount,
+        exampleUrl: `${protocol}://${replitDomain}/objects/uploads/example-id`
+      });
+
+    } catch (error) {
+      console.error('❌ Error converting image URLs:', error);
+      res.status(500).json({ 
+        error: 'Failed to convert image URLs',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
   // Analyze existing entries that don't have AI insights
   app.post('/api/journal/analyze-missing', async (req, res) => {
     const userId = req.userId; // Use authenticated user ID for security
@@ -862,6 +931,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       res.status(500).json({ error: "Internal server error" });
     }
+  });
+
+  // API 404 guard - prevents HTML fallback for unknown API routes
+  app.all('/api/*', (req, res) => {
+    res.status(404).json({ 
+      error: 'API endpoint not found', 
+      path: req.path, 
+      method: req.method 
+    });
   });
 
   const httpServer = createServer(app);
