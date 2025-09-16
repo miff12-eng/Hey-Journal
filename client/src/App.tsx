@@ -31,8 +31,8 @@ function Router() {
       <Route path="/u/:username/:rest+" component={NotFound} />
       <Route path="/e/:entryId/:rest+" component={NotFound} />
 
-      {/* Authenticated and loading states - restrict to specific paths */}
-      <Route path="/:path(|record|search|chat|profile)" nest>
+      {/* Main app routes */}
+      <Route>
         {() => {
           // Show loading state while checking authentication
           if (isLoading) {
@@ -48,12 +48,7 @@ function Router() {
 
           // Show landing page for unauthenticated users
           if (!isAuthenticated) {
-            return (
-              <Switch>
-                <Route path="/" component={Landing} />
-                <Route component={Landing} />
-              </Switch>
-            )
+            return <Landing />
           }
 
           // Show authenticated app with bottom navigation

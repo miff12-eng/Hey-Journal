@@ -4,17 +4,28 @@ import { Card, CardContent } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Input } from '@/components/ui/input'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { Search, Plus, Bell, Filter, TrendingUp } from 'lucide-react'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog'
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
+import { Search, Plus, Bell, Filter, TrendingUp, Copy, Share2, ExternalLink, Trash2 } from 'lucide-react'
 import JournalEntryCard from '@/components/JournalEntryCard'
 import ThemeToggle from '@/components/ThemeToggle'
 import { JournalEntryWithUser } from '@shared/schema'
 import { useQuery } from '@tanstack/react-query'
+import { useLocation } from 'wouter'
+import { useToast } from '@/hooks/use-toast'
 
 type PrivacyFilter = 'all' | 'private' | 'shared' | 'public'
 
 export default function Home() {
+  const [, setLocation] = useLocation()
   const [searchQuery, setSearchQuery] = useState('')
   const [activeFilter, setActiveFilter] = useState<PrivacyFilter>('all')
+  const [shareModalOpen, setShareModalOpen] = useState(false)
+  const [sharingEntryId, setSharingEntryId] = useState<string | null>(null)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [deletingEntryId, setDeletingEntryId] = useState<string | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const { toast } = useToast()
   
   // Fetch real journal entries
   const { data: entries = [], isLoading, error, refetch } = useQuery({
@@ -61,15 +72,115 @@ export default function Home() {
   })
 
   const handleEdit = (entryId: string) => {
-    console.log('Edit entry:', entryId)
+    setLocation(`/record?edit=${entryId}`)
   }
 
   const handleShare = (entryId: string) => {
-    console.log('Share entry:', entryId)
+    setSharingEntryId(entryId)
+    setShareModalOpen(true)
+  }
+  
+  const copyPublicUrl = async (entryId: string) => {
+    const publicUrl = `${window.location.origin}/e/${entryId}`
+    try {
+      await navigator.clipboard.writeText(publicUrl)
+      toast({
+        title: "URL copied!",
+        description: "The public link has been copied to your clipboard.",
+      })
+    } catch (error) {
+      console.error('Failed to copy URL:', error)
+      toast({
+        title: "Copy failed",
+        description: "Unable to copy URL. Please try again.",
+        variant: "destructive"
+      })
+    }
+    setShareModalOpen(false)
+  }
+  
+  const shareToSocial = (platform: string, entryId: string) => {
+    const publicUrl = `${window.location.origin}/e/${entryId}`
+    const text = 'Check out my journal entry'
+    
+    let shareUrl = ''
+    switch (platform) {
+      case 'twitter':
+        shareUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(publicUrl)}`
+        break
+      case 'facebook':
+        shareUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(publicUrl)}`
+        break
+      case 'linkedin':
+        shareUrl = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(publicUrl)}`
+        break
+    }
+    
+    if (shareUrl) {
+      window.open(shareUrl, '_blank', 'width=600,height=400')
+    }
+    setShareModalOpen(false)
+  }
+  
+  const handleNativeShare = async (entryId: string) => {
+    if (navigator.share) {
+      try {
+        const publicUrl = `${window.location.origin}/e/${entryId}`
+        await navigator.share({
+          title: 'My Journal Entry',
+          text: 'Check out my journal entry',
+          url: publicUrl
+        })
+        setShareModalOpen(false)
+      } catch (error) {
+        console.error('Native share failed:', error)
+      }
+    }
   }
 
   const handleDelete = (entryId: string) => {
-    console.log('Delete entry:', entryId)
+    setDeletingEntryId(entryId)
+    setDeleteDialogOpen(true)
+  }
+  
+  const confirmDelete = async () => {
+    if (!deletingEntryId) return
+    
+    setIsDeleting(true)
+    try {
+      const response = await fetch(`/api/journal/entries/${deletingEntryId}`, {
+        method: 'DELETE',
+        credentials: 'include'
+      })
+      
+      if (response.ok) {
+        toast({
+          title: "Entry deleted",
+          description: "Your journal entry has been permanently deleted.",
+        })
+        
+        // Invalidate and refetch entries to update the UI
+        refetch()
+      } else {
+        const errorData = await response.json().catch(() => ({}))
+        toast({
+          title: "Delete failed",
+          description: errorData.error || 'Unable to delete entry. Please try again.',
+          variant: "destructive"
+        })
+      }
+    } catch (error) {
+      toast({
+        title: "Connection error",
+        description: 'Unable to connect to server. Please check your connection.',
+        variant: "destructive"
+      })
+      console.error('Error deleting entry:', error)
+    } finally {
+      setIsDeleting(false)
+      setDeleteDialogOpen(false)
+      setDeletingEntryId(null)
+    }
   }
 
   const handlePlayAudio = (audioUrl: string) => {
@@ -249,6 +360,120 @@ export default function Home() {
           </div>
         </ScrollArea>
       </main>
+      
+      {/* Share Modal */}
+      <Dialog open={shareModalOpen} onOpenChange={setShareModalOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Share2 className="h-5 w-5" />
+              Share Entry
+            </DialogTitle>
+            <DialogDescription>
+              Share this journal entry with others using the options below.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            {/* Copy Public URL */}
+            <div>
+              <h4 className="text-sm font-medium mb-2">Share Link</h4>
+              <Button 
+                onClick={() => sharingEntryId && copyPublicUrl(sharingEntryId)}
+                variant="outline" 
+                className="w-full justify-start"
+                data-testid="button-copy-url"
+              >
+                <Copy className="h-4 w-4 mr-2" />
+                Copy Public URL
+              </Button>
+            </div>
+            
+            {/* Social Media Sharing */}
+            <div>
+              <h4 className="text-sm font-medium mb-2">Share to Social Media</h4>
+              <div className="grid grid-cols-2 gap-2">
+                <Button 
+                  onClick={() => sharingEntryId && shareToSocial('twitter', sharingEntryId)}
+                  variant="outline"
+                  size="sm"
+                  data-testid="button-share-twitter"
+                >
+                  <ExternalLink className="h-4 w-4 mr-2" />
+                  Twitter
+                </Button>
+                <Button 
+                  onClick={() => sharingEntryId && shareToSocial('facebook', sharingEntryId)}
+                  variant="outline"
+                  size="sm"
+                  data-testid="button-share-facebook"
+                >
+                  <ExternalLink className="h-4 w-4 mr-2" />
+                  Facebook
+                </Button>
+                <Button 
+                  onClick={() => sharingEntryId && shareToSocial('linkedin', sharingEntryId)}
+                  variant="outline"
+                  size="sm"
+                  data-testid="button-share-linkedin"
+                >
+                  <ExternalLink className="h-4 w-4 mr-2" />
+                  LinkedIn
+                </Button>
+                {navigator.share && (
+                  <Button 
+                    onClick={() => sharingEntryId && handleNativeShare(sharingEntryId)}
+                    variant="outline"
+                    size="sm"
+                    data-testid="button-share-native"
+                  >
+                    <Share2 className="h-4 w-4 mr-2" />
+                    More
+                  </Button>
+                )}
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+      
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Trash2 className="h-5 w-5 text-destructive" />
+              Delete Entry
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this journal entry? This action cannot be undone and will permanently remove the entry from your journal.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-delete">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={confirmDelete}
+              disabled={isDeleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              data-testid="button-confirm-delete"
+            >
+              {isDeleting ? (
+                <>
+                  <div className="animate-spin h-4 w-4 mr-2 border-2 border-current border-t-transparent rounded-full" />
+                  Deleting...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete Entry
+                </>
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
