@@ -45,13 +45,13 @@ export default function PublicSearch() {
 
   // Search users query
   const usersQuery = useQuery<PublicUser[]>({
-    queryKey: ["/api/public/users/search", query],
+    queryKey: [`/api/public/users/search?q=${encodeURIComponent(query)}`],
     enabled: !!query.trim() && activeTab === "users"
   })
 
   // Search entries query
   const entriesQuery = useQuery<{ entries: PublicJournalEntry[] }>({
-    queryKey: ["/api/public/entries/search", query],
+    queryKey: [`/api/public/entries/search?q=${encodeURIComponent(query)}`],
     enabled: !!query.trim() && activeTab === "entries"
   })
 
