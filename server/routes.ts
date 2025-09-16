@@ -222,6 +222,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Update a journal entry
+  app.put('/api/journal/entries/:id', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const updates = insertJournalEntrySchema.partial().parse(req.body);
+      
+      // Verify entry exists and belongs to the user
+      const existingEntry = await storage.getJournalEntry(id);
+      if (!existingEntry) {
+        return res.status(404).json({ error: 'Entry not found' });
+      }
+      
+      if (existingEntry.userId !== req.userId) {
+        return res.status(403).json({ error: 'Not authorized to update this entry' });
+      }
+      
+      const updatedEntry = await storage.updateJournalEntry(id, updates);
+      res.json(updatedEntry);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: 'Invalid entry data', details: error.errors });
+      }
+      console.error('Update Entry Error:', error);
+      res.status(500).json({ error: 'Failed to update journal entry' });
+    }
+  });
+
+  // Delete a journal entry
+  app.delete('/api/journal/entries/:id', async (req, res) => {
+    try {
+      const { id } = req.params;
+      
+      // Verify entry exists and belongs to the user
+      const existingEntry = await storage.getJournalEntry(id);
+      if (!existingEntry) {
+        return res.status(404).json({ error: 'Entry not found' });
+      }
+      
+      if (existingEntry.userId !== req.userId) {
+        return res.status(403).json({ error: 'Not authorized to delete this entry' });
+      }
+      
+      await storage.deleteJournalEntry(id);
+      res.status(204).send(); // 204 No Content for successful deletion
+    } catch (error) {
+      console.error('Delete Entry Error:', error);
+      res.status(500).json({ error: 'Failed to delete journal entry' });
+    }
+  });
+
   // ========== PUBLIC API ROUTES (No Authentication Required) ==========
   
   // Public user search endpoint
