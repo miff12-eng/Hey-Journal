@@ -9,7 +9,6 @@ import Landing from "@/pages/Landing"
 import Home from "@/pages/Home"
 import Record from "@/pages/Record"
 import Search from "@/pages/Search"
-import Chat from "@/pages/Chat"
 import Profile from "@/pages/Profile"
 import PublicSearch from "@/pages/PublicSearch"
 import PublicProfile from "@/pages/PublicProfile"
@@ -58,7 +57,6 @@ function Router() {
                 <Route path="/" component={Home} />
                 <Route path="/record" component={Record} />
                 <Route path="/search" component={Search} />
-                <Route path="/chat" component={Chat} />
                 <Route path="/profile" component={Profile} />
                 <Route component={NotFound} />
               </Switch>
