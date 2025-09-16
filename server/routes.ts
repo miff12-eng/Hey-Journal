@@ -336,6 +336,79 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get usage statistics for journal entries
+  app.get('/api/journal/stats', async (req, res) => {
+    try {
+      console.log('📊 Calculating usage stats for user:', req.userId);
+      
+      // Get all user's entries sorted by creation date
+      const allEntries = await storage.getJournalEntriesByUserId(req.userId, 1000);
+      
+      if (!allEntries || allEntries.length === 0) {
+        return res.json({
+          entriesThisWeek: 0,
+          dayStreak: 0,
+          daysSinceLastEntry: null
+        });
+      }
+
+      // Sort entries by creation date (most recent first)
+      const sortedEntries = allEntries.sort((a, b) => 
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+
+      const now = new Date();
+      const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+      // Calculate entries this week
+      const entriesThisWeek = sortedEntries.filter(entry => 
+        new Date(entry.createdAt) >= oneWeekAgo
+      ).length;
+
+      // Calculate days since last entry
+      const lastEntry = sortedEntries[0];
+      const daysSinceLastEntry = Math.floor((now.getTime() - new Date(lastEntry.createdAt).getTime()) / (24 * 60 * 60 * 1000));
+
+      // Calculate day streak (consecutive days with entries starting from today)
+      let dayStreak = 0;
+      // Use UTC consistently to avoid timezone issues
+      const nowUTC = new Date();
+      const todayUTC = new Date(Date.UTC(nowUTC.getUTCFullYear(), nowUTC.getUTCMonth(), nowUTC.getUTCDate()));
+
+      // Group entries by date (YYYY-MM-DD format using UTC)
+      const entriesByDate = new Map<string, number>();
+      sortedEntries.forEach(entry => {
+        const dateStr = new Date(entry.createdAt).toISOString().split('T')[0];
+        entriesByDate.set(dateStr, (entriesByDate.get(dateStr) || 0) + 1);
+      });
+
+      // Check consecutive days starting from today (UTC)
+      let currentDate = new Date(todayUTC);
+      while (true) {
+        const dateStr = currentDate.toISOString().split('T')[0];
+        if (entriesByDate.has(dateStr)) {
+          dayStreak++;
+          // Move to previous day
+          currentDate.setUTCDate(currentDate.getUTCDate() - 1);
+        } else {
+          break;
+        }
+      }
+
+      const stats = {
+        entriesThisWeek,
+        dayStreak,
+        daysSinceLastEntry
+      };
+
+      console.log('📊 Usage stats calculated:', stats);
+      res.json(stats);
+    } catch (error) {
+      console.error('Stats calculation error:', error);
+      res.status(500).json({ error: 'Failed to calculate usage statistics' });
+    }
+  });
+
   // Search journal entries endpoint  
   app.post(['/api/search', '/api/journal/search'], async (req, res) => {
     try {
