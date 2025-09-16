@@ -211,12 +211,131 @@ export async function analyzeEntry(
 }
 
 /**
- * Generate semantic embeddings for search ranking
- * Note: This is a placeholder for vector embeddings - could use OpenAI embeddings API
+ * Intelligent semantic ranking using AI insights and content analysis
+ * Ranks entries by semantic relevance to the search query
  */
 export async function semanticRank(query: string, entries: any[]): Promise<any[]> {
-  // For now, return entries as-is
-  // TODO: Implement semantic ranking using embeddings
   console.log('🔍 Semantic ranking requested for query:', query);
-  return entries;
+  
+  if (!query || entries.length === 0) {
+    return entries;
+  }
+  
+  const queryLower = query.toLowerCase();
+  const queryWords = queryLower.split(/\s+/).filter(word => word.length > 1);
+  
+  // Calculate semantic relevance score for each entry
+  const scoredEntries = entries.map(entry => {
+    let semanticScore = 0;
+    let matchReasons = [];
+    
+    // Strong matches in title (highest weight)
+    if (entry.title) {
+      const titleLower = entry.title.toLowerCase();
+      if (titleLower.includes(queryLower)) {
+        semanticScore += 1.0;
+        matchReasons.push('title exact match');
+      } else if (queryWords.some(word => titleLower.includes(word))) {
+        semanticScore += 0.7;
+        matchReasons.push('title word match');
+      }
+    }
+    
+    // Content semantic matching
+    if (entry.content) {
+      const contentLower = entry.content.toLowerCase();
+      if (contentLower.includes(queryLower)) {
+        semanticScore += 0.8;
+        matchReasons.push('content exact match');
+      } else if (queryWords.some(word => contentLower.includes(word))) {
+        const wordMatches = queryWords.filter(word => contentLower.includes(word)).length;
+        semanticScore += 0.4 * (wordMatches / queryWords.length);
+        matchReasons.push(`content partial match (${wordMatches}/${queryWords.length} words)`);
+      }
+    }
+    
+    // AI insights matching (this is the key for semantic search)
+    if (entry.aiInsights) {
+      // Keywords matching
+      const matchingKeywords = (entry.aiInsights.keywords || []).filter(keyword =>
+        queryWords.some(word => keyword.toLowerCase().includes(word)) ||
+        keyword.toLowerCase().includes(queryLower)
+      );
+      if (matchingKeywords.length > 0) {
+        semanticScore += 0.6 * matchingKeywords.length;
+        matchReasons.push(`AI keywords: ${matchingKeywords.join(', ')}`);
+      }
+      
+      // Entities matching
+      const matchingEntities = (entry.aiInsights.entities || []).filter(entity =>
+        queryWords.some(word => entity.toLowerCase().includes(word)) ||
+        entity.toLowerCase().includes(queryLower)
+      );
+      if (matchingEntities.length > 0) {
+        semanticScore += 0.6 * matchingEntities.length;
+        matchReasons.push(`AI entities: ${matchingEntities.join(', ')}`);
+      }
+      
+      // Labels matching (for image content)
+      const matchingLabels = (entry.aiInsights.labels || []).filter(label =>
+        queryWords.some(word => label.toLowerCase().includes(word)) ||
+        label.toLowerCase().includes(queryLower)
+      );
+      if (matchingLabels.length > 0) {
+        semanticScore += 0.8 * matchingLabels.length; // Higher weight for visual content
+        matchReasons.push(`image labels: ${matchingLabels.join(', ')}`);
+      }
+      
+      // People matching
+      const matchingPeople = (entry.aiInsights.people || []).filter(person =>
+        queryWords.some(word => person.toLowerCase().includes(word)) ||
+        person.toLowerCase().includes(queryLower)
+      );
+      if (matchingPeople.length > 0) {
+        semanticScore += 0.7 * matchingPeople.length;
+        matchReasons.push(`people: ${matchingPeople.join(', ')}`);
+      }
+      
+      // Summary semantic matching (fuzzy matching for concepts)
+      if (entry.aiInsights.summary) {
+        const summaryLower = entry.aiInsights.summary.toLowerCase();
+        const summaryWordMatches = queryWords.filter(word => summaryLower.includes(word)).length;
+        if (summaryWordMatches > 0) {
+          semanticScore += 0.3 * (summaryWordMatches / queryWords.length);
+          matchReasons.push(`summary concept match (${summaryWordMatches}/${queryWords.length})`);
+        }
+      }
+    }
+    
+    // Tag matching
+    const matchingTags = (entry.tags || []).filter(tag =>
+      queryWords.some(word => tag.toLowerCase().includes(word)) ||
+      tag.toLowerCase().includes(queryLower)
+    );
+    if (matchingTags.length > 0) {
+      semanticScore += 0.5 * matchingTags.length;
+      matchReasons.push(`tags: ${matchingTags.join(', ')}`);
+    }
+    
+    return {
+      ...entry,
+      _semanticScore: semanticScore,
+      _matchReasons: matchReasons
+    };
+  });
+  
+  // Filter out entries with very low relevance (threshold of 0.1)
+  const relevantEntries = scoredEntries.filter(entry => entry._semanticScore > 0.1);
+  
+  // Sort by semantic score (highest first)
+  const rankedEntries = relevantEntries.sort((a, b) => b._semanticScore - a._semanticScore);
+  
+  console.log(`🎯 Semantic ranking: ${rankedEntries.length}/${entries.length} relevant entries found`);
+  rankedEntries.forEach((entry, index) => {
+    if (index < 3) { // Log top 3 for debugging
+      console.log(`  ${index + 1}. "${entry.title || entry.id}" - Score: ${entry._semanticScore.toFixed(2)} - ${entry._matchReasons.join(', ')}`);
+    }
+  });
+  
+  return rankedEntries;
 }
