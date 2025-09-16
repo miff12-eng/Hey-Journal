@@ -53,6 +53,14 @@ export const journalEntries = pgTable(
     tags: text("tags").array().default([]),
     privacy: varchar("privacy", { enum: ["private", "shared", "public"] }).default("private"),
     sharedWith: text("shared_with").array().default([]), // User IDs
+    aiInsights: jsonb("ai_insights").$type<{
+      summary: string;
+      keywords: string[];
+      entities: string[];
+      labels: string[];
+      people: string[];
+      sentiment?: 'positive' | 'neutral' | 'negative';
+    }>(),
     createdAt: timestamp("created_at").defaultNow(),
     updatedAt: timestamp("updated_at").defaultNow(),
   },
@@ -115,6 +123,7 @@ export const aiChatSessions = pgTable(
 export const insertJournalEntrySchema = createInsertSchema(journalEntries).omit({
   id: true,
   userId: true,
+  aiInsights: true, // AI insights are populated by the server
   createdAt: true,
   updatedAt: true,
 });
@@ -182,4 +191,14 @@ export type AiChatMessage = {
   content: string;
   timestamp: string;
   relatedEntryIds?: string[];
+};
+
+// AI insights type for journal entries
+export type AiInsights = {
+  summary: string;
+  keywords: string[];
+  entities: string[];
+  labels: string[];
+  people: string[];
+  sentiment?: 'positive' | 'neutral' | 'negative';
 };

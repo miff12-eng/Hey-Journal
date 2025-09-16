@@ -8,7 +8,8 @@ import {
   type InsertAiChatSession,
   type AiChatMessage,
   type PublicUser,
-  type PublicJournalEntry
+  type PublicJournalEntry,
+  type AiInsights
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { drizzle } from "drizzle-orm/neon-http";
@@ -30,6 +31,7 @@ export interface IStorage {
   getJournalEntriesByUserId(userId: string, limit?: number): Promise<JournalEntryWithUser[]>;
   createJournalEntry(entry: InsertJournalEntry, userId: string): Promise<JournalEntry>;
   updateJournalEntry(id: string, entry: Partial<InsertJournalEntry>): Promise<JournalEntry>;
+  updateAiInsights(entryId: string, insights: AiInsights | null): Promise<JournalEntry>;
   deleteJournalEntry(id: string): Promise<void>;
   
   // AI Chat methods
@@ -98,6 +100,7 @@ class DbStorage implements IStorage {
         tags: journalEntries.tags,
         privacy: journalEntries.privacy,
         sharedWith: journalEntries.sharedWith,
+        aiInsights: journalEntries.aiInsights,
         createdAt: journalEntries.createdAt,
         updatedAt: journalEntries.updatedAt,
         // User fields
@@ -126,6 +129,7 @@ class DbStorage implements IStorage {
       tags: row.tags || [],
       privacy: row.privacy as "private" | "shared" | "public",
       sharedWith: row.sharedWith || [],
+      aiInsights: row.aiInsights,
       createdAt: row.createdAt!,
       updatedAt: row.updatedAt!,
       user: {
@@ -167,6 +171,19 @@ class DbStorage implements IStorage {
       .update(journalEntries)
       .set({ ...updates, updatedAt: new Date() })
       .where(eq(journalEntries.id, id))
+      .returning();
+    
+    if (!result[0]) {
+      throw new Error('Journal entry not found');
+    }
+    return result[0];
+  }
+
+  async updateAiInsights(entryId: string, insights: AiInsights | null): Promise<JournalEntry> {
+    const result = await this.db
+      .update(journalEntries)
+      .set({ aiInsights: insights, updatedAt: new Date() })
+      .where(eq(journalEntries.id, entryId))
       .returning();
     
     if (!result[0]) {
@@ -478,7 +495,10 @@ export class MemStorage implements IStorage {
       email: 'user@example.com',
       firstName: 'Demo',
       lastName: 'User',
+      username: 'demouser',
+      bio: 'Demo user for testing journal app',
       profileImageUrl: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150',
+      isProfilePublic: true,
       createdAt: new Date(),
       updatedAt: new Date()
     };
@@ -551,6 +571,7 @@ export class MemStorage implements IStorage {
       mediaUrls: entryData.mediaUrls || [],
       tags: entryData.tags || [],
       sharedWith: entryData.sharedWith || [],
+      aiInsights: null, // Will be populated by AI analysis
       createdAt: now,
       updatedAt: now
     };
@@ -572,6 +593,22 @@ export class MemStorage implements IStorage {
     };
     
     this.journalEntries.set(id, updated);
+    return updated;
+  }
+
+  async updateAiInsights(entryId: string, insights: AiInsights | null): Promise<JournalEntry> {
+    const existing = this.journalEntries.get(entryId);
+    if (!existing) {
+      throw new Error('Journal entry not found');
+    }
+    
+    const updated: JournalEntry = {
+      ...existing,
+      aiInsights: insights,
+      updatedAt: new Date()
+    };
+    
+    this.journalEntries.set(entryId, updated);
     return updated;
   }
 
