@@ -25,10 +25,6 @@ export default function Record() {
   const editEntryId = urlParams.get('edit')
   const isEditMode = !!editEntryId
   
-  // Debug logging
-  console.log('🔍 Record Debug - search:', search)
-  console.log('🔍 Record Debug - editEntryId:', editEntryId)
-  console.log('🔍 Record Debug - isEditMode:', isEditMode)
   
   const [title, setTitle] = useState('')
   const [content, setContent] = useState('')
