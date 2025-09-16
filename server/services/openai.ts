@@ -67,8 +67,12 @@ export async function analyzeTextContent(content: string, title?: string | null)
       throw new Error('No response from OpenAI');
     }
 
-    // Parse JSON response
-    const analysis = JSON.parse(response);
+    // Extract JSON from markdown code blocks if present
+    const jsonMatch = response.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/) || response.match(/(\{[\s\S]*\})/);
+    const jsonString = jsonMatch ? jsonMatch[1] : response.trim();
+    
+    // Parse JSON response with error handling
+    const analysis = JSON.parse(jsonString);
     
     return {
       summary: analysis.summary || "",
@@ -104,12 +108,28 @@ export async function analyzeMediaContent(mediaUrls: string[]): Promise<{ labels
     // Analyze first media item (could be extended to handle multiple)
     let mediaUrl = mediaUrls[0];
     
-    // Convert relative URLs to full URLs for OpenAI access
+    // Normalize URLs to ensure OpenAI can access them
     if (mediaUrl.startsWith('/')) {
-      const baseUrl = process.env.REPL_DOMAINS ? 
-        `https://${process.env.REPL_DOMAINS.split(',')[0]}` : 
-        'http://localhost:5000';
+      // Handle relative URLs
+      if (!process.env.REPL_DOMAINS) {
+        throw new Error('REPL_DOMAINS environment variable is required for public image access');
+      }
+      const baseUrl = `https://${process.env.REPL_DOMAINS.split(',')[0]}`;
       mediaUrl = `${baseUrl}${mediaUrl}`;
+    } else if (mediaUrl.includes('localhost') || mediaUrl.includes('127.0.0.1')) {
+      // Handle absolute localhost URLs
+      if (!process.env.REPL_DOMAINS) {
+        throw new Error('Cannot convert localhost URL: REPL_DOMAINS environment variable is required');
+      }
+      const baseUrl = `https://${process.env.REPL_DOMAINS.split(',')[0]}`;
+      // Extract the path from localhost URL
+      const urlPath = mediaUrl.replace(/https?:\/\/(?:localhost:?\d*|127\.0\.0\.1:?\d*)/, '');
+      mediaUrl = `${baseUrl}${urlPath}`;
+    }
+    
+    // Validate that the URL is HTTPS (required for OpenAI)
+    if (!mediaUrl.startsWith('https://')) {
+      throw new Error(`Invalid URL for OpenAI analysis: must be HTTPS. Got: ${mediaUrl}`);
     }
     
     console.log('📸 Analyzing image URL:', mediaUrl);
@@ -146,7 +166,11 @@ export async function analyzeMediaContent(mediaUrls: string[]): Promise<{ labels
       throw new Error('No response from OpenAI vision model');
     }
 
-    const analysis = JSON.parse(response);
+    // Extract JSON from markdown code blocks if present
+    const jsonMatch = response.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/) || response.match(/(\{[\s\S]*\})/);
+    const jsonString = jsonMatch ? jsonMatch[1] : response.trim();
+    
+    const analysis = JSON.parse(jsonString);
     
     return {
       labels: Array.isArray(analysis.labels) ? analysis.labels : [],

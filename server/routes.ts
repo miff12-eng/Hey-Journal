@@ -30,8 +30,8 @@ const upload = multer({
 export async function registerRoutes(app: Express): Promise<Server> {
   // Development authentication bypass (exclude public routes)
   app.use('/api', async (req, res, next) => {
-    // Skip authentication for public routes and object uploads (for OpenAI access)
-    if (req.originalUrl.startsWith('/api/public/') || req.originalUrl.startsWith('/objects/uploads/')) {
+    // Skip authentication for public routes only
+    if (req.originalUrl.startsWith('/api/public/')) {
       return next();
     }
     
