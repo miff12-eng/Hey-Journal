@@ -515,21 +515,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Semantic search mode
         console.log('🧠 Performing semantic search');
         
-        // For now, use semantic ranking placeholder
+        // Use intelligent semantic ranking
         const rankedEntries = await semanticRank(query, filteredEntries as any[]);
         
-        // Convert to search results format with basic matching
-        const queryLower = query.toLowerCase();
-        searchResults = rankedEntries.slice(0, limit).map(entry => ({
-          entry,
-          matches: [{
-            field: 'semantic',
-            snippet: entry.aiInsights?.summary || entry.content.substring(0, 200) + '...',
-            score: 0.8
-          }],
-          confidence: 0.8, // Placeholder confidence
-          matchReason: 'Semantic similarity match'
-        }));
+        // Convert to search results format using actual semantic scores
+        searchResults = rankedEntries.slice(0, limit).map(entry => {
+          const semanticScore = entry._semanticScore || 0;
+          const matchReasons = entry._matchReasons || [];
+          
+          return {
+            entry: { ...entry, _semanticScore: undefined, _matchReasons: undefined }, // Clean up internal fields
+            matches: [{
+              field: 'semantic',
+              snippet: entry.aiInsights?.summary || entry.content.substring(0, 200) + '...',
+              score: Math.min(semanticScore, 1.0) // Use actual semantic score
+            }],
+            confidence: Math.min(semanticScore, 1.0), // Use actual confidence from ranking
+            matchReason: matchReasons.length > 0 ? matchReasons.join('; ') : 'Semantic similarity match'
+          };
+        });
       }
 
       // Apply limit and return results
