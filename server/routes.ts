@@ -284,24 +284,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Public entry detail endpoint
-  app.get('/api/public/entries/:entryId', async (req, res) => {
-    try {
-      const { entryId } = req.params;
-      const entry = await storage.getPublicEntryById(entryId);
-      
-      if (!entry) {
-        return res.status(404).json({ error: 'Entry not found' });
-      }
-      
-      res.json(entry);
-    } catch (error) {
-      console.error('Public Entry Detail Error:', error);
-      res.status(500).json({ error: 'Failed to fetch entry' });
-    }
-  });
-
-  // Public entries search endpoint
+  // Public entries search endpoint (must come before :entryId route)
   app.get('/api/public/entries/search', async (req, res) => {
     try {
       const query = req.query.q as string;
@@ -326,6 +309,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Public Entries Search Error:', error);
       res.status(500).json({ error: 'Failed to search entries' });
+    }
+  });
+
+  // Public entry detail endpoint (regex constraint to prevent capturing "search")
+  app.get('/api/public/entries/:entryId([0-9a-fA-F-]{10,})', async (req, res) => {
+    try {
+      const { entryId } = req.params;
+      const entry = await storage.getPublicEntryById(entryId);
+      
+      if (!entry) {
+        return res.status(404).json({ error: 'Entry not found' });
+      }
+      
+      res.json(entry);
+    } catch (error) {
+      console.error('Public Entry Detail Error:', error);
+      res.status(500).json({ error: 'Failed to fetch entry' });
     }
   });
 
