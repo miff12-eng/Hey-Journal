@@ -337,7 +337,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Search journal entries endpoint  
-  app.post('/api/search', async (req, res) => {
+  app.post(['/api/search', '/api/journal/search'], async (req, res) => {
     try {
       const searchSchema = z.object({
         query: z.string().min(1, 'Search query is required'),
