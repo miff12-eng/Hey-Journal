@@ -25,6 +25,7 @@ export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
   createUser(user: UpsertUser): Promise<User>;
+  searchUsers(query: string, limit?: number): Promise<User[]>;
   
   // Journal entry methods
   getJournalEntry(id: string): Promise<JournalEntry | undefined>;
@@ -78,6 +79,22 @@ class DbStorage implements IStorage {
       updatedAt: insertUser.updatedAt || new Date(),
     }).returning();
     return result[0];
+  }
+
+  async searchUsers(query: string, limit = 10): Promise<User[]> {
+    const result = await this.db
+      .select()
+      .from(users)
+      .where(
+        or(
+          ilike(users.email, `%${query}%`),
+          ilike(users.firstName, `%${query}%`),
+          ilike(users.lastName, `%${query}%`),
+          ilike(users.username, `%${query}%`)
+        )
+      )
+      .limit(limit);
+    return result;
   }
 
   async getJournalEntry(id: string): Promise<JournalEntry | undefined> {

@@ -15,6 +15,7 @@ import { apiRequest, queryClient } from '@/lib/queryClient'
 import RecordButton from '@/components/RecordButton'
 import { ObjectUploader } from '@/components/ObjectUploader'
 import ThemeToggle from '@/components/ThemeToggle'
+import UserSelector from '@/components/UserSelector'
 import { cn } from '@/lib/utils'
 
 type PrivacyLevel = 'private' | 'shared' | 'public'
@@ -35,6 +36,7 @@ export default function Record() {
   const [isTranscribing, setIsTranscribing] = useState(false)
   const [mediaUrls, setMediaUrls] = useState<string[]>([])
   const [isSaving, setIsSaving] = useState(false)
+  const [selectedUsers, setSelectedUsers] = useState<{id: string, email: string, username?: string, firstName?: string, lastName?: string, profileImageUrl?: string}[]>([])
   const { toast } = useToast()
   
   // Fetch entry data when in edit mode
@@ -71,8 +73,26 @@ export default function Record() {
       setTags(editEntry.tags || [])
       setPrivacy(editEntry.privacy || 'private')
       setMediaUrls(editEntry.mediaUrls || [])
+      
+      // Load sharing information if entry is shared
+      if (editEntry.privacy === 'shared' && editEntry.id) {
+        loadSharingInfo(editEntry.id)
+      }
     }
   }, [editEntry, isEditMode])
+  
+  // Function to load existing sharing information
+  const loadSharingInfo = async (entryId: string) => {
+    try {
+      const response = await fetch(`/api/journal/entries/${entryId}/sharing`)
+      if (response.ok) {
+        const sharingData = await response.json()
+        setSelectedUsers(sharingData.sharedWith || [])
+      }
+    } catch (error) {
+      console.error('Failed to load sharing info:', error)
+    }
+  }
   
   // Show loading state when in edit mode and fetching entry
   if (isEditMode && isLoadingEntry) {
@@ -213,6 +233,35 @@ export default function Record() {
       
       if (response.ok) {
         const data = await response.json()
+        const entryId = data.entry?.id || editEntryId
+        
+        // Handle sharing for shared entries with selected users
+        if (privacy === 'shared' && selectedUsers.length > 0 && entryId) {
+          try {
+            const userIds = selectedUsers.map(user => user.id)
+            const shareResponse = await fetch(`/api/journal/entries/${entryId}/share`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              credentials: 'include',
+              body: JSON.stringify({ userIds })
+            })
+            
+            if (!shareResponse.ok) {
+              console.error('Failed to share entry with selected users')
+              toast({
+                title: "Partial success",
+                description: "Entry saved but sharing failed. You can manage sharing from the feed.",
+                variant: "destructive"
+              })
+            } else {
+              console.log('Entry shared successfully with users:', userIds)
+            }
+          } catch (shareError) {
+            console.error('Error sharing entry:', shareError)
+          }
+        }
         
         // Success! For new entries, clear the form. For edits, keep the form populated
         if (!isEditMode) {
@@ -221,6 +270,7 @@ export default function Record() {
           setTags([])
           setPrivacy('private')
           setMediaUrls([])
+          setSelectedUsers([])
         }
         
         toast({
@@ -480,6 +530,18 @@ export default function Record() {
                 </div>
               )
             })}
+            
+            {/* User selector for shared entries */}
+            {privacy === 'shared' && (
+              <div className="pt-4 border-t border-border">
+                <UserSelector
+                  selectedUsers={selectedUsers}
+                  onUsersChange={setSelectedUsers}
+                  placeholder="Search users by email or name..."
+                  className="space-y-3"
+                />
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

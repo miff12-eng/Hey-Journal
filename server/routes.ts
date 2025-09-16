@@ -880,6 +880,184 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // User search endpoint for sharing
+  app.get('/api/users/search', async (req, res) => {
+    try {
+      const query = req.query.q as string;
+      if (!query || query.length < 2) {
+        return res.status(400).json({ error: 'Search query must be at least 2 characters' });
+      }
+      
+      const limit = Math.min(parseInt(req.query.limit as string) || 10, 20);
+      console.log('🔍 Searching users for:', query);
+      
+      // Search users by email or username
+      const users = await storage.searchUsers(query, limit);
+      
+      // Filter out the current user from results
+      const filteredUsers = users.filter(user => user.id !== req.userId);
+      
+      // Return public user information only
+      const publicUsers = filteredUsers.map(user => ({
+        id: user.id,
+        email: user.email,
+        username: user.username,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        profileImageUrl: user.profileImageUrl,
+      }));
+      
+      console.log('📋 Found users:', publicUsers.length);
+      res.json(publicUsers);
+    } catch (error) {
+      console.error('User Search Error:', error);
+      res.status(500).json({ error: 'Failed to search users' });
+    }
+  });
+
+  // Add users to entry sharing
+  app.post('/api/journal/entries/:id/share', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { userIds } = req.body;
+      
+      if (!Array.isArray(userIds) || userIds.length === 0) {
+        return res.status(400).json({ error: 'userIds array is required' });
+      }
+      
+      // Verify entry exists and belongs to the user
+      const entry = await storage.getJournalEntry(id);
+      if (!entry) {
+        return res.status(404).json({ error: 'Entry not found' });
+      }
+      
+      if (entry.userId !== req.userId) {
+        return res.status(403).json({ error: 'Not authorized to share this entry' });
+      }
+      
+      // Verify all user IDs exist
+      for (const userId of userIds) {
+        const user = await storage.getUser(userId);
+        if (!user) {
+          return res.status(400).json({ error: `User ${userId} not found` });
+        }
+      }
+      
+      // Add users to sharedWith list (avoid duplicates)
+      const currentSharedWith = entry.sharedWith || [];
+      const newSharedWith = [...new Set([...currentSharedWith, ...userIds])];
+      
+      // Update entry with new sharing list
+      const updatedEntry = await storage.updateJournalEntry(id, {
+        sharedWith: newSharedWith,
+        privacy: 'shared' // Ensure privacy is set to shared
+      });
+      
+      console.log('✅ Added users to sharing:', { entryId: id, userIds, totalShared: newSharedWith.length });
+      res.json({ 
+        message: 'Users added to sharing', 
+        sharedWith: newSharedWith,
+        entry: updatedEntry 
+      });
+      
+    } catch (error) {
+      console.error('Share Entry Error:', error);
+      res.status(500).json({ error: 'Failed to share entry' });
+    }
+  });
+
+  // Remove users from entry sharing
+  app.delete('/api/journal/entries/:id/share', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { userIds } = req.body;
+      
+      if (!Array.isArray(userIds) || userIds.length === 0) {
+        return res.status(400).json({ error: 'userIds array is required' });
+      }
+      
+      // Verify entry exists and belongs to the user
+      const entry = await storage.getJournalEntry(id);
+      if (!entry) {
+        return res.status(404).json({ error: 'Entry not found' });
+      }
+      
+      if (entry.userId !== req.userId) {
+        return res.status(403).json({ error: 'Not authorized to modify sharing for this entry' });
+      }
+      
+      // Remove users from sharedWith list
+      const currentSharedWith = entry.sharedWith || [];
+      const newSharedWith = currentSharedWith.filter(userId => !userIds.includes(userId));
+      
+      // If no users left, change privacy back to private
+      const newPrivacy = newSharedWith.length > 0 ? 'shared' : 'private';
+      
+      // Update entry
+      const updatedEntry = await storage.updateJournalEntry(id, {
+        sharedWith: newSharedWith,
+        privacy: newPrivacy
+      });
+      
+      console.log('✅ Removed users from sharing:', { entryId: id, userIds, remainingShared: newSharedWith.length });
+      res.json({ 
+        message: 'Users removed from sharing', 
+        sharedWith: newSharedWith,
+        entry: updatedEntry 
+      });
+      
+    } catch (error) {
+      console.error('Unshare Entry Error:', error);
+      res.status(500).json({ error: 'Failed to remove sharing' });
+    }
+  });
+
+  // Get sharing information for an entry
+  app.get('/api/journal/entries/:id/sharing', async (req, res) => {
+    try {
+      const { id } = req.params;
+      
+      // Verify entry exists and user has access
+      const entry = await storage.getJournalEntry(id);
+      if (!entry) {
+        return res.status(404).json({ error: 'Entry not found' });
+      }
+      
+      // Only entry owner can view sharing details
+      if (entry.userId !== req.userId) {
+        return res.status(403).json({ error: 'Not authorized to view sharing details' });
+      }
+      
+      const sharedWith = entry.sharedWith || [];
+      
+      // Get user details for each shared user
+      const sharedUsers = [];
+      for (const userId of sharedWith) {
+        const user = await storage.getUser(userId);
+        if (user) {
+          sharedUsers.push({
+            id: user.id,
+            email: user.email,
+            username: user.username,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            profileImageUrl: user.profileImageUrl,
+          });
+        }
+      }
+      
+      res.json({
+        entryId: id,
+        privacy: entry.privacy,
+        sharedWith: sharedUsers
+      });
+      
+    } catch (error) {
+      console.error('Get Sharing Info Error:', error);
+      res.status(500).json({ error: 'Failed to get sharing information' });
+    }
+  });
+
   // Object Storage endpoints for photo uploads
   
   // Serve uploaded photos from object storage
