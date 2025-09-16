@@ -49,17 +49,15 @@ export default function Search() {
   const searchMutation = useMutation({
     mutationFn: async (params: { query: string; mode: SearchMode; filters?: any }) => {
       console.log('🔍 Performing search:', params);
-      const response = await apiRequest<SearchResponse>('/api/search', {
-        method: 'POST',
-        body: JSON.stringify({
-          query: params.query,
-          mode: params.mode,
-          limit: 20,
-          filters: params.filters || {}
-        })
+      const response = await apiRequest('POST', '/api/search', {
+        query: params.query,
+        mode: params.mode,
+        limit: 20,
+        filters: params.filters || {}
       });
-      console.log('📊 Search results:', response);
-      return response;
+      const data = await response.json() as SearchResponse;
+      console.log('📊 Search results:', data);
+      return data;
     },
     onSuccess: (data) => {
       setSearchResults(data.results);
