@@ -1,53 +1,120 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Search as SearchIcon, Filter, Calendar, Hash, User, Clock } from 'lucide-react'
+import { Search as SearchIcon, Filter, Calendar, Hash, User, Clock, Sparkles, Brain } from 'lucide-react'
 import JournalEntryCard from '@/components/JournalEntryCard'
 import ThemeToggle from '@/components/ThemeToggle'
 import { JournalEntryWithUser } from '@shared/schema'
+import { useMutation } from '@tanstack/react-query'
+import { apiRequest } from '@/lib/queryClient'
+
+// Search types
+type SearchMode = 'keyword' | 'semantic'
+type FilterType = 'all' | 'tags' | 'date' | 'people' | 'sentiment'
+
+interface SearchMatch {
+  field: string
+  snippet: string
+  score: number
+}
+
+interface SearchResult {
+  entry: JournalEntryWithUser
+  matches: SearchMatch[]
+  confidence: number
+  matchReason: string
+}
+
+interface SearchResponse {
+  query: string
+  mode: SearchMode
+  totalResults: number
+  results: SearchResult[]
+  executionTime: number
+}
 
 export default function Search() {
   const [searchQuery, setSearchQuery] = useState('')
-  const [activeFilter, setActiveFilter] = useState<'all' | 'text' | 'tags' | 'date' | 'people'>('all')
+  const [searchMode, setSearchMode] = useState<SearchMode>('keyword')
+  const [activeFilter, setActiveFilter] = useState<FilterType>('all')
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([])
+  const [selectedTags, setSelectedTags] = useState<string[]>([])
+  const [selectedSentiment, setSelectedSentiment] = useState<'positive' | 'neutral' | 'negative' | ''>('')
+  const [dateRange, setDateRange] = useState<{from?: string, to?: string}>({})
   
-  // Mock search results - todo: replace with real search
-  const mockResults: JournalEntryWithUser[] = [
-    {
-      id: '1',
-      userId: 'user1',
-      title: 'Mindful Morning',
-      content: 'Started with meditation and gratitude practice...',
-      audioUrl: undefined,
-      mediaUrls: [],
-      tags: ['meditation', 'morning', 'gratitude'],
-      privacy: 'public' as const,
-      sharedWith: [],
-      createdAt: new Date('2024-01-10T08:00:00Z'),
-      updatedAt: new Date('2024-01-10T08:00:00Z'),
-      user: {
-        id: 'user1',
-        email: 'user@example.com',
-        firstName: 'Sarah',
-        lastName: 'Wilson',
-        profileImageUrl: 'https://images.unsplash.com/photo-1494790108755-2616b2dc1193?w=150',
-        createdAt: new Date(),
-        updatedAt: new Date()
-      }
+  // Search mutation
+  const searchMutation = useMutation({
+    mutationFn: async (params: { query: string; mode: SearchMode; filters?: any }) => {
+      console.log('🔍 Performing search:', params);
+      const response = await apiRequest<SearchResponse>('/api/search', {
+        method: 'POST',
+        body: JSON.stringify({
+          query: params.query,
+          mode: params.mode,
+          limit: 20,
+          filters: params.filters || {}
+        })
+      });
+      console.log('📊 Search results:', response);
+      return response;
+    },
+    onSuccess: (data) => {
+      setSearchResults(data.results);
+    },
+    onError: (error) => {
+      console.error('Search error:', error);
+      setSearchResults([]);
     }
-  ]
+  });
+
+  // Build filters object based on selected values
+  const buildFilters = () => {
+    const filters: any = {};
+    
+    if (selectedTags.length > 0) {
+      filters.tags = selectedTags;
+    }
+    
+    if (selectedSentiment) {
+      filters.sentiment = selectedSentiment;
+    }
+    
+    if (dateRange.from || dateRange.to) {
+      filters.dateRange = {};
+      if (dateRange.from) filters.dateRange.from = dateRange.from;
+      if (dateRange.to) filters.dateRange.to = dateRange.to;
+    }
+    
+    return filters;
+  };
+
+  // Perform search when query or filter values change
+  useEffect(() => {
+    if (searchQuery.trim()) {
+      const timer = setTimeout(() => {
+        searchMutation.mutate({ 
+          query: searchQuery, 
+          mode: searchMode,
+          filters: buildFilters()
+        });
+      }, 300); // Debounce search
+      return () => clearTimeout(timer);
+    } else {
+      setSearchResults([]);
+    }
+  }, [searchQuery, searchMode, selectedTags, selectedSentiment, dateRange]);
 
   const recentSearches = ['morning routine', 'family time', 'travel memories', 'work reflections']
   const suggestedTags = ['meditation', 'gratitude', 'family', 'travel', 'work', 'goals', 'reflection']
 
   const filters = [
     { key: 'all' as const, label: 'All', icon: SearchIcon },
-    { key: 'text' as const, label: 'Text', icon: SearchIcon },
     { key: 'tags' as const, label: 'Tags', icon: Hash },
-    { key: 'date' as const, label: 'Date', icon: Calendar },
-    { key: 'people' as const, label: 'People', icon: User }
+    { key: 'sentiment' as const, label: 'Mood', icon: Sparkles },
+    { key: 'date' as const, label: 'Date', icon: Calendar }
   ]
 
   return (
@@ -59,11 +126,35 @@ export default function Search() {
           <ThemeToggle />
         </div>
         
+        {/* Search mode toggle */}
+        <div className="flex gap-2 mb-3">
+          <Button
+            variant={searchMode === 'keyword' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setSearchMode('keyword')}
+            className="flex-1"
+            data-testid="mode-keyword"
+          >
+            <SearchIcon className="h-3 w-3 mr-1" />
+            Keyword
+          </Button>
+          <Button
+            variant={searchMode === 'semantic' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setSearchMode('semantic')}
+            className="flex-1"
+            data-testid="mode-semantic"
+          >
+            <Brain className="h-3 w-3 mr-1" />
+            AI Search
+          </Button>
+        </div>
+
         {/* Search input */}
         <div className="relative">
           <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search your journal..."
+            placeholder={searchMode === 'keyword' ? "Search by keywords, tags, or content..." : "Ask questions about your journal entries..."}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-10 pr-4"
@@ -144,34 +235,104 @@ export default function Search() {
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-medium text-foreground">
-                  {mockResults.length} result{mockResults.length !== 1 ? 's' : ''} for "{searchQuery}"
+                  {searchMutation.isLoading ? 'Searching...' : 
+                    `${searchResults.length} result${searchResults.length !== 1 ? 's' : ''} for "${searchQuery}"`
+                  }
                 </h3>
-                <Button variant="outline" size="sm" data-testid="button-advanced-search">
-                  <Filter className="h-3 w-3 mr-1" />
-                  Filters
-                </Button>
+                <div className="flex gap-2">
+                  <Badge variant="outline" className="text-xs" data-testid="search-mode-indicator">
+                    {searchMode === 'semantic' ? 'AI' : 'Keyword'} Mode
+                  </Badge>
+                  {searchMutation.data?.executionTime && (
+                    <Badge variant="secondary" className="text-xs" data-testid="search-time">
+                      {searchMutation.data.executionTime}ms
+                    </Badge>
+                  )}
+                </div>
               </div>
               
-              {mockResults.length > 0 ? (
+              {searchMutation.isLoading ? (
                 <div className="space-y-4">
-                  {mockResults.map((entry) => (
-                    <JournalEntryCard
-                      key={entry.id}
-                      entry={entry}
-                      onEdit={(id) => console.log('Edit:', id)}
-                      onShare={(id) => console.log('Share:', id)}
-                      onDelete={(id) => console.log('Delete:', id)}
-                      onPlayAudio={(url) => console.log('Play:', url)}
-                    />
+                  {[...Array(3)].map((_, i) => (
+                    <Card key={i} className="p-4 animate-pulse">
+                      <div className="h-4 bg-muted rounded w-3/4 mb-2"></div>
+                      <div className="h-3 bg-muted rounded w-1/2 mb-1"></div>
+                      <div className="h-3 bg-muted rounded w-2/3"></div>
+                    </Card>
                   ))}
                 </div>
+              ) : searchResults.length > 0 ? (
+                <div className="space-y-4">
+                  {searchResults.map((result) => (
+                    <div key={result.entry.id} className="space-y-2">
+                      {/* Match reason and confidence */}
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <Badge variant="outline" className="px-1.5 py-0.5 text-xs">
+                          {(result.confidence * 100).toFixed(0)}% match
+                        </Badge>
+                        <span>{result.matchReason}</span>
+                      </div>
+                      
+                      <JournalEntryCard
+                        entry={result.entry}
+                        onEdit={(id) => console.log('Edit:', id)}
+                        onShare={(id) => console.log('Share:', id)}
+                        onDelete={(id) => console.log('Delete:', id)}
+                        onPlayAudio={(url) => console.log('Play:', url)}
+                      />
+                      
+                      {/* Show match highlights */}
+                      {result.matches.length > 0 && (
+                        <div className="ml-4 space-y-1">
+                          {result.matches.map((match, idx) => (
+                            <div key={idx} className="text-xs">
+                              <Badge variant="secondary" className="px-1 py-0.5 text-xs mr-1">
+                                {match.field}
+                              </Badge>
+                              <span className="text-muted-foreground italic">
+                                "{match.snippet.substring(0, 100)}{match.snippet.length > 100 ? '...' : ''}"
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : searchMutation.error ? (
+                <Card className="p-8 text-center border-destructive/20">
+                  <SearchIcon className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-foreground mb-2">Search Error</h3>
+                  <p className="text-sm text-muted-foreground max-w-sm mx-auto mb-4">
+                    There was an error searching your journal. Please try again.
+                  </p>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => searchMutation.mutate({ query: searchQuery, mode: searchMode })}
+                    data-testid="button-retry-search"
+                  >
+                    Try Again
+                  </Button>
+                </Card>
               ) : (
                 <Card className="p-8 text-center">
                   <SearchIcon className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                   <h3 className="text-lg font-medium text-foreground mb-2">No results found</h3>
-                  <p className="text-sm text-muted-foreground max-w-sm mx-auto">
-                    Try adjusting your search terms or filters to find what you are looking for.
+                  <p className="text-sm text-muted-foreground max-w-sm mx-auto mb-4">
+                    {searchMode === 'semantic' 
+                      ? "Try rephrasing your question or asking about different topics in your journal."
+                      : "Try different keywords, tags, or filters to find what you're looking for."
+                    }
                   </p>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => setSearchMode(searchMode === 'keyword' ? 'semantic' : 'keyword')}
+                    data-testid="button-switch-mode"
+                  >
+                    Try {searchMode === 'keyword' ? 'AI Search' : 'Keyword Search'}
+                  </Button>
                 </Card>
               )}
             </div>
