@@ -417,7 +417,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
 
           // Search in content
-          const contentLower = entry.content.toLowerCase();
+          const contentLower = (entry.content || '').toLowerCase();
           if (contentLower.includes(queryLower)) {
             const snippetStart = Math.max(0, contentLower.indexOf(queryLower) - 50);
             const snippetEnd = Math.min(entry.content.length, snippetStart + 200);
