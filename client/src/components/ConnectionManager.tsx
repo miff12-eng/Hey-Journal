@@ -60,7 +60,10 @@ export default function ConnectionManager({ isOpen, onClose }: ConnectionManager
       return res.json()
     },
     onSuccess: () => {
+      // Invalidate sent requests list
       queryClient.invalidateQueries({ queryKey: ['/api/connections/requests', 'sent'] })
+      // Invalidate search results to update connection status buttons
+      queryClient.invalidateQueries({ queryKey: ['/api/connections/search'] })
       toast({ title: 'Connection request sent!' })
     },
     onError: (error: any) => {
