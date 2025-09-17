@@ -1672,6 +1672,226 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // === Connection Management Routes ===
+  
+  // Send connection request
+  app.post('/api/connections/request', async (req, res) => {
+    try {
+      const { recipientId } = z.object({ recipientId: z.string() }).parse(req.body);
+      
+      // Prevent self-connection
+      if (req.userId === recipientId) {
+        return res.status(400).json({ error: 'Cannot send connection request to yourself' });
+      }
+      
+      const connection = await storage.sendConnectionRequest(req.userId, recipientId);
+      
+      // Use 201 Created for new resource creation
+      res.status(201).json(connection);
+    } catch (error: any) {
+      console.error('Error sending connection request:', error);
+      
+      // Handle specific errors with appropriate status codes
+      if (error.message.includes('already exists')) {
+        return res.status(409).json({ error: 'Connection request already exists' });
+      }
+      if (error.message.includes('blocked')) {
+        return res.status(403).json({ error: 'Cannot send request - one user has blocked the other' });
+      }
+      if (error.message.includes('User not found')) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+      
+      res.status(500).json({ error: 'Failed to send connection request' });
+    }
+  });
+
+  // Accept connection request
+  app.post('/api/connections/accept/:id', async (req, res) => {
+    try {
+      // Validate path parameter
+      const { id } = z.object({ id: z.string().min(1) }).parse(req.params);
+      
+      // CRITICAL: Pass userId to enforce authorization in storage layer
+      const connection = await storage.acceptConnectionRequest(id, req.userId);
+      res.json(connection);
+    } catch (error: any) {
+      console.error('Error accepting connection request:', error);
+      
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: 'Invalid connection request ID', details: error.errors });
+      }
+      
+      // Handle specific authorization and validation errors
+      if (error.message.includes('not found')) {
+        return res.status(404).json({ error: 'Connection request not found' });
+      }
+      if (error.message.includes('not pending')) {
+        return res.status(409).json({ error: 'Connection request is no longer pending' });
+      }
+      if (error.message.includes('Unauthorized')) {
+        return res.status(403).json({ error: 'Not authorized to accept this connection request' });
+      }
+      
+      res.status(500).json({ error: 'Failed to accept connection request' });
+    }
+  });
+
+  // Reject connection request
+  app.post('/api/connections/reject/:id', async (req, res) => {
+    try {
+      // Validate path parameter
+      const { id } = z.object({ id: z.string().min(1) }).parse(req.params);
+      
+      // CRITICAL: Pass userId to enforce authorization in storage layer
+      await storage.rejectConnectionRequest(id, req.userId);
+      
+      // Use 204 No Content for successful deletion
+      res.status(204).send();
+    } catch (error: any) {
+      console.error('Error rejecting connection request:', error);
+      
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: 'Invalid connection request ID', details: error.errors });
+      }
+      
+      // Handle specific authorization and validation errors
+      if (error.message.includes('not found')) {
+        return res.status(404).json({ error: 'Connection request not found' });
+      }
+      if (error.message.includes('not pending')) {
+        return res.status(409).json({ error: 'Connection request is no longer pending' });
+      }
+      if (error.message.includes('Unauthorized')) {
+        return res.status(403).json({ error: 'Not authorized to reject this connection request' });
+      }
+      
+      res.status(500).json({ error: 'Failed to reject connection request' });
+    }
+  });
+
+  // Block user
+  app.post('/api/connections/block', async (req, res) => {
+    try {
+      const { recipientId } = z.object({ recipientId: z.string() }).parse(req.body);
+      
+      // Prevent self-blocking
+      if (req.userId === recipientId) {
+        return res.status(400).json({ error: 'Cannot block yourself' });
+      }
+      
+      const connection = await storage.blockUser(req.userId, recipientId);
+      
+      // Use 201 Created for new block relationship
+      res.status(201).json(connection);
+    } catch (error: any) {
+      console.error('Error blocking user:', error);
+      
+      if (error.message.includes('User not found')) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+      
+      res.status(500).json({ error: 'Failed to block user' });
+    }
+  });
+
+  // Unblock user
+  app.delete('/api/connections/block/:userId', async (req, res) => {
+    try {
+      // Validate path parameter
+      const { userId } = z.object({ userId: z.string().min(1) }).parse(req.params);
+      
+      // NOTE: Removed nonsensical "Cannot unblock yourself" check
+      // Users should be able to unblock themselves if they previously blocked someone
+      
+      await storage.unblockUser(req.userId, userId);
+      
+      // Use 204 No Content for successful deletion
+      res.status(204).send();
+    } catch (error: any) {
+      console.error('Error unblocking user:', error);
+      
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: 'Invalid user ID', details: error.errors });
+      }
+      
+      if (error.message.includes('not found')) {
+        return res.status(404).json({ error: 'Block relationship not found' });
+      }
+      
+      res.status(500).json({ error: 'Failed to unblock user' });
+    }
+  });
+
+  // Get connection requests (received or sent)
+  app.get('/api/connections/requests', async (req, res) => {
+    try {
+      const { type = 'received' } = req.query;
+      
+      if (type !== 'received' && type !== 'sent') {
+        return res.status(400).json({ error: 'Type must be "received" or "sent"' });
+      }
+      
+      const requests = await storage.getConnectionRequests(req.userId, type as 'received' | 'sent');
+      res.json(requests);
+    } catch (error: any) {
+      console.error('Error fetching connection requests:', error);
+      res.status(500).json({ error: 'Failed to fetch connection requests' });
+    }
+  });
+
+  // Get connections (accepted connections)
+  app.get('/api/connections', async (req, res) => {
+    try {
+      const connections = await storage.getConnections(req.userId);
+      res.json(connections);
+    } catch (error: any) {
+      console.error('Error fetching connections:', error);
+      res.status(500).json({ error: 'Failed to fetch connections' });
+    }
+  });
+
+  // Get connection status with another user
+  app.get('/api/connections/status/:userId', async (req, res) => {
+    try {
+      // Validate path parameter
+      const { userId } = z.object({ userId: z.string().min(1) }).parse(req.params);
+      
+      // Prevent checking status with self
+      if (req.userId === userId) {
+        return res.status(400).json({ error: 'Cannot check connection status with yourself' });
+      }
+      
+      const status = await storage.getConnectionStatus(req.userId, userId);
+      res.json({ status: status || null });
+    } catch (error: any) {
+      console.error('Error checking connection status:', error);
+      
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: 'Invalid user ID', details: error.errors });
+      }
+      
+      res.status(500).json({ error: 'Failed to check connection status' });
+    }
+  });
+
+  // Search public users
+  app.get('/api/connections/search', async (req, res) => {
+    try {
+      const { q } = req.query;
+      
+      if (!q || typeof q !== 'string') {
+        return res.status(400).json({ error: 'Search query is required' });
+      }
+      
+      const users = await storage.searchPublicUsers(q, 20);
+      res.json(users);
+    } catch (error: any) {
+      console.error('Error searching users:', error);
+      res.status(500).json({ error: 'Failed to search users' });
+    }
+  });
+
   // API 404 guard - prevents HTML fallback for unknown API routes
   app.all('/api/*', (req, res) => {
     res.status(404).json({ 
