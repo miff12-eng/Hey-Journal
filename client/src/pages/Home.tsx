@@ -432,7 +432,11 @@ export default function Home() {
                 <p className="text-sm text-muted-foreground mb-4 max-w-sm mx-auto">
                   Start your journal journey by recording your first entry
                 </p>
-                <Button size="lg" data-testid="button-create-first-entry">
+                <Button 
+                  size="lg" 
+                  onClick={() => setLocation('/record')}
+                  data-testid="button-create-first-entry"
+                >
                   Create Your First Entry
                 </Button>
               </div>
