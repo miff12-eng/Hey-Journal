@@ -9,6 +9,8 @@ import {
   type InsertComment,
   type CommentWithUser,
   type CommentWithPublicUser,
+  type UserConnection,
+  type UserConnectionWithUser,
   type AiChatSession,
   type InsertAiChatSession,
   type AiChatMessage,
@@ -20,7 +22,7 @@ import { randomUUID } from "crypto";
 import { drizzle } from "drizzle-orm/neon-http";
 import { neon } from "@neondatabase/serverless";
 import { eq, desc, and, ilike, or, sql } from "drizzle-orm";
-import { users, journalEntries, comments, aiChatSessions } from "@shared/schema";
+import { users, journalEntries, comments, aiChatSessions, userConnections } from "@shared/schema";
 
 // modify the interface with any CRUD methods
 // you might need
@@ -55,6 +57,16 @@ export interface IStorage {
   createComment(comment: InsertComment, userId: string): Promise<Comment>;
   updateComment(id: string, updates: Partial<InsertComment>): Promise<Comment>;
   deleteComment(id: string): Promise<void>;
+  
+  // Connection methods
+  sendConnectionRequest(requesterId: string, recipientId: string): Promise<UserConnection>;
+  acceptConnectionRequest(requestId: string): Promise<UserConnection>;
+  rejectConnectionRequest(requestId: string): Promise<void>;
+  blockUser(requesterId: string, recipientId: string): Promise<UserConnection>;
+  unblockUser(requesterId: string, recipientId: string): Promise<void>;
+  getConnectionRequests(userId: string, type: 'received' | 'sent'): Promise<UserConnectionWithUser[]>;
+  getConnections(userId: string): Promise<UserConnectionWithUser[]>;
+  getConnectionStatus(requesterId: string, recipientId: string): Promise<UserConnection | undefined>;
   
   // Public-facing methods (no authentication required)
   getPublicUserByUsername(username: string): Promise<PublicUser | undefined>;
@@ -440,6 +452,241 @@ class DbStorage implements IStorage {
     await this.db.delete(comments).where(eq(comments.id, id));
   }
 
+  // Connection management methods
+  async sendConnectionRequest(requesterId: string, recipientId: string): Promise<UserConnection> {
+    // Check if connection already exists
+    const existing = await this.db
+      .select()
+      .from(userConnections)
+      .where(
+        or(
+          and(eq(userConnections.requesterId, requesterId), eq(userConnections.recipientId, recipientId)),
+          and(eq(userConnections.requesterId, recipientId), eq(userConnections.recipientId, requesterId))
+        )
+      );
+    
+    if (existing.length > 0) {
+      throw new Error('Connection request already exists');
+    }
+    
+    const result = await this.db.insert(userConnections).values({
+      id: randomUUID(),
+      requesterId,
+      recipientId,
+      status: "pending",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }).returning();
+    
+    return result[0];
+  }
+
+  async acceptConnectionRequest(requestId: string): Promise<UserConnection> {
+    const result = await this.db
+      .update(userConnections)
+      .set({ status: "accepted", updatedAt: new Date() })
+      .where(eq(userConnections.id, requestId))
+      .returning();
+    
+    if (!result[0]) {
+      throw new Error('Connection request not found');
+    }
+    return result[0];
+  }
+
+  async rejectConnectionRequest(requestId: string): Promise<void> {
+    await this.db.delete(userConnections).where(eq(userConnections.id, requestId));
+  }
+
+  async blockUser(requesterId: string, recipientId: string): Promise<UserConnection> {
+    // Check if connection already exists and update or create
+    const existing = await this.db
+      .select()
+      .from(userConnections)
+      .where(
+        or(
+          and(eq(userConnections.requesterId, requesterId), eq(userConnections.recipientId, recipientId)),
+          and(eq(userConnections.requesterId, recipientId), eq(userConnections.recipientId, requesterId))
+        )
+      );
+    
+    if (existing.length > 0) {
+      const result = await this.db
+        .update(userConnections)
+        .set({ status: "blocked", updatedAt: new Date() })
+        .where(eq(userConnections.id, existing[0].id))
+        .returning();
+      return result[0];
+    } else {
+      const result = await this.db.insert(userConnections).values({
+        id: randomUUID(),
+        requesterId,
+        recipientId,
+        status: "blocked",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }).returning();
+      return result[0];
+    }
+  }
+
+  async unblockUser(requesterId: string, recipientId: string): Promise<void> {
+    await this.db
+      .delete(userConnections)
+      .where(
+        and(
+          eq(userConnections.requesterId, requesterId),
+          eq(userConnections.recipientId, recipientId),
+          eq(userConnections.status, "blocked")
+        )
+      );
+  }
+
+  async getConnectionRequests(userId: string, type: 'received' | 'sent'): Promise<UserConnectionWithUser[]> {
+    const isReceived = type === 'received';
+    const userField = isReceived ? userConnections.requesterId : userConnections.recipientId;
+    const currentUserField = isReceived ? userConnections.recipientId : userConnections.requesterId;
+    
+    const result = await this.db
+      .select({
+        // Connection fields
+        id: userConnections.id,
+        requesterId: userConnections.requesterId,
+        recipientId: userConnections.recipientId,
+        status: userConnections.status,
+        createdAt: userConnections.createdAt,
+        updatedAt: userConnections.updatedAt,
+        // User fields (the other person in the connection)
+        userFirstName: users.firstName,
+        userLastName: users.lastName,
+        userUsername: users.username,
+        userBio: users.bio,
+        userProfileImageUrl: users.profileImageUrl,
+        userEmail: users.email,
+      })
+      .from(userConnections)
+      .leftJoin(users, eq(userField, users.id))
+      .where(
+        and(
+          eq(currentUserField, userId),
+          eq(userConnections.status, "pending")
+        )
+      )
+      .orderBy(desc(userConnections.createdAt));
+
+    // Convert to UserConnectionWithUser format
+    return result.map((row) => ({
+      id: row.id,
+      requesterId: row.requesterId,
+      recipientId: row.recipientId,
+      status: row.status as "pending" | "accepted" | "blocked",
+      createdAt: row.createdAt!,
+      updatedAt: row.updatedAt!,
+      requester: isReceived ? {
+        id: row.requesterId,
+        email: row.userEmail || '',
+        firstName: row.userFirstName,
+        lastName: row.userLastName,
+        username: row.userUsername,
+        bio: row.userBio,
+        profileImageUrl: row.userProfileImageUrl,
+        isProfilePublic: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } : {} as User,
+      recipient: !isReceived ? {
+        id: row.recipientId,
+        email: row.userEmail || '',
+        firstName: row.userFirstName,
+        lastName: row.userLastName,
+        username: row.userUsername,
+        bio: row.userBio,
+        profileImageUrl: row.userProfileImageUrl,
+        isProfilePublic: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } : {} as User,
+    }));
+  }
+
+  async getConnections(userId: string): Promise<UserConnectionWithUser[]> {
+    const result = await this.db
+      .select({
+        // Connection fields
+        id: userConnections.id,
+        requesterId: userConnections.requesterId,
+        recipientId: userConnections.recipientId,
+        status: userConnections.status,
+        createdAt: userConnections.createdAt,
+        updatedAt: userConnections.updatedAt,
+        // Connected user fields
+        userFirstName: users.firstName,
+        userLastName: users.lastName,
+        userUsername: users.username,
+        userBio: users.bio,
+        userProfileImageUrl: users.profileImageUrl,
+        userEmail: users.email,
+      })
+      .from(userConnections)
+      .leftJoin(users, or(eq(userConnections.requesterId, users.id), eq(userConnections.recipientId, users.id)))
+      .where(
+        and(
+          or(eq(userConnections.requesterId, userId), eq(userConnections.recipientId, userId)),
+          eq(userConnections.status, "accepted"),
+          sql`${users.id} != ${userId}` // Get the other user, not ourselves
+        )
+      )
+      .orderBy(desc(userConnections.createdAt));
+
+    // Convert to UserConnectionWithUser format
+    return result.map((row) => ({
+      id: row.id,
+      requesterId: row.requesterId,
+      recipientId: row.recipientId,
+      status: row.status as "pending" | "accepted" | "blocked",
+      createdAt: row.createdAt!,
+      updatedAt: row.updatedAt!,
+      requester: {
+        id: row.requesterId,
+        email: row.userEmail || '',
+        firstName: row.userFirstName,
+        lastName: row.userLastName,
+        username: row.userUsername,
+        bio: row.userBio,
+        profileImageUrl: row.userProfileImageUrl,
+        isProfilePublic: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+      recipient: {
+        id: row.recipientId,
+        email: row.userEmail || '',
+        firstName: row.userFirstName,
+        lastName: row.userLastName,
+        username: row.userUsername,
+        bio: row.userBio,
+        profileImageUrl: row.userProfileImageUrl,
+        isProfilePublic: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    }));
+  }
+
+  async getConnectionStatus(requesterId: string, recipientId: string): Promise<UserConnection | undefined> {
+    const result = await this.db
+      .select()
+      .from(userConnections)
+      .where(
+        or(
+          and(eq(userConnections.requesterId, requesterId), eq(userConnections.recipientId, recipientId)),
+          and(eq(userConnections.requesterId, recipientId), eq(userConnections.recipientId, requesterId))
+        )
+      );
+    
+    return result[0];
+  }
+
   // Public-facing methods (no authentication required)
   async getPublicUserByUsername(username: string): Promise<PublicUser | undefined> {
     const result = await this.db
@@ -598,6 +845,7 @@ class DbStorage implements IStorage {
       title: row.title,
       content: row.content,
       audioUrl: row.audioUrl,
+      audioPlayable: row.audioPlayable ?? false,
       mediaUrls: row.mediaUrls || [],
       tags: row.tags || [],
       createdAt: row.createdAt!,
@@ -831,6 +1079,7 @@ export class MemStorage implements IStorage {
       title: entryData.title ?? null,
       content: entryData.content,
       audioUrl: entryData.audioUrl ?? null,
+      audioPlayable: entryData.audioPlayable ?? false,
       mediaUrls: entryData.mediaUrls ?? [],
       tags: entryData.tags ?? [],
       privacy: entryData.privacy ?? "private",
@@ -1004,6 +1253,39 @@ export class MemStorage implements IStorage {
 
   async deleteComment(id: string): Promise<void> {
     this.comments.delete(id);
+  }
+
+  // Connection management methods (stub implementations for MemStorage)
+  async sendConnectionRequest(requesterId: string, recipientId: string): Promise<UserConnection> {
+    throw new Error('Connection methods not implemented in MemStorage - use DbStorage');
+  }
+
+  async acceptConnectionRequest(requestId: string): Promise<UserConnection> {
+    throw new Error('Connection methods not implemented in MemStorage - use DbStorage');
+  }
+
+  async rejectConnectionRequest(requestId: string): Promise<void> {
+    throw new Error('Connection methods not implemented in MemStorage - use DbStorage');
+  }
+
+  async blockUser(requesterId: string, recipientId: string): Promise<UserConnection> {
+    throw new Error('Connection methods not implemented in MemStorage - use DbStorage');
+  }
+
+  async unblockUser(requesterId: string, recipientId: string): Promise<void> {
+    throw new Error('Connection methods not implemented in MemStorage - use DbStorage');
+  }
+
+  async getConnectionRequests(userId: string, type: 'received' | 'sent'): Promise<UserConnectionWithUser[]> {
+    throw new Error('Connection methods not implemented in MemStorage - use DbStorage');
+  }
+
+  async getConnections(userId: string): Promise<UserConnectionWithUser[]> {
+    throw new Error('Connection methods not implemented in MemStorage - use DbStorage');
+  }
+
+  async getConnectionStatus(requesterId: string, recipientId: string): Promise<UserConnection | undefined> {
+    throw new Error('Connection methods not implemented in MemStorage - use DbStorage');
   }
 
   // Public-facing methods (not implemented for MemStorage - use DbStorage for public features)
