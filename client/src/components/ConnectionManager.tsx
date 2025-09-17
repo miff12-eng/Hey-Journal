@@ -35,17 +35,17 @@ export default function ConnectionManager({ isOpen, onClose }: ConnectionManager
 
   // Search users query
   const { data: searchResults = [], isLoading: isSearching } = useQuery<PublicUser[]>({
-    queryKey: ['/api/connections/search', { q: searchQuery }],
+    queryKey: [`/api/connections/search?q=${encodeURIComponent(searchQuery)}`, { q: searchQuery }],
     enabled: searchQuery.length >= 2,
   })
 
   // Connection requests queries
   const { data: receivedRequests = [], isLoading: isLoadingReceived } = useQuery<UserConnectionWithUser[]>({
-    queryKey: ['/api/connections/requests', 'received'],
+    queryKey: ['/api/connections/requests?type=received', 'received'],
   })
 
   const { data: sentRequests = [], isLoading: isLoadingSent } = useQuery<UserConnectionWithUser[]>({
-    queryKey: ['/api/connections/requests', 'sent'],
+    queryKey: ['/api/connections/requests?type=sent', 'sent'],
   })
 
   // Current connections query
