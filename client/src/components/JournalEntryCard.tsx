@@ -206,39 +206,38 @@ export default function JournalEntryCard({
 
       <CardFooter className="pt-0">
         <Separator className="mb-3" />
-        <div className="flex items-center justify-between w-full">
-          <div className="flex items-center gap-4">
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              className="gap-2 text-muted-foreground hover:text-foreground"
-              onClick={() => setIsLiked(!isLiked)}
-              data-testid={`button-like-${entry.id}`}
-            >
-              <Heart className={cn('h-4 w-4', isLiked && 'fill-red-500 text-red-500')} />
-              <span className="text-sm">24</span>
-            </Button>
-            
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              className="gap-2 text-muted-foreground hover:text-foreground"
-              onClick={() => setShowComments(!showComments)}
-              data-testid={`button-comment-${entry.id}`}
-            >
-              <MessageCircle className="h-4 w-4" />
-              <span className="text-sm">{comments.length}</span>
-            </Button>
-          </div>
+        <div className="flex items-center gap-2 w-full justify-start flex-wrap">
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            className="gap-2 text-muted-foreground hover:text-foreground"
+            onClick={() => setIsLiked(!isLiked)}
+            data-testid={`button-like-${entry.id}`}
+          >
+            <Heart className={cn('h-4 w-4', isLiked && 'fill-red-500 text-red-500')} />
+            <span className="text-sm">24</span>
+          </Button>
+          
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            className="gap-2 text-muted-foreground hover:text-foreground"
+            onClick={() => setShowComments(!showComments)}
+            data-testid={`button-comment-${entry.id}`}
+          >
+            <MessageCircle className="h-4 w-4" />
+            <span className="text-sm">{comments.length}</span>
+          </Button>
           
           <Button 
             variant="ghost" 
             size="sm" 
             onClick={() => onShare?.(entry.id)}
-            className="text-muted-foreground hover:text-foreground"
+            className="gap-2 text-muted-foreground hover:text-foreground"
             data-testid={`button-share-${entry.id}`}
           >
             <Share className="h-4 w-4" />
+            <span className="text-sm hidden sm:inline">Share</span>
           </Button>
         </div>
       </CardFooter>
