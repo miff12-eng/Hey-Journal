@@ -1,6 +1,7 @@
 import { 
   type User, 
   type UpsertUser,
+  type UpdateUserProfile,
   type JournalEntry,
   type InsertJournalEntry,
   type JournalEntryWithUser,
@@ -29,6 +30,7 @@ export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
   createUser(user: UpsertUser): Promise<User>;
+  updateUserProfile(id: string, updates: UpdateUserProfile): Promise<User>;
   searchUsers(query: string, limit?: number): Promise<User[]>;
   
   // Journal entry methods
@@ -93,6 +95,19 @@ class DbStorage implements IStorage {
     return result[0];
   }
 
+  async updateUserProfile(id: string, updates: UpdateUserProfile): Promise<User> {
+    const result = await this.db
+      .update(users)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(users.id, id))
+      .returning();
+    
+    if (!result[0]) {
+      throw new Error('User not found');
+    }
+    return result[0];
+  }
+
   async searchUsers(query: string, limit = 10): Promise<User[]> {
     const result = await this.db
       .select()
@@ -136,7 +151,10 @@ class DbStorage implements IStorage {
         userEmail: users.email,
         userFirstName: users.firstName,
         userLastName: users.lastName,
+        userUsername: users.username,
+        userBio: users.bio,
         userProfileImageUrl: users.profileImageUrl,
+        userIsProfilePublic: users.isProfilePublic,
         userCreatedAt: users.createdAt,
         userUpdatedAt: users.updatedAt,
       })
@@ -166,7 +184,10 @@ class DbStorage implements IStorage {
         email: row.userEmail!,
         firstName: row.userFirstName!,
         lastName: row.userLastName!,
+        username: row.userUsername,
+        bio: row.userBio,
         profileImageUrl: row.userProfileImageUrl,
+        isProfilePublic: row.userIsProfilePublic,
         createdAt: row.userCreatedAt!,
         updatedAt: row.userUpdatedAt!,
       }
@@ -347,23 +368,25 @@ class DbStorage implements IStorage {
       .where(eq(comments.entryId, entryId))
       .orderBy(desc(comments.createdAt));
 
-    const commentsWithPublicUser: CommentWithPublicUser[] = result.map((row) => ({
-      id: row.id,
-      entryId: row.entryId,
-      userId: row.userId,
-      content: row.content,
-      mediaUrls: row.mediaUrls || [],
-      createdAt: row.createdAt!,
-      updatedAt: row.updatedAt!,
-      user: {
-        id: row.userId,
-        username: row.userUsername,
-        firstName: row.userFirstName,
-        lastName: row.userLastName,
-        bio: row.userBio,
-        profileImageUrl: row.userProfileImageUrl,
-      }
-    }));
+    const commentsWithPublicUser: CommentWithPublicUser[] = result
+      .filter(row => row.userUsername !== null) // Only include users with usernames
+      .map((row) => ({
+        id: row.id,
+        entryId: row.entryId,
+        userId: row.userId,
+        content: row.content,
+        mediaUrls: row.mediaUrls || [],
+        createdAt: row.createdAt!,
+        updatedAt: row.updatedAt!,
+        user: {
+          id: row.userId,
+          username: row.userUsername!,
+          firstName: row.userFirstName,
+          lastName: row.userLastName,
+          bio: row.userBio,
+          profileImageUrl: row.userProfileImageUrl,
+        }
+      }));
 
     return commentsWithPublicUser;
   }
@@ -682,13 +705,35 @@ export class MemStorage implements IStorage {
     const id = insertUser.id || randomUUID();
     const now = new Date();
     const user: User = { 
-      ...insertUser, 
       id,
-      createdAt: insertUser.createdAt || now,
-      updatedAt: insertUser.updatedAt || now
+      email: insertUser.email ?? null,
+      firstName: insertUser.firstName ?? null,
+      lastName: insertUser.lastName ?? null,
+      username: insertUser.username ?? null,
+      bio: insertUser.bio ?? null,
+      profileImageUrl: insertUser.profileImageUrl ?? null,
+      isProfilePublic: insertUser.isProfilePublic ?? null,
+      createdAt: insertUser.createdAt ?? now,
+      updatedAt: insertUser.updatedAt ?? now
     };
     this.users.set(id, user);
     return user;
+  }
+
+  async updateUserProfile(id: string, updates: UpdateUserProfile): Promise<User> {
+    const existingUser = this.users.get(id);
+    if (!existingUser) {
+      throw new Error('User not found');
+    }
+    
+    const updatedUser: User = {
+      ...existingUser,
+      ...updates,
+      updatedAt: new Date()
+    };
+    
+    this.users.set(id, updatedUser);
+    return updatedUser;
   }
 
   async searchUsers(query: string, limit = 10): Promise<User[]> {
@@ -718,7 +763,7 @@ export class MemStorage implements IStorage {
     
     const entries = allEntries
       .filter(entry => entry.userId === userId)
-      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0))
       .slice(0, limit);
 
     console.log('🗂️ Filtered entries for user:', entries.length);
@@ -740,13 +785,16 @@ export class MemStorage implements IStorage {
     const id = randomUUID();
     const now = new Date();
     const entry: JournalEntry = {
-      ...entryData,
       id,
       userId,
-      mediaUrls: entryData.mediaUrls || [],
-      tags: entryData.tags || [],
-      sharedWith: entryData.sharedWith || [],
-      aiInsights: null, // Will be populated by AI analysis
+      title: entryData.title ?? null,
+      content: entryData.content,
+      audioUrl: entryData.audioUrl ?? null,
+      mediaUrls: entryData.mediaUrls ?? [],
+      tags: entryData.tags ?? [],
+      privacy: entryData.privacy ?? "private",
+      sharedWith: entryData.sharedWith ?? [],
+      aiInsights: null,
       createdAt: now,
       updatedAt: now
     };
@@ -798,18 +846,18 @@ export class MemStorage implements IStorage {
   async getAiChatSessionsByUserId(userId: string): Promise<AiChatSession[]> {
     return Array.from(this.aiChatSessions.values())
       .filter(session => session.userId === userId)
-      .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
+      .sort((a, b) => (b.updatedAt?.getTime() || 0) - (a.updatedAt?.getTime() || 0));
   }
 
   async createAiChatSession(sessionData: InsertAiChatSession, userId: string): Promise<AiChatSession> {
     const id = randomUUID();
     const now = new Date();
     const session: AiChatSession = {
-      ...sessionData,
       id,
       userId,
-      messages: sessionData.messages || [],
-      relatedEntryIds: sessionData.relatedEntryIds || [],
+      title: sessionData.title ?? null,
+      messages: sessionData.messages ?? [],
+      relatedEntryIds: sessionData.relatedEntryIds ?? [],
       createdAt: now,
       updatedAt: now
     };
@@ -864,11 +912,11 @@ export class MemStorage implements IStorage {
     const commentsWithPublicUser: CommentWithPublicUser[] = [];
     for (const comment of entryComments) {
       const user = await this.getUser(comment.userId);
-      if (user) {
-        // Convert to public user DTO (omit email and other private fields)
+      if (user && user.username) {
+        // Only include users with usernames for public comments
         const publicUser: PublicUser = {
           id: user.id,
-          username: user.username,
+          username: user.username!,
           firstName: user.firstName,
           lastName: user.lastName,
           bio: user.bio,
