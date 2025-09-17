@@ -234,7 +234,7 @@ export default function Search() {
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-medium text-foreground">
                   {searchMutation.isLoading ? 'Searching...' : 
-                    `${searchResults.length} result${searchResults.length !== 1 ? 's' : ''} for "${searchQuery}"`
+                    `${searchMutation.data?.totalResults || 0} result${(searchMutation.data?.totalResults || 0) !== 1 ? 's' : ''} for "${searchQuery}"`
                   }
                 </h3>
                 <div className="flex gap-2">
@@ -259,9 +259,9 @@ export default function Search() {
                     </Card>
                   ))}
                 </div>
-              ) : searchResults.length > 0 ? (
+              ) : searchMutation.data && searchMutation.data.results && searchMutation.data.results.length > 0 ? (
                 <div className="space-y-4">
-                  {searchResults.map((result) => (
+                  {searchMutation.data.results.map((result) => (
                     <div key={result.entry.id} className="space-y-2">
                       {/* Match reason and confidence */}
                       <div className="flex items-center gap-2 text-xs text-muted-foreground">
