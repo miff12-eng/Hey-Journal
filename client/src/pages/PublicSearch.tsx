@@ -6,6 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Search, Users, FileText, Mic, LogIn, ArrowRight } from "lucide-react"
+import AudioPlayer from "@/components/AudioPlayer"
 import { useQuery } from "@tanstack/react-query"
 import { Link, useLocation } from "wouter"
 import { useAuth } from "@/hooks/useAuth"
@@ -27,6 +28,7 @@ interface PublicJournalEntry {
   title: string | null
   content: string
   audioUrl: string | null
+  audioPlayable: boolean
   mediaUrls: string[]
   tags: string[]
   createdAt: string
@@ -292,6 +294,16 @@ export default function PublicSearch() {
                         )}
                         
                         <p className="text-sm line-clamp-3">{entry.content}</p>
+                        
+                        {entry.audioUrl && entry.audioPlayable && (
+                          <div className="mt-3">
+                            <AudioPlayer 
+                              audioUrl={entry.audioUrl}
+                              showFullControls={true}
+                              className="w-full"
+                            />
+                          </div>
+                        )}
                         
                         {entry.tags.length > 0 && (
                           <div className="flex flex-wrap gap-1">
