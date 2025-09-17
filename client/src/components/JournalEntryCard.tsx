@@ -96,30 +96,38 @@ export default function JournalEntryCard({
             </div>
           </div>
           
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8" data-testid={`button-entry-menu-${entry.id}`}>
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => onEdit?.(entry.id)} data-testid={`menu-edit-${entry.id}`}>
-                <Edit2 className="h-4 w-4 mr-2" />
-                Edit
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onShare?.(entry.id)} data-testid={`menu-share-${entry.id}`}>
-                <Share className="h-4 w-4 mr-2" />
-                Share
-              </DropdownMenuItem>
-              <DropdownMenuItem 
-                onClick={() => onDelete?.(entry.id)} 
-                className="text-destructive focus:text-destructive"
-                data-testid={`menu-delete-${entry.id}`}
-              >
-                Delete
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {(onEdit || onShare || onDelete) && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8" data-testid={`button-entry-menu-${entry.id}`}>
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {onEdit && (
+                  <DropdownMenuItem onClick={() => onEdit(entry.id)} data-testid={`menu-edit-${entry.id}`}>
+                    <Edit2 className="h-4 w-4 mr-2" />
+                    Edit
+                  </DropdownMenuItem>
+                )}
+                {onShare && (
+                  <DropdownMenuItem onClick={() => onShare(entry.id)} data-testid={`menu-share-${entry.id}`}>
+                    <Share className="h-4 w-4 mr-2" />
+                    Share
+                  </DropdownMenuItem>
+                )}
+                {onDelete && (
+                  <DropdownMenuItem 
+                    onClick={() => onDelete(entry.id)} 
+                    className="text-destructive focus:text-destructive"
+                    data-testid={`menu-delete-${entry.id}`}
+                  >
+                    Delete
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
         
         {entry.title && (
