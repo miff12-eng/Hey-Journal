@@ -16,10 +16,13 @@ export function useAuth() {
     window.location.href = '/api/logout'
   }
 
+  // Check if the error indicates the user is not authenticated (401)
+  const isUnauthorized = error?.message?.includes("401")
+
   return {
     user,
     isLoading,
-    isAuthenticated: !!user,
+    isAuthenticated: !!user && !isUnauthorized,
     login,
     logout,
     error,
