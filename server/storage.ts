@@ -22,6 +22,7 @@ import { randomUUID } from "crypto";
 import { drizzle } from "drizzle-orm/neon-http";
 import { neon } from "@neondatabase/serverless";
 import { eq, desc, and, ilike, or, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { users, journalEntries, comments, aiChatSessions, userConnections } from "@shared/schema";
 
 // modify the interface with any CRUD methods
@@ -454,6 +455,11 @@ class DbStorage implements IStorage {
 
   // Connection management methods
   async sendConnectionRequest(requesterId: string, recipientId: string): Promise<UserConnection> {
+    // Prevent self-connections
+    if (requesterId === recipientId) {
+      throw new Error('Cannot send connection request to yourself');
+    }
+    
     // Check if connection already exists
     const existing = await this.db
       .select()
@@ -466,7 +472,27 @@ class DbStorage implements IStorage {
       );
     
     if (existing.length > 0) {
-      throw new Error('Connection request already exists');
+      const connection = existing[0];
+      
+      // Provide specific error messages based on existing connection status
+      switch (connection.status) {
+        case "pending":
+          if (connection.requesterId === requesterId) {
+            throw new Error('You have already sent a connection request to this user');
+          } else {
+            throw new Error('This user has already sent you a connection request. Check your pending requests');
+          }
+        case "accepted":
+          throw new Error('You are already connected to this user');
+        case "blocked":
+          if (connection.requesterId === requesterId) {
+            throw new Error('You have blocked this user. Please unblock them first to send a connection request');
+          } else {
+            throw new Error('Cannot send connection request. User relationship is blocked');
+          }
+        default:
+          throw new Error('Connection request cannot be processed');
+      }
     }
     
     const result = await this.db.insert(userConnections).values({
@@ -481,16 +507,36 @@ class DbStorage implements IStorage {
     return result[0];
   }
 
-  async acceptConnectionRequest(requestId: string): Promise<UserConnection> {
+  async acceptConnectionRequest(requestId: string, userId?: string): Promise<UserConnection> {
+    // First, get the connection request to validate it exists and is in correct state
+    const existingConnection = await this.db
+      .select()
+      .from(userConnections)
+      .where(eq(userConnections.id, requestId));
+    
+    if (!existingConnection[0]) {
+      throw new Error('Connection request not found');
+    }
+    
+    const connection = existingConnection[0];
+    
+    // Validate status is pending
+    if (connection.status !== "pending") {
+      throw new Error('Connection request is no longer pending');
+    }
+    
+    // If userId provided, validate authorization (only recipient can accept)
+    if (userId && connection.recipientId !== userId) {
+      throw new Error('Unauthorized: Only the recipient can accept this connection request');
+    }
+    
+    // Update the connection to accepted
     const result = await this.db
       .update(userConnections)
       .set({ status: "accepted", updatedAt: new Date() })
       .where(eq(userConnections.id, requestId))
       .returning();
     
-    if (!result[0]) {
-      throw new Error('Connection request not found');
-    }
     return result[0];
   }
 
@@ -531,12 +577,15 @@ class DbStorage implements IStorage {
   }
 
   async unblockUser(requesterId: string, recipientId: string): Promise<void> {
+    // Delete blocked connection in either direction
     await this.db
       .delete(userConnections)
       .where(
         and(
-          eq(userConnections.requesterId, requesterId),
-          eq(userConnections.recipientId, recipientId),
+          or(
+            and(eq(userConnections.requesterId, requesterId), eq(userConnections.recipientId, recipientId)),
+            and(eq(userConnections.requesterId, recipientId), eq(userConnections.recipientId, requesterId))
+          ),
           eq(userConnections.status, "blocked")
         )
       );
@@ -544,8 +593,11 @@ class DbStorage implements IStorage {
 
   async getConnectionRequests(userId: string, type: 'received' | 'sent'): Promise<UserConnectionWithUser[]> {
     const isReceived = type === 'received';
-    const userField = isReceived ? userConnections.requesterId : userConnections.recipientId;
     const currentUserField = isReceived ? userConnections.recipientId : userConnections.requesterId;
+    
+    // Create aliases for users table to join both requester and recipient
+    const requesterUser = alias(users, 'requesterUser');
+    const recipientUser = alias(users, 'recipientUser');
     
     const result = await this.db
       .select({
@@ -556,16 +608,30 @@ class DbStorage implements IStorage {
         status: userConnections.status,
         createdAt: userConnections.createdAt,
         updatedAt: userConnections.updatedAt,
-        // User fields (the other person in the connection)
-        userFirstName: users.firstName,
-        userLastName: users.lastName,
-        userUsername: users.username,
-        userBio: users.bio,
-        userProfileImageUrl: users.profileImageUrl,
-        userEmail: users.email,
+        // Requester user fields
+        requesterEmail: requesterUser.email,
+        requesterFirstName: requesterUser.firstName,
+        requesterLastName: requesterUser.lastName,
+        requesterUsername: requesterUser.username,
+        requesterBio: requesterUser.bio,
+        requesterProfileImageUrl: requesterUser.profileImageUrl,
+        requesterIsProfilePublic: requesterUser.isProfilePublic,
+        requesterCreatedAt: requesterUser.createdAt,
+        requesterUpdatedAt: requesterUser.updatedAt,
+        // Recipient user fields
+        recipientEmail: recipientUser.email,
+        recipientFirstName: recipientUser.firstName,
+        recipientLastName: recipientUser.lastName,
+        recipientUsername: recipientUser.username,
+        recipientBio: recipientUser.bio,
+        recipientProfileImageUrl: recipientUser.profileImageUrl,
+        recipientIsProfilePublic: recipientUser.isProfilePublic,
+        recipientCreatedAt: recipientUser.createdAt,
+        recipientUpdatedAt: recipientUser.updatedAt,
       })
       .from(userConnections)
-      .leftJoin(users, eq(userField, users.id))
+      .leftJoin(requesterUser, eq(userConnections.requesterId, requesterUser.id))
+      .leftJoin(recipientUser, eq(userConnections.recipientId, recipientUser.id))
       .where(
         and(
           eq(currentUserField, userId),
@@ -574,71 +640,7 @@ class DbStorage implements IStorage {
       )
       .orderBy(desc(userConnections.createdAt));
 
-    // Convert to UserConnectionWithUser format
-    return result.map((row) => ({
-      id: row.id,
-      requesterId: row.requesterId,
-      recipientId: row.recipientId,
-      status: row.status as "pending" | "accepted" | "blocked",
-      createdAt: row.createdAt!,
-      updatedAt: row.updatedAt!,
-      requester: isReceived ? {
-        id: row.requesterId,
-        email: row.userEmail || '',
-        firstName: row.userFirstName,
-        lastName: row.userLastName,
-        username: row.userUsername,
-        bio: row.userBio,
-        profileImageUrl: row.userProfileImageUrl,
-        isProfilePublic: true,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      } : {} as User,
-      recipient: !isReceived ? {
-        id: row.recipientId,
-        email: row.userEmail || '',
-        firstName: row.userFirstName,
-        lastName: row.userLastName,
-        username: row.userUsername,
-        bio: row.userBio,
-        profileImageUrl: row.userProfileImageUrl,
-        isProfilePublic: true,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      } : {} as User,
-    }));
-  }
-
-  async getConnections(userId: string): Promise<UserConnectionWithUser[]> {
-    const result = await this.db
-      .select({
-        // Connection fields
-        id: userConnections.id,
-        requesterId: userConnections.requesterId,
-        recipientId: userConnections.recipientId,
-        status: userConnections.status,
-        createdAt: userConnections.createdAt,
-        updatedAt: userConnections.updatedAt,
-        // Connected user fields
-        userFirstName: users.firstName,
-        userLastName: users.lastName,
-        userUsername: users.username,
-        userBio: users.bio,
-        userProfileImageUrl: users.profileImageUrl,
-        userEmail: users.email,
-      })
-      .from(userConnections)
-      .leftJoin(users, or(eq(userConnections.requesterId, users.id), eq(userConnections.recipientId, users.id)))
-      .where(
-        and(
-          or(eq(userConnections.requesterId, userId), eq(userConnections.recipientId, userId)),
-          eq(userConnections.status, "accepted"),
-          sql`${users.id} != ${userId}` // Get the other user, not ourselves
-        )
-      )
-      .orderBy(desc(userConnections.createdAt));
-
-    // Convert to UserConnectionWithUser format
+    // Convert to UserConnectionWithUser format with proper user data for both sides
     return result.map((row) => ({
       id: row.id,
       requesterId: row.requesterId,
@@ -648,27 +650,108 @@ class DbStorage implements IStorage {
       updatedAt: row.updatedAt!,
       requester: {
         id: row.requesterId,
-        email: row.userEmail || '',
-        firstName: row.userFirstName,
-        lastName: row.userLastName,
-        username: row.userUsername,
-        bio: row.userBio,
-        profileImageUrl: row.userProfileImageUrl,
-        isProfilePublic: true,
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        email: row.requesterEmail || '',
+        firstName: row.requesterFirstName,
+        lastName: row.requesterLastName,
+        username: row.requesterUsername,
+        bio: row.requesterBio,
+        profileImageUrl: row.requesterProfileImageUrl,
+        isProfilePublic: row.requesterIsProfilePublic || false,
+        createdAt: row.requesterCreatedAt || new Date(),
+        updatedAt: row.requesterUpdatedAt || new Date(),
       },
       recipient: {
         id: row.recipientId,
-        email: row.userEmail || '',
-        firstName: row.userFirstName,
-        lastName: row.userLastName,
-        username: row.userUsername,
-        bio: row.userBio,
-        profileImageUrl: row.userProfileImageUrl,
-        isProfilePublic: true,
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        email: row.recipientEmail || '',
+        firstName: row.recipientFirstName,
+        lastName: row.recipientLastName,
+        username: row.recipientUsername,
+        bio: row.recipientBio,
+        profileImageUrl: row.recipientProfileImageUrl,
+        isProfilePublic: row.recipientIsProfilePublic || false,
+        createdAt: row.recipientCreatedAt || new Date(),
+        updatedAt: row.recipientUpdatedAt || new Date(),
+      },
+    }));
+  }
+
+  async getConnections(userId: string): Promise<UserConnectionWithUser[]> {
+    // Create aliases for users table to join both requester and recipient
+    const requesterUser = alias(users, 'requesterUser');
+    const recipientUser = alias(users, 'recipientUser');
+    
+    const result = await this.db
+      .select({
+        // Connection fields
+        id: userConnections.id,
+        requesterId: userConnections.requesterId,
+        recipientId: userConnections.recipientId,
+        status: userConnections.status,
+        createdAt: userConnections.createdAt,
+        updatedAt: userConnections.updatedAt,
+        // Requester user fields
+        requesterEmail: requesterUser.email,
+        requesterFirstName: requesterUser.firstName,
+        requesterLastName: requesterUser.lastName,
+        requesterUsername: requesterUser.username,
+        requesterBio: requesterUser.bio,
+        requesterProfileImageUrl: requesterUser.profileImageUrl,
+        requesterIsProfilePublic: requesterUser.isProfilePublic,
+        requesterCreatedAt: requesterUser.createdAt,
+        requesterUpdatedAt: requesterUser.updatedAt,
+        // Recipient user fields
+        recipientEmail: recipientUser.email,
+        recipientFirstName: recipientUser.firstName,
+        recipientLastName: recipientUser.lastName,
+        recipientUsername: recipientUser.username,
+        recipientBio: recipientUser.bio,
+        recipientProfileImageUrl: recipientUser.profileImageUrl,
+        recipientIsProfilePublic: recipientUser.isProfilePublic,
+        recipientCreatedAt: recipientUser.createdAt,
+        recipientUpdatedAt: recipientUser.updatedAt,
+      })
+      .from(userConnections)
+      .leftJoin(requesterUser, eq(userConnections.requesterId, requesterUser.id))
+      .leftJoin(recipientUser, eq(userConnections.recipientId, recipientUser.id))
+      .where(
+        and(
+          or(eq(userConnections.requesterId, userId), eq(userConnections.recipientId, userId)),
+          eq(userConnections.status, "accepted")
+        )
+      )
+      .orderBy(desc(userConnections.createdAt));
+
+    // Convert to UserConnectionWithUser format with proper user data for both sides
+    return result.map((row) => ({
+      id: row.id,
+      requesterId: row.requesterId,
+      recipientId: row.recipientId,
+      status: row.status as "pending" | "accepted" | "blocked",
+      createdAt: row.createdAt!,
+      updatedAt: row.updatedAt!,
+      requester: {
+        id: row.requesterId,
+        email: row.requesterEmail || '',
+        firstName: row.requesterFirstName,
+        lastName: row.requesterLastName,
+        username: row.requesterUsername,
+        bio: row.requesterBio,
+        profileImageUrl: row.requesterProfileImageUrl,
+        isProfilePublic: row.requesterIsProfilePublic || false,
+        createdAt: row.requesterCreatedAt || new Date(),
+        updatedAt: row.requesterUpdatedAt || new Date(),
+      },
+      recipient: {
+        id: row.recipientId,
+        email: row.recipientEmail || '',
+        firstName: row.recipientFirstName,
+        lastName: row.recipientLastName,
+        username: row.recipientUsername,
+        bio: row.recipientBio,
+        profileImageUrl: row.recipientProfileImageUrl,
+        isProfilePublic: row.recipientIsProfilePublic || false,
+        createdAt: row.recipientCreatedAt || new Date(),
+        updatedAt: row.recipientUpdatedAt || new Date(),
       },
     }));
   }

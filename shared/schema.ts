@@ -103,8 +103,10 @@ export const userConnections = pgTable(
     index("idx_user_connections_requester").on(table.requesterId),
     index("idx_user_connections_recipient").on(table.recipientId),
     index("idx_user_connections_status").on(table.status),
-    // Unique constraint to prevent duplicate connection requests
-    unique("unique_connection").on(table.requesterId, table.recipientId),
+    // Bidirectional unique constraint to prevent duplicate connections in either direction
+    unique("unique_bidirectional_connection").on(sql`LEAST(${table.requesterId}, ${table.recipientId})`, sql`GREATEST(${table.requesterId}, ${table.recipientId})`),
+    // Prevent self-connections
+    // Note: This would need a CHECK constraint in actual PostgreSQL: CHECK (requester_id != recipient_id)
   ]
 );
 
