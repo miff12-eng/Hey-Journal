@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { useToast } from '@/hooks/use-toast'
-import { Settings, LogOut, Edit, Share2, Calendar, BookOpen, TrendingUp, Users, Loader2, Upload, Lock, X } from 'lucide-react'
+import { Settings, LogOut, Edit, Share2, Calendar, BookOpen, TrendingUp, Users, Loader2, Upload, Lock, X, Trophy, Mic, Volume2, Flame, Award, Globe, Camera } from 'lucide-react'
 import ThemeToggle from '@/components/ThemeToggle'
 import { apiRequest } from '@/lib/queryClient'
 import { ObjectUploader } from '@/components/ObjectUploader'
@@ -36,6 +36,20 @@ export default function Profile() {
   }>({
     queryKey: ['/api/journal/stats'],
     staleTime: 60 * 1000, // 1 minute
+  })
+
+  // Fetch real achievements data
+  const { data: achievementsData, isLoading: achievementsLoading } = useQuery<{
+    achievements: Array<{
+      title: string;
+      description: string;
+      date: string;
+      icon: string;
+      type: 'milestone' | 'streak' | 'social' | 'content';
+    }>;
+  }>({
+    queryKey: ['/api/journal/achievements'],
+    staleTime: 5 * 60 * 1000, // 5 minutes
   })
 
   // Edit form state - only fields that are actually editable in the UI
@@ -87,11 +101,24 @@ export default function Profile() {
     { label: 'Days Since Last', value: statsLoading ? '...' : (stats?.daysSinceLastEntry || 0), icon: Users, color: 'text-muted-foreground' }
   ]
 
-  const recentAchievements = [
-    { title: 'Week Warrior', description: '7 days in a row', date: '2 days ago' },
-    { title: 'Voice Master', description: '50 voice recordings', date: '1 week ago' },
-    { title: 'Social Butterfly', description: 'First shared entry', date: '2 weeks ago' }
-  ]
+  // Get achievements from real database data
+  const recentAchievements = achievementsData?.achievements || []
+
+  // Icon mapping for dynamic achievement icons
+  const iconMap: Record<string, typeof BookOpen> = {
+    BookOpen,
+    Trophy,
+    Mic,
+    Volume2,
+    Flame,
+    Award,
+    Globe,
+    Camera,
+    Share2,
+    Calendar,
+    Users,
+    TrendingUp
+  }
 
   const handleEditProfile = () => {
     if (user) {
@@ -272,18 +299,45 @@ export default function Profile() {
               <CardTitle className="text-base">Recent Achievements</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {recentAchievements.map((achievement, index) => (
-                <div key={index} className="flex items-center gap-3" data-testid={`achievement-${index}`}>
-                  <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                    <TrendingUp className="h-4 w-4 text-primary" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-foreground text-sm" data-testid={`text-achievement-title-${index}`}>{achievement.title}</p>
-                    <p className="text-xs text-muted-foreground" data-testid={`text-achievement-description-${index}`}>{achievement.description}</p>
-                  </div>
-                  <span className="text-xs text-muted-foreground" data-testid={`text-achievement-date-${index}`}>{achievement.date}</span>
+              {achievementsLoading ? (
+                // Loading state
+                <div className="space-y-3">
+                  {[...Array(3)].map((_, index) => (
+                    <div key={index} className="flex items-center gap-3 animate-pulse">
+                      <div className="h-10 w-10 rounded-full bg-muted/50" />
+                      <div className="flex-1 space-y-2">
+                        <div className="h-4 bg-muted/50 rounded w-24" />
+                        <div className="h-3 bg-muted/50 rounded w-32" />
+                      </div>
+                      <div className="h-3 bg-muted/50 rounded w-16" />
+                    </div>
+                  ))}
                 </div>
-              ))}
+              ) : recentAchievements.length > 0 ? (
+                // Achievements data
+                recentAchievements.map((achievement, index) => {
+                  const IconComponent = iconMap[achievement.icon] || Trophy
+                  return (
+                    <div key={index} className="flex items-center gap-3" data-testid={`achievement-${index}`}>
+                      <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                        <IconComponent className="h-4 w-4 text-primary" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-foreground text-sm" data-testid={`text-achievement-title-${index}`}>{achievement.title}</p>
+                        <p className="text-xs text-muted-foreground" data-testid={`text-achievement-description-${index}`}>{achievement.description}</p>
+                      </div>
+                      <span className="text-xs text-muted-foreground" data-testid={`text-achievement-date-${index}`}>{achievement.date}</span>
+                    </div>
+                  )
+                })
+              ) : (
+                // Empty state
+                <div className="text-center py-4">
+                  <Trophy className="h-8 w-8 text-muted-foreground/50 mx-auto mb-2" />
+                  <p className="text-sm text-muted-foreground" data-testid="text-no-achievements">No achievements yet</p>
+                  <p className="text-xs text-muted-foreground/80">Start journaling to unlock your first achievements!</p>
+                </div>
+              )}
             </CardContent>
           </Card>
 
