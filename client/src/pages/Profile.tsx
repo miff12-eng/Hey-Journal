@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { useToast } from '@/hooks/use-toast'
-import { Settings, LogOut, Edit, Share2, Calendar, BookOpen, TrendingUp, Users, Loader2, Upload, Lock, X, Trophy, Mic, Volume2, Flame, Award, Globe, Camera } from 'lucide-react'
+import { Settings, LogOut, Edit, Share2, Calendar, BookOpen, TrendingUp, Users, Loader2, Upload, Lock, X, Trophy, Mic, Volume2, Flame, Award, Globe, Camera, Check } from 'lucide-react'
 import ThemeToggle from '@/components/ThemeToggle'
 import { apiRequest } from '@/lib/queryClient'
 import { ObjectUploader } from '@/components/ObjectUploader'
@@ -38,18 +38,25 @@ export default function Profile() {
     staleTime: 60 * 1000, // 1 minute
   })
 
-  // Fetch real achievements data
+  // Fetch real achievements data with progress tracking
   const { data: achievementsData, isLoading: achievementsLoading } = useQuery<{
     achievements: Array<{
+      id: string;
       title: string;
       description: string;
-      date: string;
       icon: string;
       type: 'milestone' | 'streak' | 'social' | 'content';
+      progress: number;
+      target: number;
+      completed: boolean;
+      completedDate?: string;
     }>;
   }>({
-    queryKey: ['/api/journal/achievements'],
+    queryKey: ['/api/journal/achievements', user?.id],
+    enabled: !!user && !userLoading,
     staleTime: 5 * 60 * 1000, // 5 minutes
+    retry: 1,
+    refetchOnWindowFocus: true,
   })
 
   // Edit form state - only fields that are actually editable in the UI
@@ -314,19 +321,70 @@ export default function Profile() {
                   ))}
                 </div>
               ) : recentAchievements.length > 0 ? (
-                // Achievements data
+                // Achievements data with progress tracking
                 recentAchievements.map((achievement, index) => {
                   const IconComponent = iconMap[achievement.icon] || Trophy
+                  const progressPercentage = Math.round((achievement.progress / achievement.target) * 100)
+                  const isCompleted = achievement.completed
+                  
                   return (
-                    <div key={index} className="flex items-center gap-3" data-testid={`achievement-${index}`}>
-                      <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                        <IconComponent className="h-4 w-4 text-primary" />
+                    <div key={achievement.id || index} className="space-y-2" data-testid={`achievement-${index}`}>
+                      <div className="flex items-center gap-3">
+                        <div className={`h-10 w-10 rounded-full flex items-center justify-center ${
+                          isCompleted ? 'bg-green-500/10' : 'bg-primary/10'
+                        }`}>
+                          <IconComponent className={`h-4 w-4 ${
+                            isCompleted ? 'text-green-600' : 'text-primary'
+                          }`} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className={`font-medium text-sm ${
+                              isCompleted ? 'text-green-700 dark:text-green-400' : 'text-foreground'
+                            }`} data-testid={`text-achievement-title-${index}`}>
+                              {achievement.title}
+                            </p>
+                            {isCompleted && (
+                              <Check className="h-3 w-3 text-green-600" data-testid={`icon-completed-${index}`} />
+                            )}
+                          </div>
+                          <p className="text-xs text-muted-foreground" data-testid={`text-achievement-description-${index}`}>
+                            {achievement.description}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <div className={`text-xs font-medium ${
+                            isCompleted ? 'text-green-600' : 'text-primary'
+                          }`} data-testid={`text-achievement-progress-${index}`}>
+                            {achievement.progress}/{achievement.target}
+                          </div>
+                          {isCompleted && achievement.completedDate && achievement.completedDate !== 'Active streak' && (
+                            <div className="text-xs text-muted-foreground" data-testid={`text-achievement-date-${index}`}>
+                              {achievement.completedDate}
+                            </div>
+                          )}
+                        </div>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-foreground text-sm" data-testid={`text-achievement-title-${index}`}>{achievement.title}</p>
-                        <p className="text-xs text-muted-foreground" data-testid={`text-achievement-description-${index}`}>{achievement.description}</p>
+                      
+                      {/* Progress bar */}
+                      <div className="ml-13"> {/* Align with content, accounting for icon + gap width */}
+                        <div className="w-full bg-muted rounded-full h-1.5">
+                          <div 
+                            className={`h-1.5 rounded-full transition-all duration-300 ${
+                              isCompleted ? 'bg-green-500' : 'bg-primary'
+                            }`}
+                            style={{ width: `${progressPercentage}%` }}
+                            data-testid={`progress-bar-${index}`}
+                          />
+                        </div>
+                        <div className="flex justify-between text-xs text-muted-foreground/70 mt-1">
+                          <span>0</span>
+                          <span className={isCompleted ? 'text-green-600' : 'text-primary/70'}>
+                            {progressPercentage}%
+                          </span>
+                          <span>{achievement.target}</span>
+                        </div>
                       </div>
-                      <span className="text-xs text-muted-foreground" data-testid={`text-achievement-date-${index}`}>{achievement.date}</span>
                     </div>
                   )
                 })

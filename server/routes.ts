@@ -590,135 +590,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get user achievements based on real activity data
+  // Get user achievements with progress tracking
   app.get('/api/journal/achievements', async (req, res) => {
     try {
-      console.log('🏆 Calculating achievements for user:', req.userId);
+      console.log('🏆 Calculating achievements and progress for user:', req.userId);
       
       // Get all user's entries and user data
       const allEntries = await storage.getJournalEntriesByUserId(req.userId, 1000);
       const user = await storage.getUser(req.userId);
       
-      const achievements: Array<{
+      const potentialAchievements: Array<{
+        id: string;
         title: string;
         description: string;
-        date: string;
         icon: string;
         type: 'milestone' | 'streak' | 'social' | 'content';
+        progress: number;
+        target: number;
+        completed: boolean;
+        completedDate?: string;
       }> = [];
 
-      if (!allEntries || allEntries.length === 0) {
-        return res.json({ achievements: [] });
-      }
-
       // Sort entries by creation date (most recent first)
-      const sortedEntries = allEntries.sort((a, b) => 
+      const sortedEntries = (allEntries || []).sort((a, b) => 
         new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
       );
 
       const now = new Date();
+      const entryCount = sortedEntries.length;
       
-      // Helper function to format relative dates
-      const getRelativeDate = (date: Date) => {
+      // Helper function to format completion date
+      const getCompletionDate = (date: Date) => {
         const daysDiff = Math.floor((now.getTime() - date.getTime()) / (24 * 60 * 60 * 1000));
         if (daysDiff === 0) return 'Today';
-        if (daysDiff === 1) return '1 day ago';
+        if (daysDiff === 1) return 'Yesterday';
         if (daysDiff < 7) return `${daysDiff} days ago`;
         if (daysDiff < 30) return `${Math.floor(daysDiff / 7)} week${Math.floor(daysDiff / 7) > 1 ? 's' : ''} ago`;
-        if (daysDiff < 365) return `${Math.floor(daysDiff / 30)} month${Math.floor(daysDiff / 30) > 1 ? 's' : ''} ago`;
-        return `${Math.floor(daysDiff / 365)} year${Math.floor(daysDiff / 365) > 1 ? 's' : ''} ago`;
+        return `${Math.floor(daysDiff / 30)} month${Math.floor(daysDiff / 30) > 1 ? 's' : ''} ago`;
       };
 
-      // 1. First Entry Achievement
-      if (sortedEntries.length >= 1) {
-        const firstEntry = sortedEntries[sortedEntries.length - 1];
-        achievements.push({
-          title: '🎯 First Steps',
-          description: 'Created your first journal entry',
-          date: getRelativeDate(new Date(firstEntry.createdAt || Date.now())),
-          icon: 'BookOpen',
-          type: 'milestone'
-        });
-      }
-
-      // 2. Entry Count Milestones
-      const entryCount = sortedEntries.length;
-      const milestones = [10, 25, 50, 100, 250, 500];
-      
-      for (const milestone of milestones) {
-        if (entryCount >= milestone) {
-          // Find the entry that achieved this milestone
-          const milestoneEntry = sortedEntries[sortedEntries.length - milestone];
-          achievements.push({
-            title: `📚 ${milestone === 10 ? 'Dedicated' : milestone === 25 ? 'Committed' : milestone === 50 ? 'Devoted' : milestone === 100 ? 'Century Club' : milestone === 250 ? 'Prolific Writer' : 'Master Journaler'}`,
-            description: `Reached ${milestone} journal entries`,
-            date: getRelativeDate(new Date(milestoneEntry?.createdAt || Date.now())),
-            icon: 'Trophy',
-            type: 'milestone'
-          });
-        }
-      }
-
-      // 3. Voice Recording Achievements
-      const voiceEntries = sortedEntries.filter(entry => entry.audioUrl);
-      if (voiceEntries.length >= 1) {
-        achievements.push({
-          title: '🎤 Voice Activated',
-          description: 'Used voice recording for the first time',
-          date: getRelativeDate(new Date(voiceEntries[voiceEntries.length - 1].createdAt || Date.now())),
-          icon: 'Mic',
-          type: 'content'
-        });
-      }
-      
-      if (voiceEntries.length >= 10) {
-        achievements.push({
-          title: '🎙️ Voice Master',
-          description: `Recorded ${voiceEntries.length} voice entries`,
-          date: getRelativeDate(new Date(voiceEntries[voiceEntries.length - 10]?.createdAt || Date.now())),
-          icon: 'Volume2',
-          type: 'content'
-        });
-      }
-
-      // 4. Photo/Media Achievements
-      const mediaEntries = sortedEntries.filter(entry => entry.mediaUrls && entry.mediaUrls.length > 0);
-      if (mediaEntries.length >= 1) {
-        achievements.push({
-          title: '📸 Picture Perfect',
-          description: 'Added your first photo to an entry',
-          date: getRelativeDate(new Date(mediaEntries[mediaEntries.length - 1].createdAt || Date.now())),
-          icon: 'Camera',
-          type: 'content'
-        });
-      }
-
-      // 5. Social Sharing Achievements
-      const sharedEntries = sortedEntries.filter(entry => entry.privacy === 'shared' || entry.privacy === 'public');
-      const publicEntries = sortedEntries.filter(entry => entry.privacy === 'public');
-      
-      if (sharedEntries.length >= 1) {
-        achievements.push({
-          title: '🤝 Social Butterfly',
-          description: 'Shared your first entry with others',
-          date: getRelativeDate(new Date(sharedEntries[sharedEntries.length - 1].createdAt || Date.now())),
-          icon: 'Share2',
-          type: 'social'
-        });
-      }
-
-      if (publicEntries.length >= 1) {
-        achievements.push({
-          title: '🌍 Going Public',
-          description: 'Made your first public entry',
-          date: getRelativeDate(new Date(publicEntries[publicEntries.length - 1].createdAt || Date.now())),
-          icon: 'Globe',
-          type: 'social'
-        });
-      }
-
-      // 6. Consistency/Streak Achievements
-      // Calculate current day streak
+      // Calculate current streak
       const todayUTC = new Date();
       todayUTC.setUTCHours(0, 0, 0, 0);
       
@@ -732,100 +643,137 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       let currentStreak = 0;
       let currentDate = new Date(todayUTC);
-      let longestStreak = 0;
-      let tempStreak = 0;
-      let streakStartDate: Date | null = null;
-
-      // Calculate current streak
       while (true) {
         const dateStr = currentDate.toISOString().split('T')[0];
         if (entriesByDate.has(dateStr)) {
           currentStreak++;
-          if (streakStartDate === null) {
-            streakStartDate = new Date(currentDate);
-          }
           currentDate.setUTCDate(currentDate.getUTCDate() - 1);
         } else {
           break;
         }
       }
 
-      // Calculate longest streak in history
-      const allDates = Array.from(entriesByDate.keys()).sort().reverse();
-      for (let i = 0; i < allDates.length; i++) {
-        const currentDateStr = allDates[i];
-        const nextDateStr = allDates[i + 1];
-        
-        if (nextDateStr) {
-          const currentDateObj = new Date(currentDateStr);
-          const nextDateObj = new Date(nextDateStr);
-          const dayDiff = Math.floor((currentDateObj.getTime() - nextDateObj.getTime()) / (24 * 60 * 60 * 1000));
-          
-          if (dayDiff === 1) {
-            tempStreak++;
-          } else {
-            if (tempStreak > longestStreak) {
-              longestStreak = tempStreak;
-            }
-            tempStreak = 1;
-          }
-        }
-      }
-      longestStreak = Math.max(longestStreak, tempStreak);
+      // Count different content types
+      const voiceEntriesCount = sortedEntries.filter(entry => entry.audioUrl).length;
+      const mediaEntriesCount = sortedEntries.filter(entry => entry.mediaUrls && entry.mediaUrls.length > 0).length;
+      const sharedEntriesCount = sortedEntries.filter(entry => entry.privacy === 'shared' || entry.privacy === 'public').length;
+      const publicEntriesCount = sortedEntries.filter(entry => entry.privacy === 'public').length;
 
-      // Streak achievements
-      if (currentStreak >= 3) {
-        achievements.push({
-          title: '🔥 On Fire',
-          description: `${currentStreak} day writing streak`,
-          date: streakStartDate ? getRelativeDate(streakStartDate) : 'Recently',
-          icon: 'Flame',
-          type: 'streak'
-        });
-      }
-
-      if (longestStreak >= 7) {
-        achievements.push({
-          title: '🏆 Week Warrior',
-          description: `Longest streak: ${longestStreak} days`,
-          date: 'Best achievement',
-          icon: 'Award',
-          type: 'streak'
-        });
-      }
-
-      // 7. Account Milestones
-      if (user?.createdAt) {
-        const accountAge = Math.floor((now.getTime() - new Date(user.createdAt).getTime()) / (24 * 60 * 60 * 1000));
-        if (accountAge >= 30) {
-          achievements.push({
-            title: '📅 Monthly Member',
-            description: 'Active member for over a month',
-            date: getRelativeDate(new Date(user.createdAt.getTime() + 30 * 24 * 60 * 60 * 1000)),
-            icon: 'Calendar',
-            type: 'milestone'
-          });
-        }
-      }
-
-      // Sort achievements by most recent first
-      achievements.sort((a, b) => {
-        const aDate = a.date === 'Today' ? now : 
-                     a.date === 'Recently' ? now :
-                     a.date === 'Best achievement' ? now :
-                     new Date(now.getTime() - parseInt(a.date) * 24 * 60 * 60 * 1000);
-        const bDate = b.date === 'Today' ? now : 
-                     b.date === 'Recently' ? now :
-                     b.date === 'Best achievement' ? now :
-                     new Date(now.getTime() - parseInt(b.date) * 24 * 60 * 60 * 1000);
-        return bDate.getTime() - aDate.getTime();
+      // Define potential achievements with progress tracking
+      
+      // 1. First Entry Achievement
+      potentialAchievements.push({
+        id: 'first-entry',
+        title: 'First Steps',
+        description: 'Create your first journal entry',
+        icon: 'BookOpen',
+        type: 'milestone',
+        progress: Math.min(entryCount, 1),
+        target: 1,
+        completed: entryCount >= 1,
+        completedDate: entryCount >= 1 && sortedEntries.length > 0 ? 
+          getCompletionDate(new Date(sortedEntries[sortedEntries.length - 1].createdAt || Date.now())) : undefined
       });
 
-      // Limit to most recent/relevant achievements
-      const recentAchievements = achievements.slice(0, 5);
+      // 2. Entry Count Milestones
+      const entryMilestones = [10, 25, 50];
+      for (const milestone of entryMilestones) {
+        potentialAchievements.push({
+          id: `entries-${milestone}`,
+          title: milestone === 10 ? 'Dedicated Writer' : milestone === 25 ? 'Committed Journalist' : 'Devoted Chronicler',
+          description: `Write ${milestone} journal entries`,
+          icon: 'Trophy',
+          type: 'milestone',
+          progress: Math.min(entryCount, milestone),
+          target: milestone,
+          completed: entryCount >= milestone,
+          completedDate: entryCount >= milestone && sortedEntries.length >= milestone ? 
+            getCompletionDate(new Date(sortedEntries[sortedEntries.length - milestone].createdAt || Date.now())) : undefined
+        });
+      }
+
+      // 3. Voice Recording Achievement
+      potentialAchievements.push({
+        id: 'first-voice',
+        title: 'Voice Activated',
+        description: 'Record your first voice entry',
+        icon: 'Mic',
+        type: 'content',
+        progress: Math.min(voiceEntriesCount, 1),
+        target: 1,
+        completed: voiceEntriesCount >= 1,
+        completedDate: voiceEntriesCount >= 1 ? 
+          getCompletionDate(new Date(sortedEntries.find(e => e.audioUrl)?.createdAt || Date.now())) : undefined
+      });
+
+      // 4. Photo Achievement
+      potentialAchievements.push({
+        id: 'first-photo',
+        title: 'Picture Perfect',
+        description: 'Add a photo to your entry',
+        icon: 'Camera',
+        type: 'content',
+        progress: Math.min(mediaEntriesCount, 1),
+        target: 1,
+        completed: mediaEntriesCount >= 1,
+        completedDate: mediaEntriesCount >= 1 ? 
+          getCompletionDate(new Date(sortedEntries.find(e => e.mediaUrls && e.mediaUrls.length > 0)?.createdAt || Date.now())) : undefined
+      });
+
+      // 5. Social Sharing Achievement
+      potentialAchievements.push({
+        id: 'first-share',
+        title: 'Social Butterfly',
+        description: 'Share your first entry',
+        icon: 'Share2',
+        type: 'social',
+        progress: Math.min(sharedEntriesCount, 1),
+        target: 1,
+        completed: sharedEntriesCount >= 1,
+        completedDate: sharedEntriesCount >= 1 ? 
+          getCompletionDate(new Date(sortedEntries.find(e => e.privacy === 'shared' || e.privacy === 'public')?.createdAt || Date.now())) : undefined
+      });
+
+      // 6. Streak Achievements
+      const streakTargets = [3, 7, 14];
+      for (const target of streakTargets) {
+        potentialAchievements.push({
+          id: `streak-${target}`,
+          title: target === 3 ? 'On Fire' : target === 7 ? 'Week Warrior' : 'Consistency Master',
+          description: `Maintain ${target} day writing streak`,
+          icon: target === 3 ? 'Flame' : 'Award',
+          type: 'streak',
+          progress: Math.min(currentStreak, target),
+          target: target,
+          completed: currentStreak >= target,
+          completedDate: currentStreak >= target ? 'Active streak' : undefined
+        });
+      }
+
+      // Sort by priority: completed milestones first (show progress), then incomplete (encourage progress)
+      potentialAchievements.sort((a, b) => {
+        // Prioritize completed milestone achievements (especially important ones like "First Steps")
+        if (a.completed && !b.completed && a.type === 'milestone') {
+          return -1;
+        }
+        if (b.completed && !a.completed && b.type === 'milestone') {
+          return 1;
+        }
+        
+        // Then separate by completion status
+        if (a.completed !== b.completed) {
+          return a.completed ? 1 : -1; // Incomplete achievements second (to encourage progress)
+        }
+        
+        // Within same completion status, sort by target difficulty (easier first)
+        return a.target - b.target;
+      });
+
+      // Limit to top 5 most relevant achievements
+      const relevantAchievements = potentialAchievements.slice(0, 5);
       
-      console.log('🏆 Achievements calculated:', recentAchievements.length, 'achievements');
-      res.json({ achievements: recentAchievements });
+      console.log('🏆 Potential achievements calculated:', relevantAchievements.length, 'achievements');
+      res.json({ achievements: relevantAchievements });
       
     } catch (error) {
       console.error('Achievements calculation error:', error);
