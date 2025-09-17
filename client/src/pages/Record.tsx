@@ -35,6 +35,7 @@ export default function Record() {
   const [isRecording, setIsRecording] = useState(false)
   const [isTranscribing, setIsTranscribing] = useState(false)
   const [mediaUrls, setMediaUrls] = useState<string[]>([])
+  const [audioUrl, setAudioUrl] = useState<string>('')
   const [isSaving, setIsSaving] = useState(false)
   const [selectedUsers, setSelectedUsers] = useState<{id: string, email: string, username?: string, firstName?: string, lastName?: string, profileImageUrl?: string}[]>([])
   const { toast } = useToast()
@@ -73,6 +74,7 @@ export default function Record() {
       setTags(editEntry.tags || [])
       setPrivacy(editEntry.privacy || 'private')
       setMediaUrls(editEntry.mediaUrls || [])
+      setAudioUrl(editEntry.audioUrl || '')
       
       // Load sharing information if entry is shared
       if (editEntry.privacy === 'shared' && editEntry.id) {
@@ -136,35 +138,106 @@ export default function Record() {
     setIsTranscribing(true)
     console.log('Recording stopped, processing...', audioBlob.size)
     
-    // Call real OpenAI Whisper transcription API
-    const transcribeAudio = async () => {
+    // Process audio: transcription + upload to storage
+    const processAudio = async () => {
       try {
+        // Step 1: Transcribe the audio
         const formData = new FormData()
         formData.append('audio', audioBlob, 'recording.wav')
         
-        const response = await fetch('/api/ai/transcribe', {
+        const transcriptionResponse = await fetch('/api/ai/transcribe', {
           method: 'POST',
           body: formData,
           credentials: 'include'
         })
         
-        if (response.ok) {
-          const data = await response.json()
-          const transcription = data.text || 'Unable to transcribe audio'
+        let transcription = ''
+        if (transcriptionResponse.ok) {
+          const data = await transcriptionResponse.json()
+          transcription = data.text || 'Unable to transcribe audio'
           setContent(prev => prev + (prev ? '\n\n' : '') + transcription)
         } else {
-          console.error('Transcription failed:', response.status)
-          setContent(prev => prev + (prev ? '\n\n' : '') + 'Transcription failed. Please try again.')
+          console.error('Transcription failed:', transcriptionResponse.status)
+          transcription = 'Transcription failed. Please try again.'
+          setContent(prev => prev + (prev ? '\n\n' : '') + transcription)
         }
+
+        // Step 2: Upload audio file to object storage
+        try {
+          console.log('🎵 Uploading audio file to storage...')
+          
+          // Get upload URL
+          const uploadResponse = await fetch('/api/photos/upload', {
+            method: 'POST',
+            credentials: 'include'
+          })
+          
+          if (!uploadResponse.ok) {
+            throw new Error('Failed to get upload URL')
+          }
+          
+          const { uploadURL, objectPath } = await uploadResponse.json()
+          console.log('🔗 Got upload URL for audio:', objectPath)
+          
+          // Upload audio file directly to object storage
+          const audioFile = new File([audioBlob], 'recording.wav', { type: 'audio/wav' })
+          const directUploadResponse = await fetch(uploadURL, {
+            method: 'PUT',
+            body: audioFile,
+            headers: {
+              'Content-Type': 'audio/wav'
+            }
+          })
+          
+          if (!directUploadResponse.ok) {
+            throw new Error('Failed to upload audio file')
+          }
+          
+          // Set ACL policy for the uploaded audio
+          const aclResponse = await fetch('/api/photos', {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            credentials: 'include',
+            body: JSON.stringify({ photoURL: objectPath })
+          })
+          
+          if (aclResponse.ok) {
+            setAudioUrl(objectPath)
+            console.log('✅ Audio file uploaded successfully:', objectPath)
+            toast({
+              title: "Voice recorded!",
+              description: "Your audio has been transcribed and saved.",
+            })
+          } else {
+            console.error('Failed to set ACL for audio file')
+          }
+          
+        } catch (uploadError) {
+          console.error('Audio upload error:', uploadError)
+          // Continue even if upload fails - user still has transcription
+          toast({
+            title: "Audio transcribed",
+            description: "Voice was transcribed but audio file couldn't be saved.",
+            variant: "destructive"
+          })
+        }
+        
       } catch (error) {
-        console.error('Transcription error:', error)
-        setContent(prev => prev + (prev ? '\n\n' : '') + 'Transcription error. Please check your connection.')
+        console.error('Audio processing error:', error)
+        setContent(prev => prev + (prev ? '\n\n' : '') + 'Audio processing error. Please check your connection.')
+        toast({
+          title: "Processing failed",
+          description: "Unable to process your recording. Please try again.",
+          variant: "destructive"
+        })
       } finally {
         setIsTranscribing(false)
       }
     }
     
-    transcribeAudio()
+    processAudio()
   }
 
   const handleTranscriptionUpdate = (text: string) => {
@@ -207,7 +280,8 @@ export default function Record() {
       content: content.trim(),
       tags,
       privacy,
-      mediaUrls
+      mediaUrls,
+      audioUrl: audioUrl || undefined
     }
     console.log(isEditMode ? 'Updating entry:' : 'Saving entry:', entry)
     
@@ -227,13 +301,19 @@ export default function Record() {
           content: entry.content,
           tags: entry.tags,
           privacy: entry.privacy,
-          mediaUrls: mediaUrls
+          mediaUrls: mediaUrls,
+          audioUrl: audioUrl || undefined
         })
       })
       
       if (response.ok) {
         const data = await response.json()
         const entryId = data.entry?.id || editEntryId
+        
+        // Invalidate caches to refresh achievements and stats immediately
+        queryClient.invalidateQueries({ queryKey: ['/api/journal/entries'] })
+        queryClient.invalidateQueries({ queryKey: ['/api/journal/stats'] })
+        queryClient.invalidateQueries({ queryKey: ['/api/journal/achievements'] })
         
         // Handle sharing for shared entries with selected users
         if (privacy === 'shared' && selectedUsers.length > 0 && entryId) {
@@ -270,6 +350,7 @@ export default function Record() {
           setTags([])
           setPrivacy('private')
           setMediaUrls([])
+          setAudioUrl('')
           setSelectedUsers([])
         }
         
