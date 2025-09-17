@@ -21,7 +21,7 @@ import {
 import { randomUUID } from "crypto";
 import { drizzle } from "drizzle-orm/neon-http";
 import { neon } from "@neondatabase/serverless";
-import { eq, desc, and, ilike, or, sql } from "drizzle-orm";
+import { eq, desc, and, ilike, or, sql, ne } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { users, journalEntries, comments, aiChatSessions, userConnections } from "@shared/schema";
 
@@ -262,9 +262,12 @@ class DbStorage implements IStorage {
       .from(journalEntries)
       .leftJoin(users, eq(journalEntries.userId, users.id))
       .where(
-        or(
-          eq(journalEntries.privacy, 'public'),
-          sql`${userId} = ANY(${journalEntries.sharedWith})`
+        and(
+          ne(journalEntries.userId, userId), // Exclude current user's own entries
+          or(
+            eq(journalEntries.privacy, 'public'),
+            sql`${userId} = ANY(${journalEntries.sharedWith})`
+          )
         )
       )
       .orderBy(desc(journalEntries.createdAt))
@@ -335,7 +338,12 @@ class DbStorage implements IStorage {
       })
       .from(journalEntries)
       .leftJoin(users, eq(journalEntries.userId, users.id))
-      .where(sql`${userId} = ANY(${journalEntries.sharedWith})`)
+      .where(
+        and(
+          ne(journalEntries.userId, userId), // Exclude current user's own entries
+          sql`${userId} = ANY(${journalEntries.sharedWith})`
+        )
+      )
       .orderBy(desc(journalEntries.createdAt))
       .limit(limit);
 
