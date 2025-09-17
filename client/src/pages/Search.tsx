@@ -12,7 +12,7 @@ import { useMutation } from '@tanstack/react-query'
 import { apiRequest } from '@/lib/queryClient'
 
 // Search types
-type SearchMode = 'keyword' | 'semantic'
+type SearchMode = 'semantic'
 type FilterType = 'all' | 'tags' | 'date' | 'people' | 'sentiment'
 
 interface SearchMatch {
@@ -38,7 +38,7 @@ interface SearchResponse {
 
 export default function Search() {
   const [searchQuery, setSearchQuery] = useState('')
-  const [searchMode, setSearchMode] = useState<SearchMode>('keyword')
+  const [searchMode, setSearchMode] = useState<SearchMode>('semantic')
   const [activeFilter, setActiveFilter] = useState<FilterType>('all')
   const [searchResults, setSearchResults] = useState<SearchResult[]>([])
   const [selectedTags, setSelectedTags] = useState<string[]>([])
@@ -124,35 +124,12 @@ export default function Search() {
           <ThemeToggle />
         </div>
         
-        {/* Search mode toggle */}
-        <div className="flex gap-2 mb-3">
-          <Button
-            variant={searchMode === 'keyword' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setSearchMode('keyword')}
-            className="flex-1"
-            data-testid="mode-keyword"
-          >
-            <SearchIcon className="h-3 w-3 mr-1" />
-            Keyword
-          </Button>
-          <Button
-            variant={searchMode === 'semantic' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setSearchMode('semantic')}
-            className="flex-1"
-            data-testid="mode-semantic"
-          >
-            <Brain className="h-3 w-3 mr-1" />
-            AI Search
-          </Button>
-        </div>
 
         {/* Search input */}
         <div className="relative">
           <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder={searchMode === 'keyword' ? "Search by keywords, tags, or content..." : "Ask questions about your journal entries..."}
+            placeholder="Ask questions about your journal entries..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-10 pr-4"
@@ -233,13 +210,13 @@ export default function Search() {
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-medium text-foreground">
-                  {searchMutation.isLoading ? 'Searching...' : 
+                  {searchMutation.isPending ? 'Searching...' : 
                     `${searchMutation.data?.totalResults || 0} result${(searchMutation.data?.totalResults || 0) !== 1 ? 's' : ''} for "${searchQuery}"`
                   }
                 </h3>
                 <div className="flex gap-2">
                   <Badge variant="outline" className="text-xs" data-testid="search-mode-indicator">
-                    {searchMode === 'semantic' ? 'AI' : 'Keyword'} Mode
+                    AI Search
                   </Badge>
                   {searchMutation.data?.executionTime && (
                     <Badge variant="secondary" className="text-xs" data-testid="search-time">
@@ -249,7 +226,7 @@ export default function Search() {
                 </div>
               </div>
               
-              {searchMutation.isLoading ? (
+              {searchMutation.isPending ? (
                 <div className="space-y-4">
                   {[...Array(3)].map((_, i) => (
                     <Card key={i} className="p-4 animate-pulse">
@@ -318,18 +295,15 @@ export default function Search() {
                   <SearchIcon className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                   <h3 className="text-lg font-medium text-foreground mb-2">No results found</h3>
                   <p className="text-sm text-muted-foreground max-w-sm mx-auto mb-4">
-                    {searchMode === 'semantic' 
-                      ? "Try rephrasing your question or asking about different topics in your journal."
-                      : "Try different keywords, tags, or filters to find what you're looking for."
-                    }
+                    Try rephrasing your question or asking about different topics in your journal.
                   </p>
                   <Button 
                     variant="outline" 
                     size="sm" 
-                    onClick={() => setSearchMode(searchMode === 'keyword' ? 'semantic' : 'keyword')}
-                    data-testid="button-switch-mode"
+                    onClick={() => searchMutation.mutate({ query: searchQuery, mode: searchMode })}
+                    data-testid="button-retry-search"
                   >
-                    Try {searchMode === 'keyword' ? 'AI Search' : 'Keyword Search'}
+                    Try Again
                   </Button>
                 </Card>
               )}
@@ -340,15 +314,16 @@ export default function Search() {
           {!searchQuery && (
             <Card className="p-8 text-center mt-8">
               <SearchIcon className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-xl font-medium text-foreground mb-2">Search Your Journal</h3>
+              <h3 className="text-xl font-medium text-foreground mb-2">AI-Powered Journal Search</h3>
               <p className="text-sm text-muted-foreground max-w-md mx-auto mb-6">
-                Find specific entries, explore themes, or discover patterns in your writing. Search by keywords, tags, dates, or people mentioned.
+                Ask questions about your journal entries using natural language. AI will understand the meaning and context to find relevant entries.
               </p>
               <div className="space-y-2 text-xs text-muted-foreground max-w-sm mx-auto">
-                <p><strong>Pro tips:</strong></p>
-                <p>• Use #tags to find entries with specific themes</p>
-                <p>• Search @mentions to find entries about people</p>
-                <p>• Type dates like "January 2024" to find entries from specific periods</p>
+                <p><strong>Try asking:</strong></p>
+                <p>• "What entries mention my family?"</p>
+                <p>• "Show me my thoughts about work"</p>
+                <p>• "Find entries where I felt grateful"</p>
+                <p>• "What did I write about last month?"</p>
               </div>
             </Card>
           )}
