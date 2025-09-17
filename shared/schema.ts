@@ -119,6 +119,25 @@ export const aiChatSessions = pgTable(
   ]
 );
 
+// Comments on journal entries
+export const comments = pgTable(
+  "comments",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    entryId: varchar("entry_id").notNull().references(() => journalEntries.id, { onDelete: "cascade" }),
+    userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    content: text("content").notNull(),
+    mediaUrls: text("media_urls").array().default([]),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_comments_entry_id").on(table.entryId),
+    index("idx_comments_user_id").on(table.userId),
+    index("idx_comments_created_at").on(table.createdAt),
+  ]
+);
+
 // Insert schemas for forms
 export const insertJournalEntrySchema = createInsertSchema(journalEntries).omit({
   id: true,
@@ -140,6 +159,13 @@ export const insertUserConnectionSchema = createInsertSchema(userConnections).om
   createdAt: true,
 });
 
+export const insertCommentSchema = createInsertSchema(comments).omit({
+  id: true,
+  userId: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Types for TypeScript
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
@@ -153,12 +179,19 @@ export type AiChatSession = typeof aiChatSessions.$inferSelect;
 export type InsertUserConnection = z.infer<typeof insertUserConnectionSchema>;
 export type UserConnection = typeof userConnections.$inferSelect;
 
+export type InsertComment = z.infer<typeof insertCommentSchema>;
+export type Comment = typeof comments.$inferSelect;
+
 export type JournalMention = typeof journalMentions.$inferSelect;
 
 // Extended types with relations
 export type JournalEntryWithUser = JournalEntry & {
   user: User;
   mentions?: (JournalMention & { user: User })[];
+};
+
+export type CommentWithUser = Comment & {
+  user: User;
 };
 
 // Public-safe DTO types (omit sensitive fields)
