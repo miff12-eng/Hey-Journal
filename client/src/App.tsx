@@ -7,6 +7,7 @@ import { useAuth } from "@/hooks/useAuth"
 import NotFound from "@/pages/not-found"
 import Landing from "@/pages/Landing"
 import Home from "@/pages/Home"
+import MyJournal from "@/pages/MyJournal"
 import Record from "@/pages/Record"
 import Search from "@/pages/Search"
 import Profile from "@/pages/Profile"
@@ -55,6 +56,7 @@ function Router() {
             <div className="relative">
               <Switch>
                 <Route path="/" component={Home} />
+                <Route path="/my-journal" component={MyJournal} />
                 <Route path="/record" component={Record} />
                 <Route path="/search" component={Search} />
                 <Route path="/profile" component={Profile} />

@@ -313,10 +313,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/journal/entries', async (req, res) => {
     try {
       const limit = parseInt(req.query.limit as string) || 20;
-      console.log('📚 Fetching entries for userId:', req.userId);
-      const entries = await storage.getJournalEntriesByUserId(req.userId, limit);
-      console.log('📚 Found', entries.length, 'entries');
+      const type = req.query.type as string || 'own';
       
+      console.log('📚 Fetching entries for userId:', req.userId, 'type:', type);
+      
+      let entries;
+      switch (type) {
+        case 'feed':
+          entries = await storage.getFeedJournalEntries(req.userId, limit);
+          break;
+        case 'shared':
+          entries = await storage.getSharedJournalEntries(req.userId, limit);
+          break;
+        case 'own':
+        default:
+          entries = await storage.getJournalEntriesByUserId(req.userId, limit);
+          break;
+      }
+      
+      console.log('📚 Found', entries.length, 'entries of type:', type);
       res.json(entries);
     } catch (error) {
       console.error('Get Entries Error:', error);
