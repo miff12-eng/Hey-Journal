@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
-import { Search, Plus, Bell, Filter, TrendingUp, Copy, Share2, ExternalLink, Trash2, Users, Globe, UserCheck } from 'lucide-react'
+import { Search, Plus, Bell, Filter, TrendingUp, Copy, Share2, ExternalLink, Trash2, Users } from 'lucide-react'
 import JournalEntryCard from '@/components/JournalEntryCard'
 import ThemeToggle from '@/components/ThemeToggle'
 import UserSelector from '@/components/UserSelector'
@@ -16,12 +16,12 @@ import { queryClient } from '@/lib/queryClient'
 import { useLocation } from 'wouter'
 import { useToast } from '@/hooks/use-toast'
 
-type FeedFilter = 'feed' | 'shared'
+type PrivacyFilter = 'all' | 'private' | 'shared' | 'public'
 
-export default function Home() {
+export default function MyJournal() {
   const [, setLocation] = useLocation()
   const [searchQuery, setSearchQuery] = useState('')
-  const [activeFilter, setActiveFilter] = useState<FeedFilter>('feed')
+  const [activeFilter, setActiveFilter] = useState<PrivacyFilter>('all')
   const [shareModalOpen, setShareModalOpen] = useState(false)
   const [sharingEntryId, setSharingEntryId] = useState<string | null>(null)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
@@ -48,10 +48,10 @@ export default function Home() {
     refetchInterval: 60000, // Refresh every minute
   })
 
-  // Fetch feed journal entries (shared with user or public)
+  // Fetch user's own journal entries
   const { data: entries = [], isLoading, error, refetch } = useQuery<JournalEntryWithUser[]>({
-    queryKey: ['/api/journal/entries', activeFilter],
-    queryFn: () => fetch(`/api/journal/entries?type=${activeFilter}`, { credentials: 'include' }).then(res => res.json()),
+    queryKey: ['/api/journal/entries', 'own'],
+    queryFn: () => fetch('/api/journal/entries?type=own', { credentials: 'include' }).then(res => res.json()),
     refetchInterval: 30000, // Refresh every 30 seconds
   })
 
@@ -76,19 +76,26 @@ export default function Home() {
     // Note: Keep audioUrl from server response, don't override it
   }))
 
-  // Filter entries based on search query only (feed/shared filtering is handled by API)
+  // Filter entries based on active filter and search query
   const filteredEntries = displayEntries.filter(entry => {
+    // Apply privacy filter
+    let matchesFilter = true
+    if (activeFilter !== 'all') {
+      matchesFilter = entry.privacy === activeFilter
+    }
+
     // Apply search filter
+    let matchesSearch = true
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase().trim()
-      return (
+      matchesSearch = 
         entry.title?.toLowerCase().includes(query) ||
         entry.content.toLowerCase().includes(query) ||
         entry.tags?.some(tag => tag.toLowerCase().includes(query)) ||
         false
-      )
     }
-    return true
+
+    return matchesFilter && matchesSearch
   })
 
   const handleEdit = (entryId: string) => {
@@ -284,9 +291,9 @@ export default function Home() {
             </Avatar>
             <div>
               <h1 className="text-lg font-semibold text-foreground" data-testid="text-page-title">
-                Feed
+                My Journal
               </h1>
-              <p className="text-xs text-muted-foreground">Discover journal entries shared with you</p>
+              <p className="text-xs text-muted-foreground">Your personal thoughts and reflections</p>
             </div>
           </div>
           
@@ -302,7 +309,7 @@ export default function Home() {
         <div className="mt-3 relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search feed entries..."
+            placeholder="Search your journal entries..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-10 pr-4"
@@ -344,18 +351,26 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Feed toggle tabs */}
+      {/* Filter tabs */}
       <div className="px-4 py-2 border-b border-border">
         <div className="flex items-center gap-2">
           <Button 
             variant="ghost" 
             size="sm" 
-            onClick={() => setActiveFilter('feed')}
-            className={activeFilter === 'feed' ? 'bg-primary/10 text-primary' : ''} 
-            data-testid="filter-feed"
+            onClick={() => setActiveFilter('all')}
+            className={activeFilter === 'all' ? 'bg-primary/10 text-primary' : ''} 
+            data-testid="filter-all"
           >
-            <Globe className="h-4 w-4 mr-1" />
-            Feed
+            All
+          </Button>
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={() => setActiveFilter('private')}
+            className={activeFilter === 'private' ? 'bg-primary/10 text-primary' : ''} 
+            data-testid="filter-private"
+          >
+            Private
           </Button>
           <Button 
             variant="ghost" 
@@ -364,14 +379,20 @@ export default function Home() {
             className={activeFilter === 'shared' ? 'bg-primary/10 text-primary' : ''} 
             data-testid="filter-shared"
           >
-            <UserCheck className="h-4 w-4 mr-1" />
-            Shared with Me
+            Shared
           </Button>
-          <div className="ml-auto text-xs text-muted-foreground">
-            {activeFilter === 'feed' 
-              ? 'Public entries and entries shared with you' 
-              : 'Entries specifically shared with you'}
-          </div>
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={() => setActiveFilter('public')}
+            className={activeFilter === 'public' ? 'bg-primary/10 text-primary' : ''} 
+            data-testid="filter-public"
+          >
+            Public
+          </Button>
+          <Button variant="ghost" size="icon" className="ml-auto" data-testid="button-filter-options">
+            <Filter className="h-4 w-4" />
+          </Button>
         </div>
       </div>
 
@@ -408,9 +429,9 @@ export default function Home() {
               <JournalEntryCard
                 key={entry.id}
                 entry={entry}
-                onEdit={entry.userId === user?.id ? handleEdit : undefined}
-                onShare={entry.userId === user?.id ? handleShare : undefined}
-                onDelete={entry.userId === user?.id ? handleDelete : undefined}
+                onEdit={handleEdit}
+                onShare={handleShare}
+                onDelete={handleDelete}
               />
             ))}
             
