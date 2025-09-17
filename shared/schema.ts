@@ -194,6 +194,10 @@ export type CommentWithUser = Comment & {
   user: User;
 };
 
+export type CommentWithPublicUser = Comment & {
+  user: PublicUser;
+};
+
 // Public-safe DTO types (omit sensitive fields)
 export type PublicUser = {
   id: string;

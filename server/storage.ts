@@ -7,6 +7,7 @@ import {
   type Comment,
   type InsertComment,
   type CommentWithUser,
+  type CommentWithPublicUser,
   type AiChatSession,
   type InsertAiChatSession,
   type AiChatMessage,
@@ -47,6 +48,7 @@ export interface IStorage {
   // Comment methods
   getComment(id: string): Promise<Comment | undefined>;
   getCommentsByEntryId(entryId: string): Promise<CommentWithUser[]>;
+  getCommentsByEntryIdPublic(entryId: string): Promise<CommentWithPublicUser[]>;
   createComment(comment: InsertComment, userId: string): Promise<Comment>;
   updateComment(id: string, updates: Partial<InsertComment>): Promise<Comment>;
   deleteComment(id: string): Promise<void>;
@@ -320,6 +322,50 @@ class DbStorage implements IStorage {
     }));
 
     return commentsWithUser;
+  }
+
+  async getCommentsByEntryIdPublic(entryId: string): Promise<CommentWithPublicUser[]> {
+    const result = await this.db
+      .select({
+        // Comment fields
+        id: comments.id,
+        entryId: comments.entryId,
+        userId: comments.userId,
+        content: comments.content,
+        mediaUrls: comments.mediaUrls,
+        createdAt: comments.createdAt,
+        updatedAt: comments.updatedAt,
+        // Public user fields only
+        userFirstName: users.firstName,
+        userLastName: users.lastName,
+        userUsername: users.username,
+        userBio: users.bio,
+        userProfileImageUrl: users.profileImageUrl,
+      })
+      .from(comments)
+      .leftJoin(users, eq(comments.userId, users.id))
+      .where(eq(comments.entryId, entryId))
+      .orderBy(desc(comments.createdAt));
+
+    const commentsWithPublicUser: CommentWithPublicUser[] = result.map((row) => ({
+      id: row.id,
+      entryId: row.entryId,
+      userId: row.userId,
+      content: row.content,
+      mediaUrls: row.mediaUrls || [],
+      createdAt: row.createdAt!,
+      updatedAt: row.updatedAt!,
+      user: {
+        id: row.userId,
+        username: row.userUsername,
+        firstName: row.userFirstName,
+        lastName: row.userLastName,
+        bio: row.userBio,
+        profileImageUrl: row.userProfileImageUrl,
+      }
+    }));
+
+    return commentsWithPublicUser;
   }
 
   async createComment(commentData: InsertComment, userId: string): Promise<Comment> {
@@ -807,6 +853,32 @@ export class MemStorage implements IStorage {
     }
     
     return commentsWithUser;
+  }
+
+  async getCommentsByEntryIdPublic(entryId: string): Promise<CommentWithPublicUser[]> {
+    const allComments = Array.from(this.comments.values());
+    const entryComments = allComments
+      .filter(comment => comment.entryId === entryId)
+      .sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
+
+    const commentsWithPublicUser: CommentWithPublicUser[] = [];
+    for (const comment of entryComments) {
+      const user = await this.getUser(comment.userId);
+      if (user) {
+        // Convert to public user DTO (omit email and other private fields)
+        const publicUser: PublicUser = {
+          id: user.id,
+          username: user.username,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          bio: user.bio,
+          profileImageUrl: user.profileImageUrl,
+        };
+        commentsWithPublicUser.push({ ...comment, user: publicUser });
+      }
+    }
+    
+    return commentsWithPublicUser;
   }
 
   async createComment(commentData: InsertComment, userId: string): Promise<Comment> {

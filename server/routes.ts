@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { generateAIResponse, transcribeAudio } from "./ai";
 import { analyzeEntry, semanticRank } from "./services/openai";
-import { insertJournalEntrySchema, insertAiChatSessionSchema } from "@shared/schema";
+import { insertJournalEntrySchema, insertAiChatSessionSchema, insertCommentSchema } from "@shared/schema";
 import { z } from "zod";
 import multer from "multer";
 import {
@@ -333,6 +333,130 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Delete Entry Error:', error);
       res.status(500).json({ error: 'Failed to delete journal entry' });
+    }
+  });
+
+  // Comment API routes
+  
+  // Get comments for a journal entry
+  app.get('/api/journal/entries/:entryId/comments', async (req, res) => {
+    try {
+      const { entryId } = req.params;
+      
+      // Get the entry to check permissions
+      const entry = await storage.getJournalEntry(entryId);
+      if (!entry) {
+        return res.status(404).json({ error: 'Entry not found' });
+      }
+      
+      // Check if user can view comments based on entry privacy
+      const canViewComments = 
+        entry.userId === req.userId || // Owner can always view
+        entry.privacy === 'public' || // Public entries allow anyone to view comments
+        (entry.privacy === 'shared' && entry.sharedWith?.includes(req.userId)); // Shared with user
+      
+      if (!canViewComments) {
+        return res.status(403).json({ error: 'Not authorized to view comments on this entry' });
+      }
+      
+      const comments = await storage.getCommentsByEntryIdPublic(entryId);
+      res.json(comments);
+    } catch (error) {
+      console.error('Get Comments Error:', error);
+      res.status(500).json({ error: 'Failed to fetch comments' });
+    }
+  });
+  
+  // Create a comment on a journal entry
+  app.post('/api/journal/entries/:entryId/comments', async (req, res) => {
+    try {
+      const { entryId } = req.params;
+      const commentData = insertCommentSchema.parse(req.body);
+      
+      // Get the entry to check permissions
+      const entry = await storage.getJournalEntry(entryId);
+      if (!entry) {
+        return res.status(404).json({ error: 'Entry not found' });
+      }
+      
+      // Check if user can comment based on entry privacy
+      const canComment = 
+        entry.userId === req.userId || // Owner can always comment
+        entry.privacy === 'public' || // Public entries allow anyone to comment
+        (entry.privacy === 'shared' && entry.sharedWith?.includes(req.userId)); // Shared with user
+      
+      if (!canComment) {
+        return res.status(403).json({ error: 'Not authorized to comment on this entry' });
+      }
+      
+      // Ensure entryId matches the URL parameter
+      const commentToCreate = { ...commentData, entryId };
+      
+      const comment = await storage.createComment(commentToCreate, req.userId);
+      res.status(201).json(comment);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: 'Invalid comment data', details: error.errors });
+      }
+      console.error('Create Comment Error:', error);
+      res.status(500).json({ error: 'Failed to create comment' });
+    }
+  });
+  
+  // Update a comment
+  app.put('/api/comments/:id', async (req, res) => {
+    try {
+      const { id } = req.params;
+      
+      // Only allow updating content and mediaUrls, not entryId or userId
+      const updateSchema = z.object({
+        content: z.string().optional(),
+        mediaUrls: z.array(z.string()).optional()
+      });
+      
+      const updates = updateSchema.parse(req.body);
+      
+      // Verify comment exists and belongs to the user
+      const existingComment = await storage.getComment(id);
+      if (!existingComment) {
+        return res.status(404).json({ error: 'Comment not found' });
+      }
+      
+      if (existingComment.userId !== req.userId) {
+        return res.status(403).json({ error: 'Not authorized to update this comment' });
+      }
+      
+      const updatedComment = await storage.updateComment(id, updates);
+      res.json(updatedComment);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: 'Invalid comment data', details: error.errors });
+      }
+      console.error('Update Comment Error:', error);
+      res.status(500).json({ error: 'Failed to update comment' });
+    }
+  });
+  
+  // Delete a comment
+  app.delete('/api/comments/:id', async (req, res) => {
+    try {
+      const { id } = req.params;
+      
+      // Verify comment exists and belongs to the user
+      const existingComment = await storage.getComment(id);
+      if (!existingComment) {
+        return res.status(404).json({ error: 'Comment not found' });
+      }
+      
+      if (existingComment.userId !== req.userId) {
+        return res.status(403).json({ error: 'Not authorized to delete this comment' });
+      }
+      
+      await storage.deleteComment(id);
+      res.status(204).send(); // 204 No Content for successful deletion
+    } catch (error) {
+      console.error('Delete Comment Error:', error);
+      res.status(500).json({ error: 'Failed to delete comment' });
     }
   });
 
