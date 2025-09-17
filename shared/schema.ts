@@ -166,6 +166,12 @@ export const insertCommentSchema = createInsertSchema(comments).omit({
   updatedAt: true,
 });
 
+export const updateUserProfileSchema = createInsertSchema(users).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).partial();
+
 // Types for TypeScript
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
@@ -181,6 +187,8 @@ export type UserConnection = typeof userConnections.$inferSelect;
 
 export type InsertComment = z.infer<typeof insertCommentSchema>;
 export type Comment = typeof comments.$inferSelect;
+
+export type UpdateUserProfile = z.infer<typeof updateUserProfileSchema>;
 
 export type JournalMention = typeof journalMentions.$inferSelect;
 
