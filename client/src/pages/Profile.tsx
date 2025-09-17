@@ -127,21 +127,18 @@ export default function Profile() {
     setIsEditDialogOpen(false)
   }
 
-  const handleLogout = async () => {
+  const handleLogout = () => {
     try {
-      // Call logout API to clear server-side session
-      await apiRequest('POST', '/api/auth/logout', {})
-      
       // Clear all cached data
       queryClient.clear()
       
-      // Redirect to home page
-      window.location.href = '/'
+      // Redirect to OAuth logout endpoint which handles session clearing and OIDC logout
+      window.location.href = '/api/logout'
     } catch (error) {
       console.error('Logout error:', error)
-      // Fallback: clear cache and redirect anyway
+      // Fallback: clear cache and redirect to OAuth logout anyway
       queryClient.clear()
-      window.location.href = '/'
+      window.location.href = '/api/logout'
     }
   }
 
