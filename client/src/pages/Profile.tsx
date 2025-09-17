@@ -9,9 +9,10 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { useToast } from '@/hooks/use-toast'
-import { Settings, LogOut, Edit, Share2, Calendar, BookOpen, TrendingUp, Users, Loader2 } from 'lucide-react'
+import { Settings, LogOut, Edit, Share2, Calendar, BookOpen, TrendingUp, Users, Loader2, Upload } from 'lucide-react'
 import ThemeToggle from '@/components/ThemeToggle'
 import { apiRequest } from '@/lib/queryClient'
+import { ObjectUploader } from '@/components/ObjectUploader'
 import type { User } from '@shared/schema'
 
 export default function Profile() {
@@ -39,7 +40,8 @@ export default function Profile() {
   const [editForm, setEditForm] = useState({
     firstName: '',
     lastName: '',
-    email: ''
+    email: '',
+    profileImageUrl: ''
   })
 
   // Update profile mutation
@@ -70,7 +72,8 @@ export default function Profile() {
       setEditForm({
         firstName: user.firstName || '',
         lastName: user.lastName || '',
-        email: user.email || ''
+        email: user.email || '',
+        profileImageUrl: user.profileImageUrl || ''
       })
     }
   }, [user, isEditDialogOpen])
@@ -93,7 +96,8 @@ export default function Profile() {
       setEditForm({
         firstName: user.firstName || '',
         lastName: user.lastName || '',
-        email: user.email || ''
+        email: user.email || '',
+        profileImageUrl: user.profileImageUrl || ''
       })
     }
     setIsEditDialogOpen(true)
@@ -104,7 +108,8 @@ export default function Profile() {
     const updates = {
       firstName: editForm.firstName,
       lastName: editForm.lastName,
-      email: editForm.email
+      email: editForm.email,
+      profileImageUrl: editForm.profileImageUrl
     }
     updateProfileMutation.mutate(updates)
   }
@@ -115,7 +120,8 @@ export default function Profile() {
       setEditForm({
         firstName: user.firstName || '',
         lastName: user.lastName || '',
-        email: user.email || ''
+        email: user.email || '',
+        profileImageUrl: user.profileImageUrl || ''
       })
     }
     setIsEditDialogOpen(false)
@@ -343,6 +349,40 @@ export default function Profile() {
             <DialogTitle>Edit Profile</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
+            {/* Profile Picture Upload */}
+            <div className="space-y-2">
+              <Label>Profile Picture</Label>
+              <div className="flex items-center gap-4">
+                <Avatar className="h-16 w-16">
+                  <AvatarImage src={editForm.profileImageUrl || user?.profileImageUrl || undefined} alt="Profile" />
+                  <AvatarFallback className="text-lg">
+                    {editForm.firstName && editForm.lastName ? 
+                      `${editForm.firstName[0]}${editForm.lastName[0]}` : 
+                      user?.firstName && user?.lastName ? 
+                        `${user.firstName[0]}${user.lastName[0]}` : 
+                        'U'
+                    }
+                  </AvatarFallback>
+                </Avatar>
+                <ObjectUploader
+                  maxNumberOfFiles={1}
+                  maxFileSize={5 * 1024 * 1024} // 5MB
+                  acceptedFileTypes={['image/jpeg', 'image/png', 'image/gif', 'image/webp']}
+                  onComplete={(urls) => {
+                    if (urls.length > 0) {
+                      setEditForm(prev => ({ ...prev, profileImageUrl: urls[0] }))
+                    }
+                  }}
+                  buttonClassName="flex-1"
+                >
+                  <Button variant="outline" className="w-full" data-testid="button-upload-profile-picture">
+                    <Upload className="h-4 w-4 mr-2" />
+                    {editForm.profileImageUrl || user?.profileImageUrl ? 'Change Photo' : 'Upload Photo'}
+                  </Button>
+                </ObjectUploader>
+              </div>
+            </div>
+            
             <div className="space-y-2">
               <Label htmlFor="firstName">First Name</Label>
               <Input
