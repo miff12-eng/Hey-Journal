@@ -7,6 +7,7 @@ import { MessageCircle } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { queryClient, apiRequest } from '@/lib/queryClient'
 import CommentCard from './CommentCard'
+import CommentForm from './CommentForm'
 import { CommentWithPublicUser } from '@shared/schema'
 import { cn } from '@/lib/utils'
 
@@ -107,6 +108,15 @@ export default function CommentsList({
           </Button>
         )}
       </div>
+
+      <Separator />
+
+      {/* Comment creation form */}
+      <CommentForm
+        entryId={entryId}
+        className="mb-4"
+        placeholder="Write a comment..."
+      />
 
       <Separator />
 
