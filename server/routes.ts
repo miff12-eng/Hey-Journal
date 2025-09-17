@@ -10,7 +10,7 @@ import {
   ObjectStorageService,
   ObjectNotFoundError,
 } from "./objectStorage";
-import { ObjectPermission } from "./objectAcl";
+import { ObjectPermission, ObjectAclPolicy, setObjectAclPolicy } from "./objectAcl";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 
 // Extend Express Request interface to include userId
@@ -27,6 +27,31 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
 });
+
+// Utility function to sync audio object ACL with audioPlayable setting
+async function syncAudioACL(userId: string, audioUrl: string | null, audioPlayable: boolean): Promise<void> {
+  if (!audioUrl) return;
+  
+  try {
+    console.log(`🔒 Syncing ACL for audio: ${audioUrl}, playable: ${audioPlayable}`);
+    
+    const objectStorageService = new ObjectStorageService();
+    const normalizedPath = objectStorageService.normalizeObjectEntityPath(audioUrl);
+    
+    // Create ACL policy based on audioPlayable setting
+    const aclPolicy: ObjectAclPolicy = {
+      owner: userId,
+      visibility: audioPlayable ? "public" : "private"
+    };
+    
+    await objectStorageService.trySetObjectEntityAclPolicy(normalizedPath, aclPolicy);
+    
+    console.log(`✅ Audio ACL updated: ${audioUrl} is now ${audioPlayable ? 'public' : 'private'}`);
+  } catch (error) {
+    console.error(`❌ Failed to sync audio ACL for ${audioUrl}:`, error);
+    // Don't throw error - continue with entry save even if ACL fails
+  }
+}
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Setup OAuth authentication
@@ -267,6 +292,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await storage.updateAiInsights(entry.id, aiInsights);
       }
       
+      // Sync audio object ACL with audioPlayable setting
+      if (entryData.audioUrl) {
+        await syncAudioACL(req.userId, entryData.audioUrl, entryData.audioPlayable ?? false);
+      }
+      
       res.json({
         entry,
         aiInsights
@@ -356,6 +386,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.error('⚠️ AI Re-analysis failed:', error);
           // Continue with update even if AI analysis fails
         }
+      }
+      
+      // Sync audio object ACL if audioUrl or audioPlayable changed
+      const audioUrl = updates.audioUrl !== undefined ? updates.audioUrl : existingEntry.audioUrl;
+      const audioPlayable = updates.audioPlayable !== undefined ? updates.audioPlayable : existingEntry.audioPlayable;
+      
+      if (audioUrl && (updates.audioUrl !== undefined || updates.audioPlayable !== undefined)) {
+        await syncAudioACL(req.userId, audioUrl, audioPlayable ?? false);
       }
       
       res.json(updatedEntry);

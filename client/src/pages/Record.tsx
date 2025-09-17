@@ -36,6 +36,7 @@ export default function Record() {
   const [isTranscribing, setIsTranscribing] = useState(false)
   const [mediaUrls, setMediaUrls] = useState<string[]>([])
   const [audioUrl, setAudioUrl] = useState<string>('')
+  const [audioPlayable, setAudioPlayable] = useState<boolean>(false)
   const [isSaving, setIsSaving] = useState(false)
   const [selectedUsers, setSelectedUsers] = useState<{id: string, email: string, username?: string, firstName?: string, lastName?: string, profileImageUrl?: string}[]>([])
   const { toast } = useToast()
@@ -75,6 +76,7 @@ export default function Record() {
       setPrivacy(editEntry.privacy || 'private')
       setMediaUrls(editEntry.mediaUrls || [])
       setAudioUrl(editEntry.audioUrl || '')
+      setAudioPlayable(editEntry.audioPlayable || false)
       
       // Load sharing information if entry is shared
       if (editEntry.privacy === 'shared' && editEntry.id) {
@@ -193,26 +195,14 @@ export default function Record() {
             throw new Error('Failed to upload audio file')
           }
           
-          // Set ACL policy for the uploaded audio
-          const aclResponse = await fetch('/api/photos', {
-            method: 'PUT',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            credentials: 'include',
-            body: JSON.stringify({ photoURL: objectPath })
+          // Audio uploaded successfully - store URL but keep private by default
+          setAudioUrl(objectPath)
+          setAudioPlayable(false) // Default to private for user privacy
+          console.log('✅ Audio file uploaded successfully (private):', objectPath)
+          toast({
+            title: "Voice recorded!",
+            description: "Your audio has been transcribed and saved privately. You can enable playback sharing in the audio settings.",
           })
-          
-          if (aclResponse.ok) {
-            setAudioUrl(objectPath)
-            console.log('✅ Audio file uploaded successfully:', objectPath)
-            toast({
-              title: "Voice recorded!",
-              description: "Your audio has been transcribed and saved.",
-            })
-          } else {
-            console.error('Failed to set ACL for audio file')
-          }
           
         } catch (uploadError) {
           console.error('Audio upload error:', uploadError)
@@ -281,7 +271,8 @@ export default function Record() {
       tags,
       privacy,
       mediaUrls,
-      audioUrl: audioUrl || undefined
+      audioUrl: audioUrl || undefined,
+      audioPlayable: audioPlayable
     }
     console.log(isEditMode ? 'Updating entry:' : 'Saving entry:', entry)
     
@@ -302,7 +293,8 @@ export default function Record() {
           tags: entry.tags,
           privacy: entry.privacy,
           mediaUrls: mediaUrls,
-          audioUrl: audioUrl || undefined
+          audioUrl: audioUrl || undefined,
+          audioPlayable: audioPlayable
         })
       })
       
@@ -351,6 +343,7 @@ export default function Record() {
           setPrivacy('private')
           setMediaUrls([])
           setAudioUrl('')
+          setAudioPlayable(false)
           setSelectedUsers([])
         }
         
@@ -456,6 +449,26 @@ export default function Record() {
             <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
               <div className="animate-spin h-4 w-4 border-2 border-primary border-t-transparent rounded-full" />
               Transcribing with AI...
+            </div>
+          )}
+          
+          {/* Audio playback control - only show when audio is available */}
+          {audioUrl && (
+            <div className="mt-6 pt-4 border-t border-border/50">
+              <div className="flex items-center justify-center gap-3">
+                <Label htmlFor="audio-playable" className="text-sm font-medium text-foreground">
+                  Make audio playable in feed
+                </Label>
+                <Switch 
+                  id="audio-playable"
+                  checked={audioPlayable}
+                  onCheckedChange={setAudioPlayable}
+                  data-testid="switch-audio-playable"
+                />
+              </div>
+              <p className="text-xs text-muted-foreground text-center mt-2 max-w-xs mx-auto">
+                When enabled, others can play your voice recording from the feed
+              </p>
             </div>
           )}
         </div>
