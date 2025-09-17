@@ -13,6 +13,7 @@ interface PublicJournalEntry {
   title: string | null
   content: string
   audioUrl: string | null
+  audioPlayable: boolean
   mediaUrls: string[]
   tags: string[]
   createdAt: string
@@ -143,7 +144,7 @@ export default function PublicEntry() {
                   {formatDate(entry.createdAt)}
                 </span>
               </div>
-              {entry.audioUrl && (
+              {entry.audioUrl && entry.audioPlayable && (
                 <Badge variant="secondary" className="flex items-center gap-1">
                   <Volume2 className="w-3 h-3" />
                   Audio Entry
@@ -154,7 +155,7 @@ export default function PublicEntry() {
 
           <CardContent className="p-8">
             {/* Audio Player */}
-            {entry.audioUrl && (
+            {entry.audioUrl && entry.audioPlayable && (
               <div className="mb-6">
                 <audio controls className="w-full" data-testid="audio-player">
                   <source src={entry.audioUrl} type="audio/mpeg" />
