@@ -8,6 +8,7 @@ import {
   varchar,
   boolean,
   integer,
+  unique,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -92,13 +93,18 @@ export const userConnections = pgTable(
   "user_connections",
   {
     id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-    followerId: varchar("follower_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-    followingId: varchar("following_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    requesterId: varchar("requester_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    recipientId: varchar("recipient_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    status: varchar("status", { enum: ["pending", "accepted", "blocked"] }).notNull().default("pending"),
     createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
   },
   (table) => [
-    index("idx_user_connections_follower").on(table.followerId),
-    index("idx_user_connections_following").on(table.followingId),
+    index("idx_user_connections_requester").on(table.requesterId),
+    index("idx_user_connections_recipient").on(table.recipientId),
+    index("idx_user_connections_status").on(table.status),
+    // Unique constraint to prevent duplicate connection requests
+    unique("unique_connection").on(table.requesterId, table.recipientId),
   ]
 );
 
@@ -158,6 +164,7 @@ export const insertAiChatSessionSchema = createInsertSchema(aiChatSessions).omit
 export const insertUserConnectionSchema = createInsertSchema(userConnections).omit({
   id: true,
   createdAt: true,
+  updatedAt: true,
 });
 
 export const insertCommentSchema = createInsertSchema(comments).omit({
@@ -205,6 +212,11 @@ export type CommentWithUser = Comment & {
 
 export type CommentWithPublicUser = Comment & {
   user: PublicUser;
+};
+
+export type UserConnectionWithUser = UserConnection & {
+  requester: User;
+  recipient: User;
 };
 
 // Public-safe DTO types (omit sensitive fields)
