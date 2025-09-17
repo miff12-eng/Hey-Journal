@@ -636,6 +636,83 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Re-analyze old entries that are missing image analysis
+  app.post('/api/journal/reanalyze-entries', async (req, res) => {
+    try {
+      const userId = req.userId;
+      if (!userId) {
+        return res.status(401).json({ error: 'Authentication required' });
+      }
+
+      console.log('🔄 Starting re-analysis of entries with missing image insights...');
+
+      // Get all entries for the user
+      const allEntries = await storage.getJournalEntriesByUserId(userId);
+      
+      // Find entries that have media but missing/empty image analysis 
+      const entriesNeedingReanalysis = allEntries.filter(entry => {
+        const hasMedia = entry.mediaUrls && entry.mediaUrls.length > 0;
+        const hasEmptyLabels = !entry.aiInsights?.labels || entry.aiInsights.labels.length === 0;
+        return hasMedia && hasEmptyLabels;
+      });
+
+      console.log(`📊 Found ${entriesNeedingReanalysis.length} entries with media that need image re-analysis`);
+
+      if (entriesNeedingReanalysis.length === 0) {
+        return res.json({
+          message: 'No entries need re-analysis',
+          reanalyzedCount: 0,
+          entriesChecked: allEntries.length
+        });
+      }
+
+      let reanalyzedCount = 0;
+      const errors = [];
+
+      // Re-analyze each entry
+      for (const entry of entriesNeedingReanalysis) {
+        try {
+          console.log(`🤖 Re-analyzing entry: ${entry.title} (${entry.id})`);
+          
+          // Perform AI analysis for this entry
+          const newAiInsights = await analyzeEntry(
+            entry.content || '', 
+            entry.title, 
+            entry.mediaUrls || []
+          );
+
+          // Update the entry with new AI insights
+          await storage.updateJournalEntry(entry.id, { aiInsights: newAiInsights });
+          
+          console.log(`✨ Updated insights for "${entry.title}": ${newAiInsights.labels?.length || 0} labels, ${newAiInsights.keywords?.length || 0} keywords`);
+          reanalyzedCount++;
+          
+        } catch (error) {
+          console.error(`❌ Failed to re-analyze entry ${entry.id}:`, error);
+          errors.push({
+            entryId: entry.id,
+            title: entry.title,
+            error: error instanceof Error ? error.message : 'Unknown error'
+          });
+        }
+      }
+
+      console.log(`🎉 Re-analysis completed: ${reanalyzedCount}/${entriesNeedingReanalysis.length} entries updated`);
+
+      res.json({
+        message: `Successfully re-analyzed ${reanalyzedCount} entries`,
+        reanalyzedCount,
+        entriesChecked: allEntries.length,
+        entriesNeedingReanalysis: entriesNeedingReanalysis.length,
+        errors: errors.length > 0 ? errors : undefined
+      });
+
+    } catch (error) {
+      console.error('Re-analysis Error:', error);
+      res.status(500).json({ error: 'Failed to re-analyze entries' });
+    }
+  });
+
   // Convert localhost image URLs to public Replit URLs for OpenAI access
   app.post('/api/journal/convert-image-urls', async (req, res) => {
     const userId = req.userId;
