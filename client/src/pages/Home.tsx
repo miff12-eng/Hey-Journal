@@ -418,7 +418,6 @@ export default function Home() {
                 onEdit={handleEdit}
                 onShare={handleShare}
                 onDelete={handleDelete}
-                onPlayAudio={handlePlayAudio}
               />
             ))}
             

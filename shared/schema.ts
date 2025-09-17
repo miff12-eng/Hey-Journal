@@ -49,6 +49,7 @@ export const journalEntries = pgTable(
     title: varchar("title", { length: 255 }),
     content: text("content").notNull(),
     audioUrl: varchar("audio_url"),
+    audioPlayable: boolean("audio_playable").default(false),
     mediaUrls: text("media_urls").array().default([]),
     tags: text("tags").array().default([]),
     privacy: varchar("privacy", { enum: ["private", "shared", "public"] }).default("private"),

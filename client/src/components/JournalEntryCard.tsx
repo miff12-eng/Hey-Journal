@@ -10,13 +10,13 @@ import { useQuery } from '@tanstack/react-query'
 import { cn } from '@/lib/utils'
 import { JournalEntryWithUser, CommentWithPublicUser } from '@shared/schema'
 import CommentsList from './CommentsList'
+import AudioPlayer from './AudioPlayer'
 
 interface JournalEntryCardProps {
   entry: JournalEntryWithUser
   onEdit?: (entryId: string) => void
   onShare?: (entryId: string) => void
   onDelete?: (entryId: string) => void
-  onPlayAudio?: (audioUrl: string) => void
   className?: string
 }
 
@@ -25,7 +25,6 @@ export default function JournalEntryCard({
   onEdit,
   onShare,
   onDelete,
-  onPlayAudio,
   className
 }: JournalEntryCardProps) {
   const [isExpanded, setIsExpanded] = useState(false)
@@ -132,18 +131,13 @@ export default function JournalEntryCard({
 
       <CardContent className="pt-0">
         {/* Audio player */}
-        {entry.audioUrl && (
+        {entry.audioUrl && entry.audioPlayable && (
           <div className="mb-4">
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className="gap-2"
-              onClick={() => onPlayAudio?.(entry.audioUrl!)}
-              data-testid={`button-play-audio-${entry.id}`}
-            >
-              <Play className="h-3 w-3" />
-              Play Recording
-            </Button>
+            <AudioPlayer 
+              audioUrl={entry.audioUrl}
+              showFullControls={true}
+              className="w-full"
+            />
           </div>
         )}
 
