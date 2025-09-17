@@ -14,6 +14,7 @@ import { Settings, LogOut, Edit, Share2, Calendar, BookOpen, TrendingUp, Users, 
 import ThemeToggle from '@/components/ThemeToggle'
 import { apiRequest } from '@/lib/queryClient'
 import { ObjectUploader } from '@/components/ObjectUploader'
+import ConnectionManager from '@/components/ConnectionManager'
 import type { User } from '@shared/schema'
 
 export default function Profile() {
@@ -21,6 +22,7 @@ export default function Profile() {
   const queryClient = useQueryClient()
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isPrivacySettingsOpen, setIsPrivacySettingsOpen] = useState(false)
+  const [isConnectionManagerOpen, setIsConnectionManagerOpen] = useState(false)
   
   // Fetch user profile data
   const { data: user, isLoading: userLoading, error: userError } = useQuery<User>({
@@ -420,7 +422,12 @@ export default function Profile() {
                 Privacy Settings
               </Button>
               
-              <Button variant="outline" className="w-full justify-start" data-testid="button-manage-connections">
+              <Button 
+                variant="outline" 
+                className="w-full justify-start" 
+                onClick={() => setIsConnectionManagerOpen(true)}
+                data-testid="button-manage-connections"
+              >
                 <Users className="h-4 w-4 mr-3" />
                 Manage Connections
               </Button>
@@ -749,6 +756,12 @@ export default function Profile() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Connection Manager Dialog */}
+      <ConnectionManager 
+        isOpen={isConnectionManagerOpen}
+        onClose={() => setIsConnectionManagerOpen(false)}
+      />
     </div>
   )
 }
