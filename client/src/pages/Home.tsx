@@ -31,6 +31,12 @@ export default function Home() {
   const [isLoadingSharing, setIsLoadingSharing] = useState(false)
   const { toast } = useToast()
   
+  // Fetch real user data
+  const { data: user, isLoading: isLoadingUser } = useQuery({
+    queryKey: ['/api/users/me'],
+    refetchInterval: 60000, // Refresh every minute
+  })
+
   // Fetch real journal entries
   const { data: entries = [], isLoading, error, refetch } = useQuery({
     queryKey: ['/api/journal/entries'],
@@ -42,20 +48,17 @@ export default function Home() {
     queryKey: ['/api/journal/stats'],
     refetchInterval: 60000, // Refresh every minute
   })
-  
-  // Mock user data - replace with real auth when available
-  const mockUser = {
-    id: 'mock-user-id',
-    firstName: 'Demo',
-    lastName: 'User', 
-    email: 'user@example.com',
-    profileImageUrl: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150'
-  }
 
   // Transform API entries to include user data for display
   const displayEntries: JournalEntryWithUser[] = entries.map(entry => ({
     ...entry,
-    user: mockUser, // For now, all entries show current user
+    user: user || {
+      id: 'loading',
+      firstName: 'Loading...',
+      lastName: '',
+      email: '',
+      profileImageUrl: ''
+    }, // Use real user data or loading placeholder
     audioUrl: entry.mediaUrls?.[0]?.endsWith('.mp3') ? entry.mediaUrls[0] : undefined
   }))
 
@@ -263,11 +266,19 @@ export default function Home() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Avatar className="h-8 w-8">
-              <AvatarImage src={mockUser.profileImageUrl} alt={mockUser.firstName} />
-              <AvatarFallback>{mockUser.firstName[0]}</AvatarFallback>
+              <AvatarImage 
+                src={user?.profileImageUrl} 
+                alt={user?.firstName || 'User'} 
+                data-testid="img-user-avatar"
+              />
+              <AvatarFallback data-testid="text-user-initials">
+                {isLoadingUser ? '...' : (user?.firstName?.[0] || 'U')}
+              </AvatarFallback>
             </Avatar>
             <div>
-              <h1 className="text-lg font-semibold text-foreground">Good morning, {mockUser.firstName}</h1>
+              <h1 className="text-lg font-semibold text-foreground" data-testid="text-greeting">
+                {isLoadingUser ? 'Good morning!' : `Good morning, ${user?.firstName || 'User'}`}
+              </h1>
               <p className="text-xs text-muted-foreground">Ready to capture today's thoughts?</p>
             </div>
           </div>
