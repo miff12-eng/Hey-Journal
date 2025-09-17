@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { useToast } from '@/hooks/use-toast'
 import { Settings, LogOut, Edit, Share2, Calendar, BookOpen, TrendingUp, Users, Loader2, Upload } from 'lucide-react'
 import ThemeToggle from '@/components/ThemeToggle'
@@ -347,6 +347,9 @@ export default function Profile() {
         <DialogContent className="sm:max-w-[425px]" data-testid="dialog-edit-profile">
           <DialogHeader>
             <DialogTitle>Edit Profile</DialogTitle>
+            <DialogDescription>
+              Update your profile information and photo.
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             {/* Profile Picture Upload */}

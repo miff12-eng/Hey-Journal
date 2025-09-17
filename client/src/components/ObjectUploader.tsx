@@ -396,9 +396,9 @@ export function ObjectUploader({
 
   if (!showModal) {
     return (
-      <Button onClick={() => setShowModal(true)} className={buttonClassName}>
+      <div onClick={() => setShowModal(true)} className={buttonClassName}>
         {children}
-      </Button>
+      </div>
     );
   }
 
@@ -460,12 +460,14 @@ export function ObjectUploader({
                     <Camera className="w-4 h-4 mr-2" />
                     Take Photo
                   </Button>
-                  <Button asChild variant="outline" className="w-full">
-                    <label htmlFor="photos-input" data-testid="button-choose-from-photos">
-                      <Image className="w-4 h-4 mr-2" />
-                      Choose from Photos
-                    </label>
-                  </Button>
+                  <label 
+                    htmlFor="photos-input" 
+                    className="inline-flex items-center justify-center gap-2 w-full h-9 px-4 py-2 bg-background border border-input rounded-md text-sm font-medium text-foreground hover-elevate active-elevate-2 cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
+                    data-testid="button-choose-from-photos"
+                  >
+                    <Image className="w-4 h-4" />
+                    Choose from Photos
+                  </label>
                 </div>
               </div>
             </div>
