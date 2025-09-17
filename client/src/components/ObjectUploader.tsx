@@ -8,6 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 interface ObjectUploaderProps {
   maxNumberOfFiles?: number;
   maxFileSize?: number;
+  acceptedFileTypes?: string[];
   onComplete?: (uploadedUrls: string[]) => void;
   buttonClassName?: string;
   children: React.ReactNode;
@@ -201,6 +202,7 @@ function CameraModal({ isOpen, onClose, onCapture }: CameraModalProps) {
 export function ObjectUploader({
   maxNumberOfFiles = 1,
   maxFileSize = 10485760, // 10MB default
+  acceptedFileTypes = [],
   onComplete,
   buttonClassName,
   children,
@@ -223,8 +225,19 @@ export function ObjectUploader({
     if (e.target.files) {
       const files = Array.from(e.target.files);
       
-      // Validate file size
+      // Validate file type and size
       const validFiles = files.filter(file => {
+        // Check file type if acceptedFileTypes is specified
+        if (acceptedFileTypes.length > 0 && !acceptedFileTypes.includes(file.type)) {
+          toast({
+            title: "Invalid file type",
+            description: `File ${file.name} is not supported. Please select an image file.`,
+            variant: "destructive"
+          });
+          return false;
+        }
+        
+        // Check file size
         if (file.size > maxFileSize) {
           toast({
             title: "File too large",
@@ -247,6 +260,16 @@ export function ObjectUploader({
   };
 
   const handleCameraCapture = (file: File) => {
+    // Validate file type if acceptedFileTypes is specified
+    if (acceptedFileTypes.length > 0 && !acceptedFileTypes.includes(file.type)) {
+      toast({
+        title: "Invalid file type",
+        description: "Captured photo format is not supported.",
+        variant: "destructive"
+      });
+      return;
+    }
+
     // Validate file size
     if (file.size > maxFileSize) {
       toast({
