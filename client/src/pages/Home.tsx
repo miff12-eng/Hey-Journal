@@ -32,19 +32,30 @@ export default function Home() {
   const { toast } = useToast()
   
   // Fetch real user data
-  const { data: user, isLoading: isLoadingUser } = useQuery({
+  const { data: user, isLoading: isLoadingUser } = useQuery<{
+    id: string;
+    email: string;
+    firstName: string;
+    lastName: string;
+    username?: string;
+    bio?: string;
+    profileImageUrl?: string;
+    isProfilePublic?: boolean;
+    createdAt: Date;
+    updatedAt: Date;
+  }>({
     queryKey: ['/api/users/me'],
     refetchInterval: 60000, // Refresh every minute
   })
 
   // Fetch real journal entries
-  const { data: entries = [], isLoading, error, refetch } = useQuery({
+  const { data: entries = [], isLoading, error, refetch } = useQuery<JournalEntryWithUser[]>({
     queryKey: ['/api/journal/entries'],
     refetchInterval: 30000, // Refresh every 30 seconds
   })
 
   // Fetch usage statistics
-  const { data: stats } = useQuery({
+  const { data: stats = {} } = useQuery<{entriesThisWeek: number, dayStreak: number, daysSinceLastEntry: number}>({
     queryKey: ['/api/journal/stats'],
     refetchInterval: 60000, // Refresh every minute
   })
@@ -57,9 +68,11 @@ export default function Home() {
       firstName: 'Loading...',
       lastName: '',
       email: '',
-      profileImageUrl: ''
-    }, // Use real user data or loading placeholder
-    audioUrl: entry.mediaUrls?.[0]?.endsWith('.mp3') ? entry.mediaUrls[0] : undefined
+      profileImageUrl: '',
+      createdAt: new Date(),
+      updatedAt: new Date()
+    } // Use real user data or loading placeholder
+    // Note: Keep audioUrl from server response, don't override it
   }))
 
   // Filter entries based on active filter and search query

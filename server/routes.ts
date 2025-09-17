@@ -316,6 +316,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log('📚 Fetching entries for userId:', req.userId);
       const entries = await storage.getJournalEntriesByUserId(req.userId, limit);
       console.log('📚 Found', entries.length, 'entries');
+      
       res.json(entries);
     } catch (error) {
       console.error('Get Entries Error:', error);
