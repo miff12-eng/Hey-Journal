@@ -5,9 +5,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
-import { Search, Users, FileText } from "lucide-react"
+import { Search, Users, FileText, Mic, LogIn, ArrowRight } from "lucide-react"
 import { useQuery } from "@tanstack/react-query"
-import { Link } from "wouter"
+import { Link, useLocation } from "wouter"
+import { useAuth } from "@/hooks/useAuth"
+import ThemeToggle from "@/components/ThemeToggle"
 
 interface PublicUser {
   id: string
@@ -42,6 +44,8 @@ interface PublicJournalEntry {
 export default function PublicSearch() {
   const [query, setQuery] = useState("")
   const [activeTab, setActiveTab] = useState("users")
+  const { login } = useAuth()
+  const [, setLocation] = useLocation()
 
   // Search users query
   const usersQuery = useQuery<PublicUser[]>({
@@ -77,16 +81,78 @@ export default function PublicSearch() {
     return initials || user.username[0]?.toUpperCase() || "?"
   }
 
+  const handleUsernameClick = (event: React.MouseEvent, username: string) => {
+    event.stopPropagation()
+    setLocation(`/u/${username}`)
+  }
+
   return (
-    <div className="min-h-screen bg-background p-4">
-      <div className="max-w-4xl mx-auto space-y-6">
-        {/* Header */}
-        <div className="text-center space-y-2">
-          <h1 className="text-3xl font-bold">Public Journal Search</h1>
-          <p className="text-muted-foreground">
-            Discover public profiles and journal entries from the community
-          </p>
+    <div className="min-h-screen bg-background">
+      {/* Top Header */}
+      <header className="sticky top-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">
+        <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
+          <Link href="/public">
+            <div className="flex items-center gap-2 cursor-pointer hover-elevate rounded-lg p-2 -m-2">
+              <div className="h-8 w-8 bg-primary rounded-lg flex items-center justify-center">
+                <Mic className="h-4 w-4 text-primary-foreground" />
+              </div>
+              <span className="text-lg font-semibold text-foreground">Journal</span>
+            </div>
+          </Link>
+          
+          <div className="flex items-center gap-3">
+            <Button 
+              onClick={login} 
+              size="sm" 
+              className="flex items-center gap-2"
+              data-testid="button-login"
+            >
+              <LogIn className="h-4 w-4" />
+              Sign In
+            </Button>
+            <ThemeToggle />
+          </div>
         </div>
+      </header>
+
+      <div className="max-w-4xl mx-auto p-4 space-y-6">
+        {/* Welcome Hero Section */}
+        <div className="text-center space-y-4 py-8">
+          <div className="inline-flex items-center gap-2 px-3 py-1 bg-primary/10 text-primary rounded-full text-sm font-medium">
+            <Search className="h-3 w-3" />
+            Public Discovery
+          </div>
+          <h1 className="text-4xl font-bold text-foreground">
+            Discover Amazing Stories
+          </h1>
+          <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+            Explore public profiles and journal entries from our community. 
+            Ready to start your own journaling journey?
+          </p>
+          <div className="flex flex-col sm:flex-row gap-3 justify-center items-center pt-4">
+            <Button 
+              onClick={login} 
+              size="lg"
+              className="flex items-center gap-2 text-base px-8"
+              data-testid="button-get-started-hero"
+            >
+              Get Started Free
+              <ArrowRight className="h-4 w-4" />
+            </Button>
+            <p className="text-sm text-muted-foreground">
+              Join thousands using Journal to capture their thoughts
+            </p>
+          </div>
+        </div>
+
+        {/* Search Section */}
+        <div className="space-y-4">
+          <div className="text-center">
+            <h2 className="text-2xl font-semibold text-foreground mb-2">Browse Public Content</h2>
+            <p className="text-muted-foreground">
+              Search through public profiles and journal entries to discover inspiring stories
+            </p>
+          </div>
 
         {/* Search Form */}
         <Card>
@@ -205,9 +271,13 @@ export default function PublicSearch() {
                           </Avatar>
                           <div className="flex-1">
                             <p className="text-sm text-muted-foreground">
-                              <Link href={`/u/${entry.user.username}`} className="hover:underline">
+                              <button 
+                                onClick={(e) => handleUsernameClick(e, entry.user.username)}
+                                className="hover:underline cursor-pointer text-muted-foreground"
+                                data-testid={`button-username-${entry.user.id}`}
+                              >
                                 @{entry.user.username}
-                              </Link>
+                              </button>
                             </p>
                             <p className="text-xs text-muted-foreground">
                               {new Date(entry.createdAt).toLocaleDateString()}
@@ -240,6 +310,7 @@ export default function PublicSearch() {
             </div>
           </TabsContent>
         </Tabs>
+        </div>
       </div>
     </div>
   )
