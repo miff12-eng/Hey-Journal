@@ -36,7 +36,7 @@ export default function CommentsList({
   // Delete comment mutation
   const deleteCommentMutation = useMutation({
     mutationFn: async (commentId: string) => {
-      return apiRequest(`/api/comments/${commentId}`, 'DELETE')
+      return apiRequest('DELETE', `/api/comments/${commentId}`)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/journal/entries', entryId, 'comments'] })
