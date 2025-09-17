@@ -30,6 +30,7 @@ export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
   createUser(user: UpsertUser): Promise<User>;
+  upsertUser(user: UpsertUser): Promise<User>; // Required for OAuth authentication
   updateUserProfile(id: string, updates: UpdateUserProfile): Promise<User>;
   searchUsers(query: string, limit?: number): Promise<User[]>;
   
@@ -106,6 +107,21 @@ class DbStorage implements IStorage {
       throw new Error('User not found');
     }
     return result[0];
+  }
+
+  async upsertUser(userData: UpsertUser): Promise<User> {
+    const [user] = await this.db
+      .insert(users)
+      .values(userData)
+      .onConflictDoUpdate({
+        target: users.id,
+        set: {
+          ...userData,
+          updatedAt: new Date(),
+        },
+      })
+      .returning();
+    return user;
   }
 
   async searchUsers(query: string, limit = 10): Promise<User[]> {
@@ -718,6 +734,24 @@ export class MemStorage implements IStorage {
     };
     this.users.set(id, user);
     return user;
+  }
+
+  async upsertUser(userData: UpsertUser): Promise<User> {
+    const existingUser = userData.id ? this.users.get(userData.id) : null;
+    
+    if (existingUser) {
+      // Update existing user
+      const updatedUser: User = {
+        ...existingUser,
+        ...userData,
+        updatedAt: new Date(),
+      };
+      this.users.set(existingUser.id, updatedUser);
+      return updatedUser;
+    } else {
+      // Create new user
+      return this.createUser(userData);
+    }
   }
 
   async updateUserProfile(id: string, updates: UpdateUserProfile): Promise<User> {
