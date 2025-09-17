@@ -61,8 +61,8 @@ export interface IStorage {
   
   // Connection methods
   sendConnectionRequest(requesterId: string, recipientId: string): Promise<UserConnection>;
-  acceptConnectionRequest(requestId: string): Promise<UserConnection>;
-  rejectConnectionRequest(requestId: string): Promise<void>;
+  acceptConnectionRequest(requestId: string, userId: string): Promise<UserConnection>;
+  rejectConnectionRequest(requestId: string, userId: string): Promise<void>;
   blockUser(requesterId: string, recipientId: string): Promise<UserConnection>;
   unblockUser(requesterId: string, recipientId: string): Promise<void>;
   getConnectionRequests(userId: string, type: 'received' | 'sent'): Promise<UserConnectionWithUser[]>;
@@ -507,7 +507,7 @@ class DbStorage implements IStorage {
     return result[0];
   }
 
-  async acceptConnectionRequest(requestId: string, userId?: string): Promise<UserConnection> {
+  async acceptConnectionRequest(requestId: string, userId: string): Promise<UserConnection> {
     // First, get the connection request to validate it exists and is in correct state
     const existingConnection = await this.db
       .select()
@@ -525,8 +525,8 @@ class DbStorage implements IStorage {
       throw new Error('Connection request is no longer pending');
     }
     
-    // If userId provided, validate authorization (only recipient can accept)
-    if (userId && connection.recipientId !== userId) {
+    // Validate authorization - only recipient can accept
+    if (connection.recipientId !== userId) {
       throw new Error('Unauthorized: Only the recipient can accept this connection request');
     }
     
@@ -540,7 +540,29 @@ class DbStorage implements IStorage {
     return result[0];
   }
 
-  async rejectConnectionRequest(requestId: string): Promise<void> {
+  async rejectConnectionRequest(requestId: string, userId: string): Promise<void> {
+    // First, get the connection request to validate it exists and user is authorized
+    const existingConnection = await this.db
+      .select()
+      .from(userConnections)
+      .where(eq(userConnections.id, requestId));
+    
+    if (!existingConnection[0]) {
+      throw new Error('Connection request not found');
+    }
+    
+    const connection = existingConnection[0];
+    
+    // Validate authorization - only recipient can reject
+    if (connection.recipientId !== userId) {
+      throw new Error('Unauthorized: Only the recipient can reject this connection request');
+    }
+    
+    // Validate status is pending
+    if (connection.status !== "pending") {
+      throw new Error('Connection request is no longer pending');
+    }
+    
     await this.db.delete(userConnections).where(eq(userConnections.id, requestId));
   }
 
@@ -1343,11 +1365,11 @@ export class MemStorage implements IStorage {
     throw new Error('Connection methods not implemented in MemStorage - use DbStorage');
   }
 
-  async acceptConnectionRequest(requestId: string): Promise<UserConnection> {
+  async acceptConnectionRequest(requestId: string, userId: string): Promise<UserConnection> {
     throw new Error('Connection methods not implemented in MemStorage - use DbStorage');
   }
 
-  async rejectConnectionRequest(requestId: string): Promise<void> {
+  async rejectConnectionRequest(requestId: string, userId: string): Promise<void> {
     throw new Error('Connection methods not implemented in MemStorage - use DbStorage');
   }
 
