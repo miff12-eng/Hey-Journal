@@ -23,21 +23,31 @@ export const sessions = pgTable(
   (table) => [index("IDX_session_expire").on(table.expire)],
 );
 
-// User storage table - required for Replit Auth
+// User storage table with authentication
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  email: varchar("email").unique(),
+  email: varchar("email").unique().notNull(),
+  password: varchar("password").notNull(),
   firstName: varchar("first_name"),
   lastName: varchar("last_name"),
   username: varchar("username").unique(),
   bio: varchar("bio"),
   profileImageUrl: varchar("profile_image_url"),
   isProfilePublic: boolean("is_profile_public").default(true),
+  emailVerified: boolean("email_verified").default(false),
+  emailVerificationToken: varchar("email_verification_token"),
+  emailVerificationExpires: timestamp("email_verification_expires"),
+  passwordResetToken: varchar("password_reset_token"),
+  passwordResetExpires: timestamp("password_reset_expires"),
+  lastLoginAt: timestamp("last_login_at"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => [
+  index("idx_users_email").on(table.email),
   index("idx_users_username").on(table.username),
   index("idx_users_is_profile_public").on(table.isProfilePublic),
+  index("idx_users_email_verification_token").on(table.emailVerificationToken),
+  index("idx_users_password_reset_token").on(table.passwordResetToken),
 ]);
 
 // Journal entries table
@@ -168,9 +178,56 @@ export const insertCommentSchema = createInsertSchema(comments).omit({
 
 export const updateUserProfileSchema = createInsertSchema(users).omit({
   id: true,
+  password: true,
+  emailVerified: true,
+  emailVerificationToken: true,
+  emailVerificationExpires: true,
+  passwordResetToken: true,
+  passwordResetExpires: true,
+  lastLoginAt: true,
   createdAt: true,
   updatedAt: true,
 }).partial();
+
+// Authentication schemas
+export const registerSchema = createInsertSchema(users).pick({
+  email: true,
+  password: true,
+  firstName: true,
+  lastName: true,
+}).extend({
+  confirmPassword: z.string().min(1, "Password confirmation is required"),
+}).refine(data => data.password === data.confirmPassword, {
+  message: "Passwords don't match",
+  path: ["confirmPassword"],
+});
+
+export const loginSchema = createInsertSchema(users).pick({
+  email: true,
+  password: true,
+});
+
+export const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1, "Current password is required"),
+  newPassword: z.string().min(8, "Password must be at least 8 characters"),
+  confirmPassword: z.string().min(1, "Password confirmation is required"),
+}).refine(data => data.newPassword === data.confirmPassword, {
+  message: "Passwords don't match",
+  path: ["confirmPassword"],
+});
+
+export const resetPasswordRequestSchema = z.object({
+  email: z.string().email("Please enter a valid email address"),
+});
+
+export const resetPasswordSchema = z.object({
+  token: z.string().min(1, "Reset token is required"),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+  confirmPassword: z.string().min(1, "Password confirmation is required"),
+}).refine(data => data.password === data.confirmPassword, {
+  message: "Passwords don't match",
+  path: ["confirmPassword"],
+});
 
 // Types for TypeScript
 export type UpsertUser = typeof users.$inferInsert;
