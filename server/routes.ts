@@ -11,6 +11,7 @@ import {
   ObjectNotFoundError,
 } from "./objectStorage";
 import { ObjectPermission } from "./objectAcl";
+import { setupAuth, isAuthenticated } from "./replitAuth";
 
 // Extend Express Request interface to include userId
 declare global {
@@ -28,36 +29,40 @@ const upload = multer({
 });
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Development authentication bypass (exclude public routes)
+  // Setup OAuth authentication
+  await setupAuth(app);
+  
+  // Authentication middleware for protected routes
   app.use('/api', async (req, res, next) => {
-    // Skip authentication for public routes only
-    if (req.originalUrl.startsWith('/api/public/')) {
+    // Skip authentication for public routes and OAuth endpoints
+    if (req.originalUrl.startsWith('/api/public/') ||
+        req.originalUrl.startsWith('/api/login') ||
+        req.originalUrl.startsWith('/api/callback') ||
+        req.originalUrl.startsWith('/api/logout') ||
+        req.originalUrl.startsWith('/api/health')) {
       return next();
     }
     
-    // Development bypass - always authenticate as mock user
-    req.userId = 'mock-user-id';
-    
-    // Ensure mock user exists in storage
-    let user = await storage.getUser(req.userId);
-    if (!user) {
-      console.log('🔧 Creating mock user in storage');
-      user = await storage.createUser({
-        id: req.userId,
-        email: 'user@example.com',
-        firstName: 'Demo',
-        lastName: 'User'
-      });
-      console.log('✅ Mock user created:', user.id);
-    }
-    
-    next();
+    // Apply the isAuthenticated middleware which handles token refresh
+    isAuthenticated(req, res, (err) => {
+      if (err) {
+        return res.status(401).json({ message: 'Authentication required' });
+      }
+      
+      // Set userId from OAuth claims (after token refresh if needed)
+      const user = req.user as any;
+      if (!user?.claims?.sub) {
+        return res.status(401).json({ message: 'Authentication required' });
+      }
+      
+      req.userId = user.claims.sub;
+      next();
+    });
   });
 
-  // Development login endpoint bypass
-  app.post('/api/auth/login', async (req, res) => {
-    const mockUser = await storage.getUser('mock-user-id');
-    res.json({ user: mockUser, success: true });
+  // OAuth login is handled by setupAuth - this endpoint redirects to login
+  app.get('/api/auth/login', (req, res) => {
+    res.redirect('/api/login');
   });
 
   // Health check
@@ -65,19 +70,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
   });
 
-  // Auth endpoint - return mock user for development
+  // Get authenticated user from OAuth
   app.get('/api/auth/user', async (req, res) => {
-    // In development, return a mock authenticated user
-    const mockUser = await storage.getUser('mock-user-id');
-    res.json(mockUser);
+    const user = req.user as any;
+    if (!req.isAuthenticated() || !user?.claims?.sub) {
+      return res.status(401).json({ message: 'Not authenticated' });
+    }
+    
+    // Get user from storage using OAuth claims
+    const dbUser = await storage.getUser(user.claims.sub);
+    if (!dbUser) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    res.json(dbUser);
   });
 
-  // Logout endpoint
-  app.post('/api/auth/logout', async (req, res) => {
-    console.log('🚪 Logout requested');
-    // In a production app, this would clear server-side sessions
-    // For development, we just return success
-    res.json({ success: true, message: 'Logged out successfully' });
+  // OAuth logout is handled by setupAuth - this endpoint redirects to logout
+  app.post('/api/auth/logout', (req, res) => {
+    res.redirect('/api/logout');
   });
 
   // User Profile endpoints
@@ -320,18 +331,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: 'Not authorized to update this entry' });
       }
       
+      // Update the entry first
+      const updatedEntry = await storage.updateJournalEntry(id, updates);
+      
       // Analyze updated content with AI if content or media changed
       if (updates.content !== undefined || updates.mediaUrls !== undefined) {
         console.log('🤖 Re-analyzing updated journal entry with AI...');
         try {
           const aiInsights = await analyzeEntry(
-            updates.content, 
-            updates.title ?? existingEntry.title, 
+            updates.content ?? '', 
+            updates.title ?? existingEntry.title ?? undefined, 
             updates.mediaUrls ?? (existingEntry.mediaUrls || [])
           );
           
-          // Include AI insights in the update
-          updates.aiInsights = aiInsights;
+          // Update AI insights separately
+          await storage.updateAiInsights(id, aiInsights);
           
           console.log('✨ AI Re-analysis completed:', { 
             summary: aiInsights.summary?.substring(0, 50) + '...',
@@ -344,7 +358,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       
-      const updatedEntry = await storage.updateJournalEntry(id, updates);
       res.json(updatedEntry);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -520,7 +533,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Sort entries by creation date (most recent first)
       const sortedEntries = allEntries.sort((a, b) => 
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
       );
 
       const now = new Date();
@@ -528,12 +541,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Calculate entries this week
       const entriesThisWeek = sortedEntries.filter(entry => 
-        new Date(entry.createdAt) >= oneWeekAgo
+        entry.createdAt && new Date(entry.createdAt) >= oneWeekAgo
       ).length;
 
       // Calculate days since last entry
       const lastEntry = sortedEntries[0];
-      const daysSinceLastEntry = Math.floor((now.getTime() - new Date(lastEntry.createdAt).getTime()) / (24 * 60 * 60 * 1000));
+      const daysSinceLastEntry = Math.floor((now.getTime() - new Date(lastEntry.createdAt || 0).getTime()) / (24 * 60 * 60 * 1000));
 
       // Calculate day streak (consecutive days with entries starting from today)
       let dayStreak = 0;
@@ -544,8 +557,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Group entries by date (YYYY-MM-DD format using UTC)
       const entriesByDate = new Map<string, number>();
       sortedEntries.forEach(entry => {
-        const dateStr = new Date(entry.createdAt).toISOString().split('T')[0];
-        entriesByDate.set(dateStr, (entriesByDate.get(dateStr) || 0) + 1);
+        if (entry.createdAt) {
+          const dateStr = new Date(entry.createdAt).toISOString().split('T')[0];
+          entriesByDate.set(dateStr, (entriesByDate.get(dateStr) || 0) + 1);
+        }
       });
 
       // Check consecutive days starting from today (UTC)
@@ -848,7 +863,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           );
 
           // Update the entry with new AI insights
-          await storage.updateJournalEntry(entry.id, { aiInsights: newAiInsights });
+          await storage.updateAiInsights(entry.id, newAiInsights);
           
           console.log(`✨ Updated insights for "${entry.title}": ${newAiInsights.labels?.length || 0} labels, ${newAiInsights.keywords?.length || 0} keywords`);
           reanalyzedCount++;
@@ -924,7 +939,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         // Update the entry if we have changes
         if (hasChanges) {
-          await storage.updateJournalEntry(entry.id, { mediaUrls: newMediaUrls }, userId);
+          await storage.updateJournalEntry(entry.id, { mediaUrls: newMediaUrls });
           convertedCount++;
           console.log(`🎯 Updated entry: "${entry.title}" with public URLs`);
         }
@@ -1188,7 +1203,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Add users to sharedWith list (avoid duplicates)
       const currentSharedWith = entry.sharedWith || [];
-      const newSharedWith = [...new Set([...currentSharedWith, ...userIds])];
+      const newSharedWith = Array.from(new Set([...currentSharedWith, ...userIds]));
       
       // Update entry with new sharing list
       const updatedEntry = await storage.updateJournalEntry(id, {
@@ -1316,7 +1331,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // For private objects, require authentication and proper permissions
       const canAccess = await objectStorageService.canAccessObjectEntity({
         objectFile,
-        userId: req.userId || null, // Allow undefined userId for public objects
+        userId: req.userId ?? null, // Allow null userId for public objects
         requestedPermission: ObjectPermission.READ,
       });
       
@@ -1395,7 +1410,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // For newly uploaded objects, we allow setting the initial ACL policy
         // but only if the object was uploaded recently (within last 15 minutes)
         const [metadata] = await objectFile.getMetadata();
-        const uploadTime = new Date(metadata.timeCreated);
+        const uploadTime = new Date(metadata.timeCreated || Date.now());
         const now = new Date();
         const timeDiff = now.getTime() - uploadTime.getTime();
         const fifteenMinutes = 15 * 60 * 1000;
