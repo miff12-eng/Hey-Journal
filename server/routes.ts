@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { generateAIResponse, transcribeAudio } from "./ai";
 import { analyzeEntry, semanticRank } from "./services/openai";
-import { insertJournalEntrySchema, insertAiChatSessionSchema, insertCommentSchema } from "@shared/schema";
+import { insertJournalEntrySchema, insertAiChatSessionSchema, insertCommentSchema, updateUserProfileSchema } from "@shared/schema";
 import { z } from "zod";
 import multer from "multer";
 import {
@@ -70,6 +70,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // In development, return a mock authenticated user
     const mockUser = await storage.getUser('mock-user-id');
     res.json(mockUser);
+  });
+
+  // User Profile endpoints
+  app.get('/api/users/me', async (req, res) => {
+    try {
+      const user = await storage.getUser(req.userId);
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+      res.json(user);
+    } catch (error) {
+      console.error('Error fetching user profile:', error);
+      res.status(500).json({ error: 'Failed to fetch user profile' });
+    }
+  });
+
+  app.put('/api/users/me', async (req, res) => {
+    try {
+      // Validate request body
+      const validatedData = updateUserProfileSchema.parse(req.body);
+      
+      // Update user profile
+      const updatedUser = await storage.updateUserProfile(req.userId, validatedData);
+      res.json(updatedUser);
+    } catch (error) {
+      console.error('Error updating user profile:', error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: 'Invalid data', details: error.errors });
+      }
+      if (error instanceof Error && error.message === 'User not found') {
+        return res.status(404).json({ error: 'User not found' });
+      }
+      res.status(500).json({ error: 'Failed to update user profile' });
+    }
   });
 
   // AI Chat endpoints
