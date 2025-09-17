@@ -4,6 +4,9 @@ import {
   type JournalEntry,
   type InsertJournalEntry,
   type JournalEntryWithUser,
+  type Comment,
+  type InsertComment,
+  type CommentWithUser,
   type AiChatSession,
   type InsertAiChatSession,
   type AiChatMessage,
@@ -15,7 +18,7 @@ import { randomUUID } from "crypto";
 import { drizzle } from "drizzle-orm/neon-http";
 import { neon } from "@neondatabase/serverless";
 import { eq, desc, and, ilike, or, sql } from "drizzle-orm";
-import { users, journalEntries, aiChatSessions } from "@shared/schema";
+import { users, journalEntries, comments, aiChatSessions } from "@shared/schema";
 
 // modify the interface with any CRUD methods
 // you might need
@@ -40,6 +43,13 @@ export interface IStorage {
   getAiChatSessionsByUserId(userId: string): Promise<AiChatSession[]>;
   createAiChatSession(session: InsertAiChatSession, userId: string): Promise<AiChatSession>;
   updateAiChatSession(id: string, updates: Partial<{ messages: AiChatMessage[]; updatedAt: Date }>): Promise<AiChatSession>;
+  
+  // Comment methods
+  getComment(id: string): Promise<Comment | undefined>;
+  getCommentsByEntryId(entryId: string): Promise<CommentWithUser[]>;
+  createComment(comment: InsertComment, userId: string): Promise<Comment>;
+  updateComment(id: string, updates: Partial<InsertComment>): Promise<Comment>;
+  deleteComment(id: string): Promise<void>;
   
   // Public-facing methods (no authentication required)
   getPublicUserByUsername(username: string): Promise<PublicUser | undefined>;
@@ -253,6 +263,94 @@ class DbStorage implements IStorage {
       throw new Error('AI chat session not found');
     }
     return result[0];
+  }
+
+  async getComment(id: string): Promise<Comment | undefined> {
+    const result = await this.db.select().from(comments).where(eq(comments.id, id));
+    return result[0];
+  }
+
+  async getCommentsByEntryId(entryId: string): Promise<CommentWithUser[]> {
+    const result = await this.db
+      .select({
+        // Comment fields
+        id: comments.id,
+        entryId: comments.entryId,
+        userId: comments.userId,
+        content: comments.content,
+        mediaUrls: comments.mediaUrls,
+        createdAt: comments.createdAt,
+        updatedAt: comments.updatedAt,
+        // User fields
+        userEmail: users.email,
+        userFirstName: users.firstName,
+        userLastName: users.lastName,
+        userUsername: users.username,
+        userBio: users.bio,
+        userProfileImageUrl: users.profileImageUrl,
+        userIsProfilePublic: users.isProfilePublic,
+        userCreatedAt: users.createdAt,
+        userUpdatedAt: users.updatedAt,
+      })
+      .from(comments)
+      .leftJoin(users, eq(comments.userId, users.id))
+      .where(eq(comments.entryId, entryId))
+      .orderBy(desc(comments.createdAt));
+
+    const commentsWithUser: CommentWithUser[] = result.map((row) => ({
+      id: row.id,
+      entryId: row.entryId,
+      userId: row.userId,
+      content: row.content,
+      mediaUrls: row.mediaUrls || [],
+      createdAt: row.createdAt!,
+      updatedAt: row.updatedAt!,
+      user: {
+        id: row.userId,
+        email: row.userEmail,
+        firstName: row.userFirstName,
+        lastName: row.userLastName,
+        username: row.userUsername,
+        bio: row.userBio,
+        profileImageUrl: row.userProfileImageUrl,
+        isProfilePublic: row.userIsProfilePublic,
+        createdAt: row.userCreatedAt,
+        updatedAt: row.userUpdatedAt,
+      }
+    }));
+
+    return commentsWithUser;
+  }
+
+  async createComment(commentData: InsertComment, userId: string): Promise<Comment> {
+    const result = await this.db.insert(comments).values({
+      id: randomUUID(),
+      entryId: commentData.entryId,
+      userId,
+      content: commentData.content,
+      mediaUrls: commentData.mediaUrls || [],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }).returning();
+    
+    return result[0];
+  }
+
+  async updateComment(id: string, updates: Partial<InsertComment>): Promise<Comment> {
+    const result = await this.db
+      .update(comments)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(comments.id, id))
+      .returning();
+    
+    if (!result[0]) {
+      throw new Error('Comment not found');
+    }
+    return result[0];
+  }
+
+  async deleteComment(id: string): Promise<void> {
+    await this.db.delete(comments).where(eq(comments.id, id));
   }
 
   // Public-facing methods (no authentication required)
@@ -495,11 +593,13 @@ class DbStorage implements IStorage {
 export class MemStorage implements IStorage {
   private users: Map<string, User>;
   private journalEntries: Map<string, JournalEntry>;
+  private comments: Map<string, Comment>;
   private aiChatSessions: Map<string, AiChatSession>;
 
   constructor() {
     this.users = new Map();
     this.journalEntries = new Map();
+    this.comments = new Map();
     this.aiChatSessions = new Map();
     
     // Create a mock user for development
@@ -543,6 +643,18 @@ export class MemStorage implements IStorage {
     };
     this.users.set(id, user);
     return user;
+  }
+
+  async searchUsers(query: string, limit = 10): Promise<User[]> {
+    const allUsers = Array.from(this.users.values());
+    return allUsers
+      .filter(user => 
+        user.email?.toLowerCase().includes(query.toLowerCase()) ||
+        user.firstName?.toLowerCase().includes(query.toLowerCase()) ||
+        user.lastName?.toLowerCase().includes(query.toLowerCase()) ||
+        user.username?.toLowerCase().includes(query.toLowerCase())
+      )
+      .slice(0, limit);
   }
 
   async getJournalEntry(id: string): Promise<JournalEntry | undefined> {
@@ -674,6 +786,63 @@ export class MemStorage implements IStorage {
     
     this.aiChatSessions.set(id, updated);
     return updated;
+  }
+
+  async getComment(id: string): Promise<Comment | undefined> {
+    return this.comments.get(id);
+  }
+
+  async getCommentsByEntryId(entryId: string): Promise<CommentWithUser[]> {
+    const allComments = Array.from(this.comments.values());
+    const entryComments = allComments
+      .filter(comment => comment.entryId === entryId)
+      .sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
+
+    const commentsWithUser: CommentWithUser[] = [];
+    for (const comment of entryComments) {
+      const user = await this.getUser(comment.userId);
+      if (user) {
+        commentsWithUser.push({ ...comment, user });
+      }
+    }
+    
+    return commentsWithUser;
+  }
+
+  async createComment(commentData: InsertComment, userId: string): Promise<Comment> {
+    const id = randomUUID();
+    const now = new Date();
+    const comment: Comment = {
+      ...commentData,
+      id,
+      userId,
+      mediaUrls: commentData.mediaUrls || [],
+      createdAt: now,
+      updatedAt: now
+    };
+    
+    this.comments.set(id, comment);
+    return comment;
+  }
+
+  async updateComment(id: string, updates: Partial<InsertComment>): Promise<Comment> {
+    const existing = this.comments.get(id);
+    if (!existing) {
+      throw new Error('Comment not found');
+    }
+    
+    const updated: Comment = {
+      ...existing,
+      ...updates,
+      updatedAt: new Date()
+    };
+    
+    this.comments.set(id, updated);
+    return updated;
+  }
+
+  async deleteComment(id: string): Promise<void> {
+    this.comments.delete(id);
   }
 
   // Public-facing methods (not implemented for MemStorage - use DbStorage for public features)
