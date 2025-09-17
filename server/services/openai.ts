@@ -47,7 +47,7 @@ export async function analyzeTextContent(content: string, title?: string | null)
     const fullText = title ? `Title: ${title}\n\nContent: ${content}` : content;
     
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini", // Use cost-effective model for text analysis
+      model: "gpt-5", // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
       messages: [
         {
           role: "system",
@@ -111,17 +111,17 @@ export async function analyzeMediaContent(mediaUrls: string[]): Promise<{ labels
     // Normalize URLs to ensure OpenAI can access them
     if (mediaUrl.startsWith('/')) {
       // Handle relative URLs
-      if (!process.env.REPL_DOMAINS) {
-        throw new Error('REPL_DOMAINS environment variable is required for public image access');
+      if (!process.env.REPLIT_DOMAINS) {
+        throw new Error('REPLIT_DOMAINS environment variable is required for public image access');
       }
-      const baseUrl = `https://${process.env.REPL_DOMAINS.split(',')[0]}`;
+      const baseUrl = `https://${process.env.REPLIT_DOMAINS.split(',')[0]}`;
       mediaUrl = `${baseUrl}${mediaUrl}`;
     } else if (mediaUrl.includes('localhost') || mediaUrl.includes('127.0.0.1')) {
       // Handle absolute localhost URLs
-      if (!process.env.REPL_DOMAINS) {
-        throw new Error('Cannot convert localhost URL: REPL_DOMAINS environment variable is required');
+      if (!process.env.REPLIT_DOMAINS) {
+        throw new Error('Cannot convert localhost URL: REPLIT_DOMAINS environment variable is required');
       }
-      const baseUrl = `https://${process.env.REPL_DOMAINS.split(',')[0]}`;
+      const baseUrl = `https://${process.env.REPLIT_DOMAINS.split(',')[0]}`;
       // Extract the path from localhost URL
       const urlPath = mediaUrl.replace(/https?:\/\/(?:localhost:?\d*|127\.0\.0\.1:?\d*)/, '');
       mediaUrl = `${baseUrl}${urlPath}`;
@@ -135,7 +135,7 @@ export async function analyzeMediaContent(mediaUrls: string[]): Promise<{ labels
     console.log('📸 Analyzing image URL:', mediaUrl);
     
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o", // Use vision model for image analysis
+      model: "gpt-5", // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
       messages: [
         {
           role: "system", 
