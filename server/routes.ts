@@ -72,6 +72,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(mockUser);
   });
 
+  // Logout endpoint
+  app.post('/api/auth/logout', async (req, res) => {
+    console.log('🚪 Logout requested');
+    // In a production app, this would clear server-side sessions
+    // For development, we just return success
+    res.json({ success: true, message: 'Logged out successfully' });
+  });
+
   // User Profile endpoints
   app.get('/api/users/me', async (req, res) => {
     try {
