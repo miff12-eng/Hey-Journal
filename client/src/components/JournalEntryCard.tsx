@@ -6,8 +6,10 @@ import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { MoreHorizontal, Heart, MessageCircle, Share, Lock, Users, Globe, Play, Edit2 } from 'lucide-react'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { useQuery } from '@tanstack/react-query'
 import { cn } from '@/lib/utils'
-import { JournalEntryWithUser } from '@shared/schema'
+import { JournalEntryWithUser, CommentWithPublicUser } from '@shared/schema'
+import CommentsList from './CommentsList'
 
 interface JournalEntryCardProps {
   entry: JournalEntryWithUser
@@ -28,18 +30,24 @@ export default function JournalEntryCard({
 }: JournalEntryCardProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const [isLiked, setIsLiked] = useState(false)
+  const [showComments, setShowComments] = useState(false)
+  
+  // Fetch comment count for the entry
+  const { data: comments = [] } = useQuery<CommentWithPublicUser[]>({
+    queryKey: ['/api/journal/entries', entry.id, 'comments'],
+  })
   
   const privacyIcon = {
     private: <Lock className="h-3 w-3" />,
     shared: <Users className="h-3 w-3" />,
     public: <Globe className="h-3 w-3" />
-  }[entry.privacy]
+  }[entry.privacy || 'private']
 
   const privacyColor = {
     private: 'bg-muted text-muted-foreground',
     shared: 'bg-accent text-accent-foreground',
     public: 'bg-primary text-primary-foreground'
-  }[entry.privacy]
+  }[entry.privacy || 'private']
 
   const formatDate = (date: Date | string) => {
     const d = new Date(date)
@@ -215,10 +223,11 @@ export default function JournalEntryCard({
               variant="ghost" 
               size="sm" 
               className="gap-2 text-muted-foreground hover:text-foreground"
+              onClick={() => setShowComments(!showComments)}
               data-testid={`button-comment-${entry.id}`}
             >
               <MessageCircle className="h-4 w-4" />
-              <span className="text-sm">3</span>
+              <span className="text-sm">{comments.length}</span>
             </Button>
           </div>
           
@@ -233,6 +242,16 @@ export default function JournalEntryCard({
           </Button>
         </div>
       </CardFooter>
+      
+      {/* Comments Section */}
+      {showComments && (
+        <CommentsList
+          entryId={entry.id}
+          currentUserId="mock-user-id" // TODO: Get from auth context
+          onToggleVisibility={() => setShowComments(false)}
+          className="mt-4"
+        />
+      )}
     </Card>
   )
 }
