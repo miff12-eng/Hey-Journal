@@ -58,8 +58,8 @@ export async function analyzeTextContent(content: string, title?: string | null)
           content: ANALYSIS_PROMPT + fullText
         }
       ],
-      temperature: 0.3, // Lower temperature for more consistent analysis
-      max_tokens: 500,
+      // temperature: 0.3, // GPT-5 only supports default temperature of 1
+      max_completion_tokens: 500,
     });
 
     const response = completion.choices[0]?.message?.content;
@@ -157,8 +157,8 @@ export async function analyzeMediaContent(mediaUrls: string[]): Promise<{ labels
           ]
         }
       ],
-      temperature: 0.3,
-      max_tokens: 300,
+      // temperature: 0.3, // GPT-5 only supports default temperature of 1
+      max_completion_tokens: 300,
     });
 
     const response = completion.choices[0]?.message?.content;
