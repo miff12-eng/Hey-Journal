@@ -1,14 +1,22 @@
+import { useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { useToast } from '@/hooks/use-toast'
 import { Settings, LogOut, Edit, Share2, Calendar, BookOpen, TrendingUp, Users } from 'lucide-react'
 import ThemeToggle from '@/components/ThemeToggle'
 
 export default function Profile() {
+  const { toast } = useToast()
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+  
   // Mock user data - todo: replace with real user data
-  const mockUser = {
+  const [mockUser, setMockUser] = useState({
     id: 'current-user',
     firstName: 'Alex',
     lastName: 'Chen',
@@ -20,7 +28,14 @@ export default function Profile() {
     publicEntries: 23,
     followers: 45,
     following: 32
-  }
+  })
+
+  // Edit form state
+  const [editForm, setEditForm] = useState({
+    firstName: mockUser.firstName,
+    lastName: mockUser.lastName,
+    email: mockUser.email
+  })
 
   const stats = [
     { label: 'Total Entries', value: mockUser.totalEntries, icon: BookOpen, color: 'text-primary' },
@@ -34,6 +49,36 @@ export default function Profile() {
     { title: 'Voice Master', description: '50 voice recordings', date: '1 week ago' },
     { title: 'Social Butterfly', description: 'First shared entry', date: '2 weeks ago' }
   ]
+
+  const handleEditProfile = () => {
+    setIsEditDialogOpen(true)
+  }
+
+  const handleSaveProfile = () => {
+    // Update the mock user data
+    setMockUser(prev => ({
+      ...prev,
+      firstName: editForm.firstName,
+      lastName: editForm.lastName,
+      email: editForm.email
+    }))
+    
+    setIsEditDialogOpen(false)
+    toast({
+      title: "Profile updated",
+      description: "Your profile has been successfully updated.",
+    })
+  }
+
+  const handleCancelEdit = () => {
+    // Reset form to original values
+    setEditForm({
+      firstName: mockUser.firstName,
+      lastName: mockUser.lastName,
+      email: mockUser.email
+    })
+    setIsEditDialogOpen(false)
+  }
 
   const handleLogout = () => {
     console.log('Logout triggered')
@@ -85,7 +130,7 @@ export default function Profile() {
                   </div>
                 </div>
                 
-                <Button size="sm" variant="outline" data-testid="button-edit-profile">
+                <Button size="sm" variant="outline" onClick={handleEditProfile} data-testid="button-edit-profile">
                   <Edit className="h-3 w-3 mr-2" />
                   Edit Profile
                 </Button>
@@ -189,6 +234,53 @@ export default function Profile() {
           </Card>
         </div>
       </div>
+
+      {/* Edit Profile Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]" data-testid="dialog-edit-profile">
+          <DialogHeader>
+            <DialogTitle>Edit Profile</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="firstName">First Name</Label>
+              <Input
+                id="firstName"
+                value={editForm.firstName}
+                onChange={(e) => setEditForm(prev => ({ ...prev, firstName: e.target.value }))}
+                data-testid="input-first-name"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="lastName">Last Name</Label>
+              <Input
+                id="lastName"
+                value={editForm.lastName}
+                onChange={(e) => setEditForm(prev => ({ ...prev, lastName: e.target.value }))}
+                data-testid="input-last-name"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                value={editForm.email}
+                onChange={(e) => setEditForm(prev => ({ ...prev, email: e.target.value }))}
+                data-testid="input-email"
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={handleCancelEdit} data-testid="button-cancel-edit">
+              Cancel
+            </Button>
+            <Button onClick={handleSaveProfile} data-testid="button-save-profile">
+              Save Changes
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
