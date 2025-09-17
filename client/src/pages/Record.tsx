@@ -423,10 +423,10 @@ export default function Record() {
                 onComplete={handlePhotoUpload}
                 buttonClassName="w-full"
               >
-                <div className="flex items-center gap-2">
-                  <Camera className="h-4 w-4" />
+                <Button variant="outline" className="w-full justify-center hover-elevate">
+                  <Camera className="h-4 w-4 mr-2" />
                   Add Photos
-                </div>
+                </Button>
               </ObjectUploader>
               
               {mediaUrls.length > 0 && (
