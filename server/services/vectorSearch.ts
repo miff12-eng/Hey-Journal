@@ -122,8 +122,8 @@ export async function performConversationalSearch(
   try {
     console.log('🤖 Starting conversational search for:', query);
 
-    // Step 1: Perform vector search to get relevant context
-    const relevantEntries = await performVectorSearch(query, userId, 5, 0.2);
+    // Step 1: Perform semantic vector search to get relevant context (semantic-only, no keywords)
+    const relevantEntries = await performVectorSearch(query, userId, 8, 0.15);
     
     if (relevantEntries.length === 0) {
       return {
@@ -170,11 +170,12 @@ export async function performConversationalSearch(
     const messages = [
       {
         role: "system",
-        content: `You are an AI assistant helping a user explore and understand their personal journal entries. Based on the relevant journal entries provided, answer their questions in a thoughtful, insightful, and personal way.
+        content: `You are an AI assistant helping a user explore and understand their personal journal entries through semantic understanding. Based on the most semantically relevant journal entries provided (found through vector similarity, not keyword matching), answer their questions in a thoughtful, insightful, and personal way.
 
 Guidelines:
+- Focus on semantic meaning and conceptual relationships rather than exact word matches
 - Reference specific entries and dates when relevant
-- Identify patterns, themes, and connections across entries
+- Identify patterns, themes, and emotional connections across entries
 - Provide insights while being empathetic and supportive
 - If the context doesn't fully answer the question, acknowledge what you can determine and suggest related aspects
 - Use a warm, conversational tone as if you're a thoughtful friend who knows their journal well
