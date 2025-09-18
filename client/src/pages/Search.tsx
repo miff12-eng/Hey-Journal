@@ -85,21 +85,25 @@ export default function Search() {
     return filters;
   };
 
-  // Perform search when query or filter values change
-  useEffect(() => {
+  // Manual search function - triggers only when user presses Enter
+  const performSearch = () => {
     if (searchQuery.trim()) {
-      const timer = setTimeout(() => {
-        searchMutation.mutate({ 
-          query: searchQuery, 
-          mode: searchMode,
-          filters: buildFilters()
-        });
-      }, 300); // Debounce search
-      return () => clearTimeout(timer);
+      searchMutation.mutate({ 
+        query: searchQuery, 
+        mode: searchMode,
+        filters: buildFilters()
+      });
     } else {
       setSearchResults([]);
     }
-  }, [searchQuery, searchMode, selectedTags, selectedSentiment, dateRange]);
+  };
+
+  // Handle Enter key press in search input
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      performSearch();
+    }
+  };
 
   const recentSearches = ['morning routine', 'family time', 'travel memories', 'work reflections']
   const suggestedTags = ['meditation', 'gratitude', 'family', 'travel', 'work', 'goals', 'reflection']
@@ -125,9 +129,10 @@ export default function Search() {
         <div className="relative">
           <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Ask questions about your journal entries..."
+            placeholder="Ask questions about your journal entries... (Press Enter to search)"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
+            onKeyDown={handleKeyDown}
             className="pl-10 pr-4"
             data-testid="input-search"
           />
