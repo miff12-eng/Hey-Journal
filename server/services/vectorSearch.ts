@@ -5,6 +5,45 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
+/**
+ * Normalize malformed entry citations in AI answers
+ * Converts [entry: "Title"] or [entry:"Title"] to [entry:UUID] format
+ */
+function normalizeCitations(answer: string, contextEntries: Array<{id: string, title: string}>): string {
+  // Pattern to match [entry: "Title"], [entry:"Title"], [entry: Title] variations
+  const citationPattern = /\[entry:\s*["']?([^[\]"']+?)["']?\s*\]/g;
+  
+  return answer.replace(citationPattern, (match, title) => {
+    // If it's already a UUID format, keep it as is
+    const uuidPattern = /^[0-9a-fA-F-]{8}-[0-9a-fA-F-]{4}-[0-9a-fA-F-]{4}-[0-9a-fA-F-]{4}-[0-9a-fA-F-]{12}$/;
+    if (uuidPattern.test(title)) {
+      return match; // Already in UUID format
+    }
+    
+    // Normalize title for comparison (trim whitespace, handle case sensitivity)
+    const normalizedTitle = title.trim();
+    
+    // Find matching entry by exact title match first
+    let matchingEntry = contextEntries.find(entry => entry.title === normalizedTitle);
+    
+    // If no exact match, try case-insensitive matching
+    if (!matchingEntry) {
+      matchingEntry = contextEntries.find(entry => 
+        entry.title.toLowerCase() === normalizedTitle.toLowerCase()
+      );
+    }
+    
+    if (matchingEntry) {
+      console.log(`🔗 Normalized citation: "${title}" -> ${matchingEntry.id}`);
+      return `[entry:${matchingEntry.id}]`;
+    } else {
+      // If no matching entry found, remove brackets to prevent broken links
+      console.log(`⚠️ Could not resolve citation for title: "${title}"`);
+      return title; // Return just the title without brackets
+    }
+  });
+}
+
 interface VectorSearchResult {
   entryId: string;
   similarity: number;
@@ -201,10 +240,14 @@ ${contextText}`
       max_completion_tokens: 500
     });
 
-    const answer = completion.choices[0]?.message?.content || 
+    let answer = completion.choices[0]?.message?.content || 
       "I couldn't generate a response based on your journal entries.";
 
-    // Step 5: Calculate confidence based on relevance and context quality
+    // Step 5: Normalize malformed entry citations
+    console.log('🔧 Normalizing entry citations in AI answer');
+    answer = normalizeCitations(answer, contextEntries);
+
+    // Step 6: Calculate confidence based on relevance and context quality
     const avgSimilarity = relevantEntries.reduce((sum, entry) => sum + entry.similarity, 0) / relevantEntries.length;
     const confidence = Math.min(0.95, avgSimilarity * 1.2); // Cap at 95% confidence
 
