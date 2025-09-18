@@ -88,6 +88,7 @@ interface ConversationalSearchResponse {
 
 export default function Search() {
   const [searchQuery, setSearchQuery] = useState('')
+  const [hasSearched, setHasSearched] = useState(false)
   const [searchMode, setSearchMode] = useState<SearchMode>('semantic')
   const [activeFilter, setActiveFilter] = useState<FilterType>('all')
   const [searchResults, setSearchResults] = useState<EnhancedSearchResult[]>([])
@@ -103,16 +104,48 @@ export default function Search() {
   const searchMutation = useMutation({
     mutationFn: async (params: { query: string; mode: SearchMode; filters?: any }) => {
       console.log('🚀 Performing enhanced AI conversational search:', params);
-      const response = await apiRequest('POST', '/api/search/enhanced', {
-        query: params.query,
-        mode: 'conversational', // Use conversational mode for AI answers + citations
-        limit: 20,
-        filters: params.filters || {},
-        previousMessages: [] // Empty for single-shot Q&A
-      });
-      const data = await response.json() as ConversationalSearchResponse;
-      console.log('🎯 Conversational search results:', data);
-      return data;
+      
+      // Create AbortController for timeout handling
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => {
+        controller.abort();
+      }, 30000); // 30 second timeout
+      
+      try {
+        const response = await fetch('/api/search/enhanced', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            query: params.query,
+            mode: 'conversational', // Use conversational mode for AI answers + citations
+            limit: 20,
+            filters: params.filters || {},
+            previousMessages: [] // Empty for single-shot Q&A
+          }),
+          credentials: 'include', // Maintain session consistency
+          signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+          const text = await response.text() || response.statusText;
+          throw new Error(`${response.status}: ${text}`);
+        }
+        
+        const data = await response.json() as ConversationalSearchResponse;
+        console.log('🎯 Conversational search results:', data);
+        return data;
+      } catch (error) {
+        clearTimeout(timeoutId);
+        if (error instanceof Error && error.name === 'AbortError') {
+          throw new Error('Search timed out. Please try with a simpler query.');
+        }
+        throw error;
+      }
+    },
+    onMutate: () => {
+      setHasSearched(true); // Set immediately when search starts
     },
     onSuccess: (data) => {
       setConversationalResult(data);
@@ -301,12 +334,12 @@ export default function Search() {
           )}
           
           {/* Search results */}
-          {searchQuery && (
+          {searchQuery && hasSearched && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-medium text-foreground">
                   {searchMutation.isPending ? 'Searching...' : 
-                    `${searchMutation.data?.totalResults || 0} result${(searchMutation.data?.totalResults || 0) !== 1 ? 's' : ''} for "${searchQuery}"`
+                    hasSearched ? `${searchMutation.data?.totalResults || 0} result${(searchMutation.data?.totalResults || 0) !== 1 ? 's' : ''} for "${searchQuery}"` : ''
                   }
                 </h3>
                 <div className="flex gap-2">
@@ -322,14 +355,45 @@ export default function Search() {
               </div>
               
               {searchMutation.isPending ? (
-                <div className="space-y-4">
-                  {[...Array(3)].map((_, i) => (
-                    <Card key={i} className="p-4 animate-pulse">
-                      <div className="h-4 bg-muted rounded w-3/4 mb-2"></div>
-                      <div className="h-3 bg-muted rounded w-1/2 mb-1"></div>
-                      <div className="h-3 bg-muted rounded w-2/3"></div>
-                    </Card>
-                  ))}
+                <div className="space-y-6">
+                  {/* AI answer loading skeleton */}
+                  <Card className="p-6 border-primary/20 bg-primary/5">
+                    <div className="animate-pulse">
+                      <div className="flex items-center gap-2 mb-4">
+                        <div className="h-5 w-5 bg-muted rounded-full"></div>
+                        <div className="h-4 bg-muted rounded w-32"></div>
+                      </div>
+                      <div className="space-y-3">
+                        <div className="h-4 bg-muted rounded w-full"></div>
+                        <div className="h-4 bg-muted rounded w-4/5"></div>
+                        <div className="h-4 bg-muted rounded w-3/4"></div>
+                      </div>
+                      <div className="flex items-center gap-4 mt-4 pt-4 border-t border-border">
+                        <div className="h-3 bg-muted rounded w-20"></div>
+                        <div className="h-3 bg-muted rounded w-16"></div>
+                        <div className="h-3 bg-muted rounded w-24"></div>
+                      </div>
+                    </div>
+                  </Card>
+                  
+                  {/* Citations loading skeleton */}
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2">
+                      <div className="h-4 w-4 bg-muted rounded animate-pulse"></div>
+                      <div className="h-4 bg-muted rounded w-40 animate-pulse"></div>
+                    </div>
+                    {[...Array(2)].map((_, i) => (
+                      <Card key={i} className="p-4 animate-pulse">
+                        <div className="flex items-center gap-2 mb-3">
+                          <div className="h-5 bg-muted rounded w-16"></div>
+                          <div className="h-3 bg-muted rounded w-32"></div>
+                        </div>
+                        <div className="h-4 bg-muted rounded w-3/4 mb-2"></div>
+                        <div className="h-3 bg-muted rounded w-full mb-1"></div>
+                        <div className="h-3 bg-muted rounded w-2/3"></div>
+                      </Card>
+                    ))}
+                  </div>
                 </div>
               ) : conversationalResult ? (
                 <div className="space-y-6">
@@ -424,36 +488,98 @@ export default function Search() {
                   )}
                 </div>
               ) : searchMutation.error ? (
-                <Card className="p-8 text-center border-destructive/20">
-                  <SearchIcon className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                  <h3 className="text-lg font-medium text-foreground mb-2">Search Error</h3>
-                  <p className="text-sm text-muted-foreground max-w-sm mx-auto mb-4">
-                    There was an error searching your journal. Please try again.
-                  </p>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={() => searchMutation.mutate({ query: searchQuery, mode: searchMode })}
-                    data-testid="button-retry-search"
-                  >
-                    Try Again
-                  </Button>
+                <Card className="p-8 text-center border-destructive/20 bg-destructive/5">
+                  <div className="flex flex-col items-center">
+                    <div className="p-3 rounded-full bg-destructive/10 mb-4">
+                      <SearchIcon className="h-8 w-8 text-destructive" />
+                    </div>
+                    <h3 className="text-lg font-medium text-foreground mb-2">AI Search Failed</h3>
+                    <p className="text-sm text-muted-foreground max-w-md mx-auto mb-4">
+                      {(() => {
+                        const errorMessage = searchMutation.error instanceof Error ? searchMutation.error.message.toLowerCase() : '';
+                        if (errorMessage.includes('openai') || errorMessage.includes('ai service')) {
+                          return "AI service is temporarily unavailable. Please try again in a moment.";
+                        }
+                        if (errorMessage.includes('timeout') || errorMessage.includes('timed out')) {
+                          return "Search timed out. Your query might be too complex. Try using simpler terms.";
+                        }
+                        if (errorMessage.includes('network') || errorMessage.includes('failed to fetch') || errorMessage.includes('fetch')) {
+                          return "Network connection issue. Please check your internet and try again.";
+                        }
+                        return "Unable to search your journal entries right now. This might be due to a temporary AI service issue.";
+                      })()}
+                    </p>
+                    <div className="flex gap-2">
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => searchMutation.mutate({ query: searchQuery, mode: searchMode, filters: buildFilters() })}
+                        data-testid="button-retry-search"
+                        disabled={searchMutation.isPending}
+                      >
+                        {searchMutation.isPending ? 'Retrying...' : 'Try Again'}
+                      </Button>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={() => {
+                          setSearchQuery("");
+                          setHasSearched(false);
+                        }}
+                        data-testid="button-clear-search"
+                      >
+                        Clear Search
+                      </Button>
+                    </div>
+                    <details className="mt-4 text-xs text-muted-foreground max-w-sm">
+                      <summary className="cursor-pointer hover:text-foreground">Technical Details</summary>
+                      <p className="mt-2 text-left bg-muted p-2 rounded text-xs font-mono">
+                        {searchMutation.error instanceof Error ? searchMutation.error.message : 'Unknown error occurred'}
+                      </p>
+                    </details>
+                  </div>
                 </Card>
               ) : (
-                <Card className="p-8 text-center">
-                  <SearchIcon className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                  <h3 className="text-lg font-medium text-foreground mb-2">No results found</h3>
-                  <p className="text-sm text-muted-foreground max-w-sm mx-auto mb-4">
-                    Try rephrasing your question or asking about different topics in your journal.
-                  </p>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={() => searchMutation.mutate({ query: searchQuery, mode: searchMode })}
-                    data-testid="button-retry-search"
-                  >
-                    Try Again
-                  </Button>
+                <Card className="p-8 text-center border-amber-200/50 bg-amber-50/50">
+                  <div className="flex flex-col items-center">
+                    <div className="p-3 rounded-full bg-amber-100 mb-4">
+                      <SearchIcon className="h-8 w-8 text-amber-600" />
+                    </div>
+                    <h3 className="text-lg font-medium text-foreground mb-2">No matching entries found</h3>
+                    <p className="text-sm text-muted-foreground max-w-md mx-auto mb-4">
+                      AI couldn't find journal entries that match your question. Try asking differently or about topics you've definitely written about.
+                    </p>
+                    <div className="bg-muted/50 rounded-lg p-4 mb-4 max-w-sm">
+                      <p className="text-xs font-medium text-muted-foreground mb-2">Try asking:</p>
+                      <div className="text-xs text-muted-foreground space-y-1">
+                        <p>• "What did I write about [specific topic]?"</p>
+                        <p>• "Show me entries from [time period]"</p>
+                        <p>• "Find entries where I felt [emotion]"</p>
+                        <p>• "What are my thoughts on [subject]?"</p>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => {
+                          setSearchQuery("");
+                          setHasSearched(false);
+                        }}
+                        data-testid="button-clear-search"
+                      >
+                        Clear Search
+                      </Button>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={() => searchMutation.mutate({ query: searchQuery, mode: searchMode, filters: buildFilters() })}
+                        data-testid="button-retry-search"
+                      >
+                        Try Again
+                      </Button>
+                    </div>
+                  </div>
                 </Card>
               )}
             </div>
