@@ -80,7 +80,7 @@ export async function enhancedAnalyzeTextContent(
   title?: string | null,
   audioTranscription?: string | null,
   tags?: string[] | null
-): Promise<Partial<AiInsights> & { searchableText: string; embedding: number[] }> {
+): Promise<Partial<AiInsights> & { searchableText: string; embedding: number[]; embeddingString: string }> {
   try {
     // Combine all text content for analysis
     let fullText = content;
