@@ -1405,6 +1405,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Has media URLs
         if (!entry.mediaUrls || entry.mediaUrls.length === 0) return false;
         
+        console.log(`🔍 Checking entry "${entry.title}" (${entry.id.substring(0,8)}):`, {
+          hasMediaUrls: entry.mediaUrls?.length > 0,
+          hasAiInsights: !!entry.aiInsights,
+          hasLabels: !!entry.aiInsights?.labels,
+          labelsLength: entry.aiInsights?.labels?.length || 0,
+          shouldProcess: !entry.aiInsights || !entry.aiInsights.labels || entry.aiInsights.labels.length === 0
+        });
+        
         // No AI insights at all, OR has AI insights but empty/missing labels (failed image analysis)
         return !entry.aiInsights || 
                !entry.aiInsights.labels || 
