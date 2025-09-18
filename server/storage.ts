@@ -480,6 +480,7 @@ class DbStorage implements IStorage {
       title: entryData.title,
       content: entryData.content,
       audioUrl: entryData.audioUrl,
+      audioPlayable: entryData.audioPlayable ?? false,
       mediaUrls: entryData.mediaUrls || [],
       tags: entryData.tags || [],
       privacy: entryData.privacy || "private",

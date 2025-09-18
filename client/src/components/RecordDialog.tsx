@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -28,6 +28,7 @@ interface RecordDialogProps {
 
 export default function RecordDialog({ open, onOpenChange, editEntryId, onSaveSuccess }: RecordDialogProps) {
   const isEditMode = !!editEntryId
+  const hasInitializedRef = useRef(false)
   
   const [title, setTitle] = useState('')
   const [content, setContent] = useState('')
@@ -79,7 +80,7 @@ export default function RecordDialog({ open, onOpenChange, editEntryId, onSaveSu
   // Reset form when dialog closes
   useEffect(() => {
     if (!open) {
-      // Only reset when dialog actually closes, not when creating new entries
+      // Reset everything when dialog closes
       setTitle('')
       setContent('')
       setTags([])
@@ -92,13 +93,14 @@ export default function RecordDialog({ open, onOpenChange, editEntryId, onSaveSu
       setAudioPlayable(false)
       setIsSaving(false)
       setSelectedUsers([])
+      hasInitializedRef.current = false
     }
   }, [open])
 
-  // Reset form when switching from edit mode to create mode
+  // Initialize form for new entries (only once per dialog opening)
   useEffect(() => {
-    if (open && !isEditMode && !editEntry) {
-      // Reset form for new entries only when dialog opens for creation
+    if (open && !isEditMode && !hasInitializedRef.current) {
+      // Reset form for new entries only once when dialog opens
       setTitle('')
       setContent('')
       setTags([])
@@ -111,8 +113,9 @@ export default function RecordDialog({ open, onOpenChange, editEntryId, onSaveSu
       setAudioPlayable(false)
       setIsSaving(false)
       setSelectedUsers([])
+      hasInitializedRef.current = true
     }
-  }, [open, isEditMode, editEntry])
+  }, [open, isEditMode])
   
   // Function to load existing sharing information
   const loadSharingInfo = async (entryId: string) => {
