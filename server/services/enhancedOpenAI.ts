@@ -128,7 +128,8 @@ export async function enhancedAnalyzeTextContent(
       labels: [], // Will be populated by media analysis
       people: [], // Will be populated by media analysis
       searchableText: fullText,
-      embedding
+      embedding,
+      embeddingString: formatVectorForPostgres(embedding) // Add the formatted string for PostgreSQL storage
     };
 
     console.log('✅ Enhanced text analysis completed:', {
@@ -162,7 +163,8 @@ export async function enhancedAnalyzeTextContent(
       labels: [],
       people: [],
       searchableText: fullText,
-      embedding
+      embedding,
+      embeddingString: embedding.length > 0 ? formatVectorForPostgres(embedding) : ""
     };
   }
 }
