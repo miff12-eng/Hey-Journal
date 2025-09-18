@@ -86,7 +86,14 @@ export async function enhancedAnalyzeTextContent(
     let fullText = content;
     if (title) fullText = `Title: ${title}\n\n${fullText}`;
     if (audioTranscription) fullText = `${fullText}\n\nAudio Content: ${audioTranscription}`;
-    if (tags && tags.length > 0) fullText = `${fullText}\n\nTags: ${tags.join(', ')}`;
+    
+    console.log('🏷️ Debug tags received:', tags, 'type:', typeof tags, 'length:', tags?.length);
+    if (tags && tags.length > 0) {
+      fullText = `${fullText}\n\nTags: ${tags.join(', ')}`;
+      console.log('✅ Tags added to fullText:', tags.join(', '));
+    } else {
+      console.log('❌ No tags to add - tags:', tags);
+    }
     
     console.log('🧠 Enhanced text analysis starting for content length:', fullText.length);
     

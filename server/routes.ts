@@ -1435,7 +1435,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             entry.content ?? '', 
             entry.title ?? undefined, 
             entry.mediaUrls ?? [],
-            entry.audioUrl ?? undefined
+            entry.audioUrl ?? undefined,
+            entry.tags ?? []
           );
 
           // Update the entry with AI insights
