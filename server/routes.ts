@@ -420,7 +420,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         contentEmbedding: aiInsights.embeddingString || undefined,
         embeddingVersion: 'v1' as string,
         lastEmbeddingUpdate: new Date()
-      } : entryData;
+      } : {
+        ...entryData,
+        searchableText: undefined,
+        contentEmbedding: undefined,
+        embeddingVersion: undefined,
+        lastEmbeddingUpdate: undefined
+      };
       
       const entry = await storage.createJournalEntry(createData, req.userId);
       
@@ -520,8 +526,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: 'Not authorized to update this entry' });
       }
       
-      // Update the entry first
-      const updatedEntry = await storage.updateJournalEntry(id, updates);
+      // Update the entry first - ensure null values become undefined
+      const cleanUpdates = {
+        ...updates,
+        searchableText: updates.searchableText === null ? undefined : updates.searchableText,
+        contentEmbedding: updates.contentEmbedding === null ? undefined : updates.contentEmbedding,
+        embeddingVersion: updates.embeddingVersion === null ? undefined : updates.embeddingVersion,
+        lastEmbeddingUpdate: updates.lastEmbeddingUpdate === null ? undefined : updates.lastEmbeddingUpdate
+      };
+      const updatedEntry = await storage.updateJournalEntry(id, cleanUpdates);
       
       // Analyze updated content with AI if content or media changed
       if (updates.content !== undefined || updates.mediaUrls !== undefined) {
@@ -2049,6 +2062,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: 'Failed to search users' });
     }
   });
+
+  // Import and mount enhanced search routes here, after authentication middleware
+  const enhancedSearchRoutes = await import('./routes/enhancedSearch');
+  app.use('/api', enhancedSearchRoutes.default);
 
   // API 404 guard - prevents HTML fallback for unknown API routes
   app.all('/api/*', (req, res) => {
