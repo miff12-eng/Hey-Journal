@@ -377,6 +377,14 @@ export async function enhancedAnalyzeEntry(
       mediaSearchText
     ].filter(text => text.trim().length > 0).join(' ');
     
+    console.log('🔤 Enhanced searchable text preview:', {
+      originalLength: (textAnalysis.searchableText || content).length,
+      mediaLabelsLength: mediaSearchText.length,
+      enhancedLength: enhancedSearchableText.length,
+      mediaLabels: mediaAnalysis.labels?.slice(0, 5) || [],
+      enhancedPreview: enhancedSearchableText.substring(0, 200) + '...'
+    });
+    
     // Generate embedding for the complete searchable text (including media labels)
     const combinedEmbedding = await generateTextEmbedding(enhancedSearchableText);
     
