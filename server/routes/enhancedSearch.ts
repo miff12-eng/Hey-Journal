@@ -10,7 +10,7 @@ import EmbeddingProcessor from '../services/embeddingProcessor';
 const router = Router();
 
 // Enhanced search endpoint with vector similarity
-router.post('/api/search/enhanced', async (req, res) => {
+router.post('/search/enhanced', async (req, res) => {
   try {
     const searchSchema = z.object({
       query: z.string().min(1, 'Search query is required'),
@@ -77,7 +77,7 @@ router.post('/api/search/enhanced', async (req, res) => {
 });
 
 // Conversational AI search endpoint
-router.post('/api/search/conversation', async (req, res) => {
+router.post('/search/conversation', async (req, res) => {
   try {
     const conversationSchema = z.object({
       query: z.string().min(1, 'Question is required'),
@@ -112,7 +112,7 @@ router.post('/api/search/conversation', async (req, res) => {
 });
 
 // Embedding processing endpoints
-router.post('/api/embeddings/process', async (req, res) => {
+router.post('/embeddings/process', async (req, res) => {
   try {
     const userId = req.userId!;
     const processor = EmbeddingProcessor.getInstance();
@@ -135,7 +135,7 @@ router.post('/api/embeddings/process', async (req, res) => {
 });
 
 // Queue entry for embedding processing
-router.post('/api/embeddings/queue/:entryId', async (req, res) => {
+router.post('/embeddings/queue/:entryId', async (req, res) => {
   try {
     const { entryId } = req.params;
     const processor = EmbeddingProcessor.getInstance();
@@ -151,7 +151,7 @@ router.post('/api/embeddings/queue/:entryId', async (req, res) => {
 });
 
 // Get embedding processing status
-router.get('/api/embeddings/status', async (req, res) => {
+router.get('/embeddings/status', async (req, res) => {
   try {
     const userId = req.userId!;
     
@@ -190,7 +190,7 @@ router.get('/api/embeddings/status', async (req, res) => {
 });
 
 // Process all historical entries for a user
-router.post('/api/embeddings/process-all', async (req, res) => {
+router.post('/embeddings/process-all', async (req, res) => {
   try {
     const userId = req.userId!;
     
