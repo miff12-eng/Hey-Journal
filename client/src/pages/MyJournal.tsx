@@ -15,6 +15,7 @@ import { useQuery } from '@tanstack/react-query'
 import { queryClient } from '@/lib/queryClient'
 import { useLocation } from 'wouter'
 import { useToast } from '@/hooks/use-toast'
+import RecordDialog from '@/components/RecordDialog'
 
 type PrivacyFilter = 'all' | 'private' | 'shared' | 'public'
 
@@ -29,6 +30,8 @@ export default function MyJournal() {
   const [isDeleting, setIsDeleting] = useState(false)
   const [selectedUsersForSharing, setSelectedUsersForSharing] = useState<{id: string, email: string, username?: string, firstName?: string, lastName?: string, profileImageUrl?: string}[]>([])
   const [isLoadingSharing, setIsLoadingSharing] = useState(false)
+  const [recordDialogOpen, setRecordDialogOpen] = useState(false)
+  const [editingEntryId, setEditingEntryId] = useState<string | null>(null)
   const { toast } = useToast()
   
   // Fetch real user data
@@ -99,7 +102,18 @@ export default function MyJournal() {
   })
 
   const handleEdit = (entryId: string) => {
-    setLocation(`/record?edit=${entryId}`)
+    setEditingEntryId(entryId)
+    setRecordDialogOpen(true)
+  }
+  
+  const handleCreateNew = () => {
+    setEditingEntryId(null)
+    setRecordDialogOpen(true)
+  }
+  
+  const handleRecordDialogSuccess = () => {
+    // Refresh entries after successful save
+    refetch()
   }
 
   const handleShare = async (entryId: string) => {
@@ -400,6 +414,20 @@ export default function MyJournal() {
       <main className="flex-1">
         <ScrollArea className="h-full">
           <div className="p-4 space-y-4 pb-20"> {/* Extra bottom padding for navigation */}
+            {/* Create Entry CTA - only show when there are entries */}
+            {!isLoading && !error && displayEntries.length > 0 && (
+              <div className="mb-6">
+                <Button 
+                  size="default"
+                  className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-medium"
+                  onClick={handleCreateNew}
+                  data-testid="button-create-entry"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create New Entry
+                </Button>
+              </div>
+            )}
             {/* Loading state */}
             {isLoading && (
               <div className="text-center py-12">
@@ -448,7 +476,7 @@ export default function MyJournal() {
                 </p>
                 <Button 
                   size="lg" 
-                  onClick={() => setLocation('/record')}
+                  onClick={handleCreateNew}
                   data-testid="button-create-first-entry"
                 >
                   Create Your First Entry
@@ -604,6 +632,14 @@ export default function MyJournal() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      
+      {/* Record Dialog */}
+      <RecordDialog
+        open={recordDialogOpen}
+        onOpenChange={setRecordDialogOpen}
+        editEntryId={editingEntryId}
+        onSaveSuccess={handleRecordDialogSuccess}
+      />
     </div>
   )
 }
