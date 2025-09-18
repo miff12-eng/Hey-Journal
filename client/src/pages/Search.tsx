@@ -15,24 +15,20 @@ import { apiRequest } from '@/lib/queryClient'
 type SearchMode = 'semantic'
 type FilterType = 'all' | 'tags' | 'date' | 'people' | 'sentiment'
 
-interface SearchMatch {
-  field: string
+// Enhanced search result from the backend API
+interface EnhancedSearchResult {
+  entryId: string
+  similarity: number
   snippet: string
-  score: number
-}
-
-interface SearchResult {
-  entry: JournalEntryWithUser
-  matches: SearchMatch[]
-  confidence: number
+  title?: string
   matchReason: string
 }
 
-interface SearchResponse {
+interface EnhancedSearchResponse {
   query: string
-  mode: SearchMode
+  mode: string // 'hybrid' | 'keyword' | 'vector'
+  results: EnhancedSearchResult[]
   totalResults: number
-  results: SearchResult[]
   executionTime: number
 }
 
@@ -40,23 +36,23 @@ export default function Search() {
   const [searchQuery, setSearchQuery] = useState('')
   const [searchMode, setSearchMode] = useState<SearchMode>('semantic')
   const [activeFilter, setActiveFilter] = useState<FilterType>('all')
-  const [searchResults, setSearchResults] = useState<SearchResult[]>([])
+  const [searchResults, setSearchResults] = useState<EnhancedSearchResult[]>([])
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [selectedSentiment, setSelectedSentiment] = useState<'positive' | 'neutral' | 'negative' | ''>('')
   const [dateRange, setDateRange] = useState<{from?: string, to?: string}>({})
   
-  // Search mutation
+  // Enhanced search mutation using AI semantic search
   const searchMutation = useMutation({
     mutationFn: async (params: { query: string; mode: SearchMode; filters?: any }) => {
-      console.log('🔍 Performing search:', params);
-      const response = await apiRequest('POST', '/api/search', {
+      console.log('🚀 Performing enhanced AI search:', params);
+      const response = await apiRequest('POST', '/api/search/enhanced', {
         query: params.query,
-        mode: params.mode,
+        mode: params.mode === 'semantic' ? 'hybrid' : 'keyword', // Map semantic to hybrid for better results
         limit: 20,
         filters: params.filters || {}
       });
-      const data = await response.json() as SearchResponse;
-      console.log('📊 Search results:', data);
+      const data = await response.json() as EnhancedSearchResponse;
+      console.log('🎯 Enhanced search results:', data);
       return data;
     },
     onSuccess: (data) => {
@@ -239,39 +235,46 @@ export default function Search() {
               ) : searchMutation.data && searchMutation.data.results && searchMutation.data.results.length > 0 ? (
                 <div className="space-y-4">
                   {searchMutation.data.results.map((result) => (
-                    <div key={result.entry.id} className="space-y-2">
-                      {/* Match reason and confidence */}
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Card key={result.entryId} className="p-4 hover-elevate cursor-pointer" 
+                          onClick={() => console.log('Navigate to entry:', result.entryId)}
+                          data-testid={`search-result-${result.entryId}`}>
+                      {/* Match reason and similarity score */}
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground mb-3">
                         <Badge variant="outline" className="px-1.5 py-0.5 text-xs">
-                          {(result.confidence * 100).toFixed(0)}% match
+                          <Brain className="w-3 h-3 mr-1" />
+                          {(result.similarity * 100).toFixed(0)}% match
                         </Badge>
-                        <span>{result.matchReason}</span>
+                        <span className="italic">{result.matchReason}</span>
                       </div>
                       
-                      <JournalEntryCard
-                        entry={result.entry}
-                        onEdit={(id) => console.log('Edit:', id)}
-                        onShare={(id) => console.log('Share:', id)}
-                        onDelete={(id) => console.log('Delete:', id)}
-                        onPlayAudio={(url) => console.log('Play:', url)}
-                      />
-                      
-                      {/* Show match highlights */}
-                      {result.matches.length > 0 && (
-                        <div className="ml-4 space-y-1">
-                          {result.matches.map((match, idx) => (
-                            <div key={idx} className="text-xs">
-                              <Badge variant="secondary" className="px-1 py-0.5 text-xs mr-1">
-                                {match.field}
-                              </Badge>
-                              <span className="text-muted-foreground italic">
-                                "{match.snippet.substring(0, 100)}{match.snippet.length > 100 ? '...' : ''}"
-                              </span>
-                            </div>
-                          ))}
-                        </div>
+                      {/* Entry title */}
+                      {result.title && (
+                        <h3 className="font-medium text-foreground mb-2 line-clamp-2">
+                          {result.title}
+                        </h3>
                       )}
-                    </div>
+                      
+                      {/* Entry snippet */}
+                      <p className="text-sm text-muted-foreground line-clamp-3 mb-3">
+                        {result.snippet}
+                      </p>
+                      
+                      {/* View full entry link */}
+                      <div className="flex items-center justify-between">
+                        <Button variant="outline" size="sm" 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  console.log('View full entry:', result.entryId);
+                                }}
+                                data-testid={`button-view-entry-${result.entryId}`}>
+                          View Full Entry
+                        </Button>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <Sparkles className="w-3 h-3" />
+                          AI Enhanced Search
+                        </div>
+                      </div>
+                    </Card>
                   ))}
                 </div>
               ) : searchMutation.error ? (
