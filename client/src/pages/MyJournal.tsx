@@ -432,6 +432,7 @@ export default function MyJournal() {
                 onEdit={handleEdit}
                 onShare={handleShare}
                 onDelete={handleDelete}
+                showUserInfo={false}
               />
             ))}
             
