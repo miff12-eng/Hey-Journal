@@ -61,20 +61,8 @@ export default function Home() {
     refetchInterval: 60000, // Refresh every minute
   })
 
-  // Transform API entries to include user data for display
-  const displayEntries: JournalEntryWithUser[] = entries.map(entry => ({
-    ...entry,
-    user: user || {
-      id: 'loading',
-      firstName: 'Loading...',
-      lastName: '',
-      email: '',
-      profileImageUrl: '',
-      createdAt: new Date(),
-      updatedAt: new Date()
-    } // Use real user data or loading placeholder
-    // Note: Keep audioUrl from server response, don't override it
-  }))
+  // Use entries directly from API - they already contain proper author user data
+  const displayEntries: JournalEntryWithUser[] = entries
 
   // Filter entries based on search query only (feed/shared filtering is handled by API)
   const filteredEntries = displayEntries.filter(entry => {
