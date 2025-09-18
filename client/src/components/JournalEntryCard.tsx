@@ -18,6 +18,7 @@ interface JournalEntryCardProps {
   onShare?: (entryId: string) => void
   onDelete?: (entryId: string) => void
   className?: string
+  showUserInfo?: boolean // If false, hides user profile info for My Journal page
 }
 
 export default function JournalEntryCard({
@@ -25,7 +26,8 @@ export default function JournalEntryCard({
   onEdit,
   onShare,
   onDelete,
-  className
+  className,
+  showUserInfo = true
 }: JournalEntryCardProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const [isLiked, setIsLiked] = useState(false)
@@ -69,71 +71,133 @@ export default function JournalEntryCard({
   return (
     <Card className={cn('hover-elevate transition-all duration-200', className)} data-testid={`card-journal-entry-${entry.id}`}>
       <CardHeader className="pb-3">
-        <div className="flex items-start justify-between">
-          <div className="flex items-center gap-3">
-            <Avatar className="h-10 w-10">
-              <AvatarImage 
-                src={entry.user.profileImageUrl || ''} 
-                alt={`${entry.user.firstName || 'User'} ${entry.user.lastName || ''}`}
-              />
-              <AvatarFallback>
-                {(entry.user.firstName?.[0] || entry.user.email?.[0] || 'U').toUpperCase()}
-              </AvatarFallback>
-            </Avatar>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
-                <p className="text-sm font-medium text-foreground truncate">
-                  {entry.user.firstName || entry.user.email} {entry.user.lastName}
-                </p>
-                <Badge variant="secondary" className={cn('h-5 px-1.5 gap-1', privacyColor)}>
-                  {privacyIcon}
-                  <span className="text-xs capitalize">{entry.privacy}</span>
-                </Badge>
+        {showUserInfo ? (
+          // Feed page layout - with user info
+          <>
+            <div className="flex items-start justify-between">
+              <div className="flex items-center gap-3">
+                <Avatar className="h-10 w-10">
+                  <AvatarImage 
+                    src={entry.user.profileImageUrl || ''} 
+                    alt={`${entry.user.firstName || 'User'} ${entry.user.lastName || ''}`}
+                  />
+                  <AvatarFallback>
+                    {(entry.user.firstName?.[0] || entry.user.email?.[0] || 'U').toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium text-foreground truncate">
+                      {entry.user.firstName || entry.user.email} {entry.user.lastName}
+                    </p>
+                    <Badge variant="secondary" className={cn('h-5 px-1.5 gap-1', privacyColor)}>
+                      {privacyIcon}
+                      <span className="text-xs capitalize">{entry.privacy}</span>
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {formatDate(entry.createdAt!)}
+                  </p>
+                </div>
               </div>
+              
+              {(onEdit || onShare || onDelete) && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-8 w-8" data-testid={`button-entry-menu-${entry.id}`}>
+                      <MoreHorizontal className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    {onEdit && (
+                      <DropdownMenuItem onClick={() => onEdit(entry.id)} data-testid={`menu-edit-${entry.id}`}>
+                        <Edit2 className="h-4 w-4 mr-2" />
+                        Edit
+                      </DropdownMenuItem>
+                    )}
+                    {onShare && (
+                      <DropdownMenuItem onClick={() => onShare(entry.id)} data-testid={`menu-share-${entry.id}`}>
+                        <Share className="h-4 w-4 mr-2" />
+                        Share
+                      </DropdownMenuItem>
+                    )}
+                    {onDelete && (
+                      <DropdownMenuItem 
+                        onClick={() => onDelete(entry.id)} 
+                        className="text-destructive focus:text-destructive"
+                        data-testid={`menu-delete-${entry.id}`}
+                      >
+                        Delete
+                      </DropdownMenuItem>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+            </div>
+            
+            {entry.title && (
+              <h3 className="text-lg font-semibold text-foreground mt-2" data-testid={`text-entry-title-${entry.id}`}>
+                {entry.title}
+              </h3>
+            )}
+          </>
+        ) : (
+          // My Journal page layout - headline style without user info
+          <>
+            <div className="flex items-start justify-between">
+              {entry.title ? (
+                <h2 className="text-xl font-bold text-foreground leading-tight" data-testid={`text-entry-title-${entry.id}`}>
+                  {entry.title}
+                </h2>
+              ) : (
+                <div></div>
+              )}
+              
+              {(onEdit || onShare || onDelete) && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-8 w-8" data-testid={`button-entry-menu-${entry.id}`}>
+                      <MoreHorizontal className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    {onEdit && (
+                      <DropdownMenuItem onClick={() => onEdit(entry.id)} data-testid={`menu-edit-${entry.id}`}>
+                        <Edit2 className="h-4 w-4 mr-2" />
+                        Edit
+                      </DropdownMenuItem>
+                    )}
+                    {onShare && (
+                      <DropdownMenuItem onClick={() => onShare(entry.id)} data-testid={`menu-share-${entry.id}`}>
+                        <Share className="h-4 w-4 mr-2" />
+                        Share
+                      </DropdownMenuItem>
+                    )}
+                    {onDelete && (
+                      <DropdownMenuItem 
+                        onClick={() => onDelete(entry.id)} 
+                        className="text-destructive focus:text-destructive"
+                        data-testid={`menu-delete-${entry.id}`}
+                      >
+                        Delete
+                      </DropdownMenuItem>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+            </div>
+            
+            {/* Date and privacy pill below headline */}
+            <div className="flex items-center gap-3 mt-2">
               <p className="text-xs text-muted-foreground">
                 {formatDate(entry.createdAt!)}
               </p>
+              <Badge variant="secondary" className={cn('h-4 px-2 gap-1', privacyColor)}>
+                {privacyIcon}
+                <span className="text-xs capitalize">{entry.privacy}</span>
+              </Badge>
             </div>
-          </div>
-          
-          {(onEdit || onShare || onDelete) && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-8 w-8" data-testid={`button-entry-menu-${entry.id}`}>
-                  <MoreHorizontal className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                {onEdit && (
-                  <DropdownMenuItem onClick={() => onEdit(entry.id)} data-testid={`menu-edit-${entry.id}`}>
-                    <Edit2 className="h-4 w-4 mr-2" />
-                    Edit
-                  </DropdownMenuItem>
-                )}
-                {onShare && (
-                  <DropdownMenuItem onClick={() => onShare(entry.id)} data-testid={`menu-share-${entry.id}`}>
-                    <Share className="h-4 w-4 mr-2" />
-                    Share
-                  </DropdownMenuItem>
-                )}
-                {onDelete && (
-                  <DropdownMenuItem 
-                    onClick={() => onDelete(entry.id)} 
-                    className="text-destructive focus:text-destructive"
-                    data-testid={`menu-delete-${entry.id}`}
-                  >
-                    Delete
-                  </DropdownMenuItem>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
-        </div>
-        
-        {entry.title && (
-          <h3 className="text-lg font-semibold text-foreground mt-2" data-testid={`text-entry-title-${entry.id}`}>
-            {entry.title}
-          </h3>
+          </>
         )}
       </CardHeader>
 
