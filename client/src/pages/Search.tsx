@@ -280,8 +280,6 @@ export default function Search() {
     }
   };
 
-  const recentSearches = ['morning routine', 'family time', 'travel memories', 'work reflections']
-  const suggestedTags = ['meditation', 'gratitude', 'family', 'travel', 'work', 'goals', 'reflection']
 
   const filters = [
     { key: 'all' as const, label: 'All', icon: SearchIcon },
@@ -336,51 +334,6 @@ export default function Search() {
 
       <ScrollArea className="flex-1">
         <div className="p-4 space-y-6 pb-20">
-          {/* Recent searches */}
-          {!searchQuery && (
-            <div className="space-y-4">
-              <div>
-                <h3 className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
-                  <Clock className="h-4 w-4" />
-                  Recent Searches
-                </h3>
-                <div className="flex flex-wrap gap-2">
-                  {recentSearches.map((search) => (
-                    <Badge 
-                      key={search}
-                      variant="outline" 
-                      className="cursor-pointer hover-elevate"
-                      onClick={() => setSearchQuery(search)}
-                      data-testid={`recent-search-${search.replace(/\\s+/g, '-')}`}
-                    >
-                      {search}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-              
-              <div>
-                <h3 className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
-                  <Hash className="h-4 w-4" />
-                  Popular Tags
-                </h3>
-                <div className="flex flex-wrap gap-2">
-                  {suggestedTags.map((tag) => (
-                    <Badge 
-                      key={tag}
-                      variant="secondary" 
-                      className="cursor-pointer hover-elevate"
-                      onClick={() => setSearchQuery(`#${tag}`)}
-                      data-testid={`suggested-tag-${tag}`}
-                    >
-                      #{tag}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-          
           {/* Search results */}
           {searchQuery && hasSearched && (
             <div className="space-y-4">

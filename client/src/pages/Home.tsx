@@ -3,10 +3,11 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Input } from '@/components/ui/input'
+import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
-import { Search, Plus, Bell, Filter, TrendingUp, Copy, Share2, ExternalLink, Trash2, Users, Globe, UserCheck } from 'lucide-react'
+import { Search, Plus, Bell, Filter, TrendingUp, Copy, Share2, ExternalLink, Trash2, Users, Globe, UserCheck, Clock, Hash } from 'lucide-react'
 import JournalEntryCard from '@/components/JournalEntryCard'
 import ThemeToggle from '@/components/ThemeToggle'
 import UserSelector from '@/components/UserSelector'
@@ -336,6 +337,10 @@ export default function Home() {
     console.log('Play audio:', audioUrl)
   }
 
+  // Recent searches and suggested tags for Feed search
+  const recentSearches = ['morning routine', 'family time', 'travel memories', 'work reflections']
+  const suggestedTags = ['meditation', 'gratitude', 'family', 'travel', 'work', 'goals', 'reflection']
+
   return (
     <div className="flex flex-col h-screen bg-background">
       {/* Header */}
@@ -379,6 +384,51 @@ export default function Home() {
             data-testid="input-search-entries"
           />
         </div>
+
+        {/* Recent searches and suggested tags - shown when not searching */}
+        {!searchQuery && (
+          <div className="mt-4 space-y-4">
+            <div>
+              <h3 className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
+                <Clock className="h-4 w-4" />
+                Recent Searches
+              </h3>
+              <div className="flex flex-wrap gap-2">
+                {recentSearches.map((search) => (
+                  <Badge 
+                    key={search}
+                    variant="outline" 
+                    className="cursor-pointer hover-elevate"
+                    onClick={() => setSearchQuery(search)}
+                    data-testid={`recent-search-${search.replace(/\\s+/g, '-')}`}
+                  >
+                    {search}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+            
+            <div>
+              <h3 className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
+                <Hash className="h-4 w-4" />
+                Popular Tags
+              </h3>
+              <div className="flex flex-wrap gap-2">
+                {suggestedTags.map((tag) => (
+                  <Badge 
+                    key={tag}
+                    variant="secondary" 
+                    className="cursor-pointer hover-elevate"
+                    onClick={() => setSearchQuery(`#${tag}`)}
+                    data-testid={`suggested-tag-${tag}`}
+                  >
+                    #{tag}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </header>
 
 
