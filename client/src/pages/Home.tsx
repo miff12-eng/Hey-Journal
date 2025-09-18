@@ -299,67 +299,37 @@ export default function Home() {
         </div>
       </header>
 
-      {/* Quick stats */}
-      <div className="px-4 py-3 border-b border-border">
-        <div className="grid grid-cols-3 gap-4">
-          <Card className="p-3">
-            <div className="flex items-center gap-2">
-              <TrendingUp className="h-4 w-4 text-primary" />
-              <div>
-                <p className="text-lg font-semibold text-foreground">{stats?.entriesThisWeek ?? 0}</p>
-                <p className="text-xs text-muted-foreground">This week</p>
-              </div>
-            </div>
-          </Card>
-          <Card className="p-3">
-            <div className="flex items-center gap-2">
-              <div className="h-2 w-2 bg-accent rounded-full" />
-              <div>
-                <p className="text-lg font-semibold text-foreground">{stats?.daysSinceLastEntry ?? 0}</p>
-                <p className="text-xs text-muted-foreground">Days since last entry</p>
-              </div>
-            </div>
-          </Card>
-          <Card className="p-3">
-            <div className="flex items-center gap-2">
-              <div className="h-2 w-2 bg-primary rounded-full" />
-              <div>
-                <p className="text-lg font-semibold text-foreground">{stats?.dayStreak ?? 0}</p>
-                <p className="text-xs text-muted-foreground">Day streak</p>
-              </div>
-            </div>
-          </Card>
-        </div>
-      </div>
 
-      {/* Feed toggle tabs */}
-      <div className="px-4 py-2 border-b border-border">
-        <div className="flex items-center gap-2">
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            onClick={() => setActiveFilter('feed')}
-            className={activeFilter === 'feed' ? 'bg-primary/10 text-primary' : ''} 
-            data-testid="filter-feed"
-          >
-            <Globe className="h-4 w-4 mr-1" />
-            Feed
-          </Button>
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            onClick={() => setActiveFilter('shared')}
-            className={activeFilter === 'shared' ? 'bg-primary/10 text-primary' : ''} 
-            data-testid="filter-shared"
-          >
-            <UserCheck className="h-4 w-4 mr-1" />
-            Shared with Me
-          </Button>
-          <div className="ml-auto text-xs text-muted-foreground">
+      {/* Feed toggle tabs - Enhanced and more prominent */}
+      <div className="px-4 py-4 border-b border-border bg-background/50">
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center justify-center gap-1 bg-muted p-1 rounded-lg w-fit mx-auto">
+            <Button 
+              variant={activeFilter === 'feed' ? 'default' : 'ghost'} 
+              size="sm" 
+              onClick={() => setActiveFilter('feed')}
+              className="gap-2 px-4 py-2" 
+              data-testid="filter-feed"
+            >
+              <Globe className="h-4 w-4" />
+              Feed
+            </Button>
+            <Button 
+              variant={activeFilter === 'shared' ? 'default' : 'ghost'} 
+              size="sm" 
+              onClick={() => setActiveFilter('shared')}
+              className="gap-2 px-4 py-2" 
+              data-testid="filter-shared"
+            >
+              <UserCheck className="h-4 w-4" />
+              Shared with Me
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground text-center">
             {activeFilter === 'feed' 
               ? 'Public entries and entries shared with you' 
               : 'Entries specifically shared with you'}
-          </div>
+          </p>
         </div>
       </div>
 
