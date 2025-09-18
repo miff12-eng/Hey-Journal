@@ -159,6 +159,7 @@ export async function performConversationalSearch(
     });
 
     const contextText = contextEntries.map(entry => 
+      `Entry ID: ${entry.id}\n` +
       `Entry: "${entry.title}" (${entry.date}, Relevance: ${(entry.similarity * 100).toFixed(1)}%)\n` +
       `Content: ${entry.content}\n` +
       `Tags: ${entry.tags.join(', ')}\n` +

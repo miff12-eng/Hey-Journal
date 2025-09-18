@@ -13,13 +13,15 @@ import { apiRequest } from '@/lib/queryClient'
 import { Link } from 'wouter'
 
 // Function to parse AI answer and convert entry references to links
-function parseAnswerWithLinks(answer: string): React.ReactNode[] {
-  const parts = answer.split(/(\[entry:[a-fA-F0-9-]+\])/g)
+function parseAnswerWithLinks(answer: string, relevantEntries?: EnhancedSearchResult[]): React.ReactNode[] {
+  // Split on both UUID format and title format patterns
+  const parts = answer.split(/(\[entry:[a-fA-F0-9-]+\]|\[entry:\s*["']?[^[\]]+["']?\s*\])/g)
   
   return parts.map((part, index) => {
-    const entryMatch = part.match(/\[entry:([a-fA-F0-9-]+)\]/)
-    if (entryMatch) {
-      const entryId = entryMatch[1]
+    // First try UUID format (existing behavior)
+    const uuidMatch = part.match(/\[entry:([a-fA-F0-9-]+)\]/)
+    if (uuidMatch) {
+      const entryId = uuidMatch[1]
       return (
         <Link key={index} href={`/e/${entryId}`}>
           <span className="text-blue-600 dark:text-blue-400 underline hover:text-blue-800 dark:hover:text-blue-300 cursor-pointer">
@@ -28,6 +30,28 @@ function parseAnswerWithLinks(answer: string): React.ReactNode[] {
         </Link>
       )
     }
+
+    // Try title format as fallback
+    const titleMatch = part.match(/\[entry:\s*["']?([^[\]"']+)["']?\s*\]/)
+    if (titleMatch && relevantEntries) {
+      const title = titleMatch[1].trim()
+      // Find matching entry by title
+      const matchingEntry = relevantEntries.find(entry => 
+        entry.title === title || 
+        (entry.snippet && entry.snippet.includes(`Title: ${title}`))
+      )
+      
+      if (matchingEntry) {
+        return (
+          <Link key={index} href={`/e/${matchingEntry.entryId}`}>
+            <span className="text-blue-600 dark:text-blue-400 underline hover:text-blue-800 dark:hover:text-blue-300 cursor-pointer">
+              this entry
+            </span>
+          </Link>
+        )
+      }
+    }
+    
     return <span key={index}>{part}</span>
   })
 }
@@ -38,10 +62,11 @@ interface AnswerCardProps {
   confidence: number
   executionTime: number
   totalResults: number
+  relevantEntries?: EnhancedSearchResult[]
 }
 
-function AnswerCard({ answer, confidence, executionTime, totalResults }: AnswerCardProps) {
-  const parsedAnswer = parseAnswerWithLinks(answer)
+function AnswerCard({ answer, confidence, executionTime, totalResults, relevantEntries }: AnswerCardProps) {
+  const parsedAnswer = parseAnswerWithLinks(answer, relevantEntries)
   
   return (
     <Card className="p-6 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/20 dark:to-purple-950/20 border-blue-200 dark:border-blue-800 mb-6" data-testid="answer-card">
@@ -426,6 +451,7 @@ export default function Search() {
                     confidence={conversationalResult.confidence}
                     executionTime={conversationalResult.executionTime}
                     totalResults={conversationalResult.totalResults}
+                    relevantEntries={conversationalResult.relevantEntries}
                   />
                   
                   {/* Supporting entries/citations */}
