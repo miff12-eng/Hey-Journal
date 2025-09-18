@@ -366,6 +366,20 @@ export async function enhancedAnalyzeEntry(
     ]);
 
     // Step 3: Combine all insights
+    // Create enhanced searchable text that includes labels and people for vector search
+    const mediaSearchText = [
+      ...(mediaAnalysis.labels || []),
+      ...(mediaAnalysis.people || [])
+    ].join(' ');
+    
+    const enhancedSearchableText = [
+      textAnalysis.searchableText || content,
+      mediaSearchText
+    ].filter(text => text.trim().length > 0).join(' ');
+    
+    // Generate embedding for the complete searchable text (including media labels)
+    const combinedEmbedding = await generateTextEmbedding(enhancedSearchableText);
+    
     const combinedInsights: AiInsights & { 
       searchableText: string; 
       embedding: number[];
@@ -380,9 +394,9 @@ export async function enhancedAnalyzeEntry(
       labels: mediaAnalysis.labels || [],
       people: mediaAnalysis.people || [],
       sentiment: textAnalysis.sentiment || "neutral",
-      searchableText: textAnalysis.searchableText || content,
-      embedding: textAnalysis.embedding || [],
-      embeddingString: formatVectorForPostgres(textAnalysis.embedding || [])
+      searchableText: enhancedSearchableText,
+      embedding: combinedEmbedding,
+      embeddingString: formatVectorForPostgres(combinedEmbedding)
     };
 
     console.log('🎯 Enhanced multimodal analysis completed:', {
