@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
-import { Search, Plus, Bell, Filter, TrendingUp, Copy, Share2, ExternalLink, Trash2, Users } from 'lucide-react'
+import { Search, Plus, Bell, Filter, TrendingUp, Copy, Share2, ExternalLink, Trash2, Users, RefreshCw } from 'lucide-react'
 import JournalEntryCard from '@/components/JournalEntryCard'
 import ThemeToggle from '@/components/ThemeToggle'
 import UserSelector from '@/components/UserSelector'
@@ -51,6 +51,7 @@ export default function MyJournal() {
   const [isLoadingSharing, setIsLoadingSharing] = useState(false)
   const [recordDialogOpen, setRecordDialogOpen] = useState(false)
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null)
+  const [isReprocessing, setIsReprocessing] = useState(false)
   const { toast } = useToast()
   
   // Enhanced search mutation for MyJournal search
@@ -76,6 +77,33 @@ export default function MyJournal() {
       console.error('MyJournal search error:', error);
       setSearchResults([]);
       setIsSearching(false);
+    }
+  });
+
+  // Re-process photos mutation
+  const reprocessPhotosMutation = useMutation({
+    mutationFn: async () => {
+      setIsReprocessing(true);
+      const response = await apiRequest('POST', '/api/journal/analyze-missing', {});
+      return await response.json();
+    },
+    onSuccess: (data) => {
+      setIsReprocessing(false);
+      toast({
+        title: "Photos Re-processed!",
+        description: `Successfully analyzed ${data.analyzed} entries with photos. Search should now work with image content!`,
+      });
+      // Refresh entries to show updated AI insights
+      refetch();
+    },
+    onError: (error) => {
+      setIsReprocessing(false);
+      console.error('Photo reprocessing error:', error);
+      toast({
+        title: "Re-processing Failed",
+        description: "Failed to re-process photos. Please try again.",
+        variant: "destructive",
+      });
     }
   });
 
@@ -364,6 +392,16 @@ export default function MyJournal() {
           </div>
           
           <div className="flex items-center gap-2">
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              onClick={() => reprocessPhotosMutation.mutate()}
+              disabled={isReprocessing}
+              data-testid="button-reprocess-photos"
+              title="Re-process photo analysis for search"
+            >
+              <RefreshCw className={`h-4 w-4 ${isReprocessing ? 'animate-spin' : ''}`} />
+            </Button>
             <Button variant="ghost" size="icon" data-testid="button-notifications">
               <Bell className="h-4 w-4" />
             </Button>
