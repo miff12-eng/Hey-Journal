@@ -202,6 +202,107 @@ export class EmbeddingProcessor {
   }
 
   /**
+   * Process all historical entries for a user with detailed reporting
+   */
+  async processAllHistoricalEntries(userId: string): Promise<{
+    totalEntries: number;
+    processedEntries: number;
+    skippedEntries: number;
+    errorEntries: number;
+    executionTime: number;
+  }> {
+    const startTime = Date.now();
+    
+    try {
+      console.log('🔄 Processing all historical entries for user:', userId);
+
+      const { db } = await import('../db');
+      const { journalEntries } = await import('../../shared/schema');
+      const { eq, isNull, or } = await import('drizzle-orm');
+
+      // Get all entries for this user using storage interface
+      const { storage } = await import('../storage');
+      const allEntries = await storage.getJournalEntriesByUserId(userId, 1000); // Get up to 1000 entries
+      
+      const entriesNeedingEmbeddings = allEntries.map(entry => ({
+        id: entry.id,
+        title: entry.title,
+        content: entry.content,
+        audioUrl: entry.audioUrl,
+        mediaUrls: entry.mediaUrls
+      }));
+
+      console.log('📊 Found', entriesNeedingEmbeddings.length, 'total entries for user');
+
+      let processedEntries = 0;
+      let skippedEntries = 0;
+      let errorEntries = 0;
+
+      // Process each entry individually for better error handling and reporting
+      for (const entry of entriesNeedingEmbeddings) {
+        try {
+          // Check if entry already has embeddings
+          const existingEntry = await db
+            .select({
+              contentEmbedding: journalEntries.contentEmbedding,
+              lastEmbeddingUpdate: journalEntries.lastEmbeddingUpdate
+            })
+            .from(journalEntries)
+            .where(eq(journalEntries.id, entry.id))
+            .limit(1);
+
+          if (existingEntry[0]?.contentEmbedding && existingEntry[0]?.lastEmbeddingUpdate) {
+            console.log('⏭️ Skipping entry with existing embeddings:', entry.id);
+            skippedEntries++;
+            continue;
+          }
+
+          console.log('🔄 Processing entry:', entry.id, '-', entry.title);
+          await this.processEntry(entry.id);
+          processedEntries++;
+          console.log('✅ Successfully processed entry:', entry.id);
+
+        } catch (error) {
+          console.error('❌ Failed to process entry:', entry.id, error);
+          errorEntries++;
+        }
+
+        // Rate limiting to avoid overwhelming the OpenAI API
+        await new Promise(resolve => setTimeout(resolve, 250));
+      }
+
+      const executionTime = Date.now() - startTime;
+
+      console.log('🏁 Historical entry processing completed:', {
+        totalEntries: entriesNeedingEmbeddings.length,
+        processedEntries,
+        skippedEntries,
+        errorEntries,
+        executionTimeMs: executionTime
+      });
+
+      return {
+        totalEntries: entriesNeedingEmbeddings.length,
+        processedEntries,
+        skippedEntries,
+        errorEntries,
+        executionTime
+      };
+
+    } catch (error) {
+      console.error('❌ Error in processAllHistoricalEntries:', error);
+      const executionTime = Date.now() - startTime;
+      return {
+        totalEntries: 0,
+        processedEntries: 0,
+        skippedEntries: 0,
+        errorEntries: 1,
+        executionTime
+      };
+    }
+  }
+
+  /**
    * Re-process all embeddings (useful when upgrading embedding model)
    */
   async reprocessAllEmbeddings(userId?: string): Promise<void> {

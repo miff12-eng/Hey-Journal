@@ -155,45 +155,64 @@ router.get('/api/embeddings/status', async (req, res) => {
   try {
     const userId = req.userId!;
     
-    // Get stats about embeddings for this user
-    const { db } = await import('../db');
-    const { journalEntries } = await import('../../shared/schema');
-    const { eq, and, isNotNull, isNull, or } = await import('drizzle-orm');
-
-    const { count } = await import('drizzle-orm');
+    // Get stats about embeddings for this user using storage interface
+    const { storage } = await import('../storage');
     
-    const [totalEntries, withEmbeddings, needsProcessing] = await Promise.all([
-      db.select({ count: count() }).from(journalEntries).where(eq(journalEntries.userId, userId)),
-      db.select({ count: count() }).from(journalEntries).where(
-        and(
-          eq(journalEntries.userId, userId),
-          isNotNull(journalEntries.contentEmbedding),
-          isNotNull(journalEntries.lastEmbeddingUpdate)
-        )
-      ),
-      db.select({ count: count() }).from(journalEntries).where(
-        and(
-          eq(journalEntries.userId, userId),
-          or(
-            isNull(journalEntries.contentEmbedding),
-            isNull(journalEntries.lastEmbeddingUpdate)
-          )
-        )
-      )
-    ]);
+    // Get all entries for this user
+    const allEntries = await storage.getJournalEntriesByUserId(userId, 1000); // Get up to 1000 entries
+    
+    // Count entries with embeddings
+    const withEmbeddings = allEntries.filter(entry => 
+      entry.contentEmbedding && entry.lastEmbeddingUpdate
+    ).length;
+    
+    const needsProcessing = allEntries.length - withEmbeddings;
+
+    console.log('📊 Embedding status for user:', userId, {
+      totalEntries: allEntries.length,
+      withEmbeddings,
+      needsProcessing
+    });
 
     res.json({
-      totalEntries: totalEntries[0].count,
-      withEmbeddings: withEmbeddings[0].count,
-      needsProcessing: needsProcessing[0].count,
-      embeddingCoverage: totalEntries[0].count > 0 
-        ? (withEmbeddings[0].count / totalEntries[0].count * 100).toFixed(1) + '%'
+      totalEntries: allEntries.length,
+      withEmbeddings: withEmbeddings,
+      needsProcessing: needsProcessing,
+      embeddingCoverage: allEntries.length > 0 
+        ? (withEmbeddings / allEntries.length * 100).toFixed(1) + '%'
         : '0%'
     });
 
   } catch (error) {
     console.error('Embedding status error:', error);
     res.status(500).json({ error: 'Failed to get embedding status' });
+  }
+});
+
+// Process all historical entries for a user
+router.post('/api/embeddings/process-all', async (req, res) => {
+  try {
+    const userId = req.userId!;
+    
+    console.log('🔄 Starting processing of all historical entries for user:', userId);
+    
+    const processor = EmbeddingProcessor.getInstance();
+    const result = await processor.processAllHistoricalEntries(userId);
+    
+    console.log('✅ Historical entry processing completed:', result);
+    
+    res.json({ 
+      message: 'All historical entries processed successfully', 
+      userId,
+      totalEntries: result.totalEntries,
+      processedEntries: result.processedEntries,
+      skippedEntries: result.skippedEntries,
+      errorEntries: result.errorEntries,
+      executionTime: result.executionTime
+    });
+  } catch (error) {
+    console.error('❌ Error processing all historical entries:', error);
+    res.status(500).json({ error: 'Failed to process historical entries' });
   }
 });
 

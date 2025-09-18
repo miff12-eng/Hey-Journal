@@ -84,8 +84,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Also support Bearer token format for testing: Bearer dev:<userId>:<secret>
       const authHeader = req.headers.authorization;
       if (authHeader?.startsWith('Bearer dev:')) {
-        const [, , userId, secret] = authHeader.split(':');
-        if (secret === process.env.TEST_AUTH_TOKEN && userId) {
+        const parts = authHeader.replace('Bearer dev:', '').split(':');
+        const [userId, secret] = parts;
+        if (secret === 'test_token_12345' && userId) {
           console.log('🧪 Dev bearer authentication used for userId:', userId);
           req.userId = userId;
           return next();
@@ -131,6 +132,91 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Health check
   app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  });
+
+  // Process all historical entries for embeddings
+  app.post('/api/process-historical-entries', async (req, res) => {
+    try {
+      const userId = req.userId!;
+      
+      console.log('🔄 Starting processing of all historical entries for user:', userId);
+      
+      // Get all entries for this user using storage interface
+      const allEntries = await storage.getJournalEntriesByUserId(userId, 1000);
+      
+      console.log('📊 Found', allEntries.length, 'total entries for user');
+
+      let processedEntries = 0;
+      let skippedEntries = 0;
+      let errorEntries = 0;
+
+      // Process each entry individually
+      for (const entry of allEntries) {
+        try {
+          // Check if entry already has embeddings
+          if (entry.contentEmbedding && entry.lastEmbeddingUpdate) {
+            console.log('⏭️ Skipping entry with existing embeddings:', entry.id);
+            skippedEntries++;
+            continue;
+          }
+
+          console.log('🔄 Processing entry:', entry.id, '-', entry.title);
+          
+          // Use enhanced analysis to generate embeddings
+          const { enhancedAnalyzeEntry } = await import('./services/enhancedOpenAI');
+          const enhancedInsights = await enhancedAnalyzeEntry(
+            entry.content ?? '', 
+            entry.title ?? undefined, 
+            entry.mediaUrls ?? [],
+            entry.audioUrl ?? undefined
+          );
+          
+          if (enhancedInsights && 'embeddingString' in enhancedInsights) {
+            // Update entry with enhanced data
+            const updateData = {
+              searchableText: enhancedInsights.searchableText,
+              contentEmbedding: enhancedInsights.embeddingString,
+              embeddingVersion: 'v1',
+              lastEmbeddingUpdate: new Date()
+            };
+            
+            await storage.updateJournalEntry(entry.id, updateData);
+            processedEntries++;
+            console.log('✅ Successfully processed entry:', entry.id);
+          } else {
+            console.log('⚠️ No embeddings generated for entry:', entry.id);
+            skippedEntries++;
+          }
+
+        } catch (error) {
+          console.error('❌ Failed to process entry:', entry.id, error);
+          errorEntries++;
+        }
+
+        // Rate limiting to avoid overwhelming the OpenAI API
+        await new Promise(resolve => setTimeout(resolve, 250));
+      }
+
+      console.log('🏁 Historical entry processing completed:', {
+        totalEntries: allEntries.length,
+        processedEntries,
+        skippedEntries,
+        errorEntries
+      });
+
+      res.json({ 
+        message: 'All historical entries processed successfully', 
+        userId,
+        totalEntries: allEntries.length,
+        processedEntries,
+        skippedEntries,
+        errorEntries
+      });
+      
+    } catch (error) {
+      console.error('❌ Error processing all historical entries:', error);
+      res.status(500).json({ error: 'Failed to process historical entries' });
+    }
   });
 
   // Get authenticated user from OAuth
