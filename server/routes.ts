@@ -401,13 +401,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (entryData.content || (entryData.mediaUrls && entryData.mediaUrls.length > 0)) {
         console.log('🤖 Analyzing journal entry with AI...');
         try {
+          // Get user information for enhanced search with author names
+          const user = await storage.getUser(req.userId);
+          const authorInfo = user ? {
+            firstName: user.firstName,
+            lastName: user.lastName,
+            username: user.username
+          } : null;
+          
           // Use enhanced analysis with vector embeddings
           console.log('🚀 Using enhanced AI analysis with vector embeddings');
           const enhancedInsights = await enhancedAnalyzeEntry(
             entryData.content ?? '', 
             entryData.title ?? undefined, 
             entryData.mediaUrls ?? [],
-            entryData.audioUrl ?? undefined
+            entryData.audioUrl ?? undefined,
+            entryData.tags ?? undefined,
+            authorInfo
           );
           
           aiInsights = enhancedInsights;
@@ -596,14 +606,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (updates.content !== undefined || updates.mediaUrls !== undefined) {
         console.log('🤖 Re-analyzing updated journal entry with AI...');
         try {
-          const aiInsights = await analyzeEntry(
+          // Get user information for enhanced search with author names
+          const user = await storage.getUser(req.userId);
+          const authorInfo = user ? {
+            firstName: user.firstName,
+            lastName: user.lastName,
+            username: user.username
+          } : null;
+          
+          const aiInsights = await enhancedAnalyzeEntry(
             updates.content ?? '', 
             updates.title ?? existingEntry.title ?? undefined, 
-            updates.mediaUrls ?? (existingEntry.mediaUrls || [])
+            updates.mediaUrls ?? (existingEntry.mediaUrls || []),
+            updates.audioUrl ?? existingEntry.audioUrl ?? undefined,
+            updates.tags ?? existingEntry.tags ?? undefined,
+            authorInfo
           );
           
           // Update AI insights separately
           await storage.updateAiInsights(id, aiInsights);
+          
+          // Update entry with enhanced embedding data if available
+          if (aiInsights && 'embeddingString' in aiInsights) {
+            await storage.updateJournalEntry(id, {
+              searchableText: aiInsights.searchableText || undefined,
+              contentEmbedding: aiInsights.embeddingString || undefined,
+              embeddingVersion: 'v1' as string,
+              lastEmbeddingUpdate: new Date()
+            });
+          }
           
           console.log('✨ AI Re-analysis completed:', { 
             summary: aiInsights.summary?.substring(0, 50) + '...',
