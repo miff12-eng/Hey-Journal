@@ -14,16 +14,16 @@ import { Link } from 'wouter'
 
 // Function to parse AI answer and convert entry references to links
 function parseAnswerWithLinks(answer: string, relevantEntries?: EnhancedSearchResult[]): React.ReactNode[] {
-  // Split on both UUID format and title format patterns
-  const parts = answer.split(/(\[entry:[a-fA-F0-9-]+\]|\[entry:\s*["']?[^[\]]+["']?\s*\])/g)
+  // Split on both UUID format and title format patterns (case-insensitive)
+  const parts = answer.split(/(\[entry:\s*["']?[^[\]]+["']?\s*\])/gi)
   
   return parts.map((part, index) => {
-    // First try UUID format (existing behavior)
-    const uuidMatch = part.match(/\[entry:([a-fA-F0-9-]+)\]/)
+    // First try UUID format (including quoted UUIDs, case-insensitive)
+    const uuidMatch = part.match(/\[entry:\s*["']?([a-fA-F0-9-]{8}-[a-fA-F0-9-]{4}-[a-fA-F0-9-]{4}-[a-fA-F0-9-]{4}-[a-fA-F0-9-]{12})["']?\s*\]/i)
     if (uuidMatch) {
       const entryId = uuidMatch[1]
       return (
-        <Link key={index} href={`/e/${entryId}`}>
+        <Link key={index} href={`/e/${entryId}`} data-testid={`link-entry-${entryId}`}>
           <span className="text-blue-600 dark:text-blue-400 underline hover:text-blue-800 dark:hover:text-blue-300 cursor-pointer">
             this entry
           </span>

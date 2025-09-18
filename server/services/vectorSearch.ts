@@ -14,10 +14,12 @@ function normalizeCitations(answer: string, contextEntries: Array<{id: string, t
   const citationPattern = /\[entry:\s*["']?([^[\]"']+?)["']?\s*\]/g;
   
   return answer.replace(citationPattern, (match, title) => {
-    // If it's already a UUID format, keep it as is
+    // If it's already a UUID format, standardize it (strip quotes)
     const uuidPattern = /^[0-9a-fA-F-]{8}-[0-9a-fA-F-]{4}-[0-9a-fA-F-]{4}-[0-9a-fA-F-]{4}-[0-9a-fA-F-]{12}$/;
-    if (uuidPattern.test(title)) {
-      return match; // Already in UUID format
+    const cleanedTitle = title.trim();
+    if (uuidPattern.test(cleanedTitle)) {
+      console.log(`🔗 Standardized UUID citation: "${title}" -> ${cleanedTitle}`);
+      return `[entry:${cleanedTitle}]`; // Strip quotes from UUID format
     }
     
     // Normalize title for comparison (trim whitespace, handle case sensitivity)
@@ -198,8 +200,7 @@ export async function performConversationalSearch(
     });
 
     const contextText = contextEntries.map(entry => 
-      `Entry ID: ${entry.id}\n` +
-      `Entry: "${entry.title}" (${entry.date}, Relevance: ${(entry.similarity * 100).toFixed(1)}%)\n` +
+      `Entry: "${entry.title}" (ID: ${entry.id}, ${entry.date}, Relevance: ${(entry.similarity * 100).toFixed(1)}%)\n` +
       `Content: ${entry.content}\n` +
       `Tags: ${entry.tags.join(', ')}\n` +
       (entry.aiInsights ? `Summary: ${entry.aiInsights.summary}\n` : '') +
@@ -214,13 +215,24 @@ export async function performConversationalSearch(
 
 Guidelines:
 - Only summarize and reference what is explicitly written in the journal entries
-- When referencing a specific entry, include its ID in this format: [entry:ENTRY_ID]
-- Reference specific entries and dates when relevant
-- Identify patterns and themes that appear across the entries
 - Stay factual and descriptive - report what the user wrote, not what they should do
 - If the question cannot be answered from the journal entries, simply state what information is or isn't present
 - Never give advice, suggestions, or recommendations about what the user should do
 - Never reference anything outside of the provided journal entries
+
+**CITATION FORMAT - CRITICAL:**
+When referencing a specific entry, you MUST use the exact ID format: [entry:ENTRY_ID]
+
+✅ CORRECT Examples:
+- "In your entry from September 18th [entry:2d130f98-bd8e-4e1a-a814-e9c352b8517d], you wrote about..."
+- "As mentioned in [entry:6d558107-d49d-4015-ab82-3fdd360dd63a], you felt..."
+
+❌ WRONG Examples (DO NOT USE):
+- [entry:"Maggie's first complete sentence"] ← Never use titles
+- [entry:Title] ← Never use titles
+- [entry: "Any text here"] ← Never use quoted text
+
+**BEFORE FINALIZING:** Check that every [entry:...] contains only the UUID from the provided entries, not titles or descriptions.
 
 Relevant journal entries:
 ${contextText}`
