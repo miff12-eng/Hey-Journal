@@ -32,11 +32,23 @@ interface EnhancedSearchResponse {
   executionTime: number
 }
 
+// Conversational search response with AI-generated answer
+interface ConversationalSearchResponse {
+  query: string
+  mode: string // 'conversational'
+  answer: string
+  relevantEntries: EnhancedSearchResult[]
+  confidence: number
+  totalResults: number
+  executionTime: number
+}
+
 export default function Search() {
   const [searchQuery, setSearchQuery] = useState('')
   const [searchMode, setSearchMode] = useState<SearchMode>('semantic')
   const [activeFilter, setActiveFilter] = useState<FilterType>('all')
   const [searchResults, setSearchResults] = useState<EnhancedSearchResult[]>([])
+  const [conversationalResult, setConversationalResult] = useState<ConversationalSearchResponse | null>(null)
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [selectedSentiment, setSelectedSentiment] = useState<'positive' | 'neutral' | 'negative' | ''>('')
   const [dateRange, setDateRange] = useState<{from?: string, to?: string}>({})
@@ -44,25 +56,28 @@ export default function Search() {
   const [expandedEntry, setExpandedEntry] = useState<JournalEntryWithUser | null>(null)
   const [isLoadingEntry, setIsLoadingEntry] = useState(false)
   
-  // Enhanced search mutation using AI semantic search
+  // Enhanced search mutation using AI conversational search
   const searchMutation = useMutation({
     mutationFn: async (params: { query: string; mode: SearchMode; filters?: any }) => {
-      console.log('🚀 Performing enhanced AI search:', params);
+      console.log('🚀 Performing enhanced AI conversational search:', params);
       const response = await apiRequest('POST', '/api/search/enhanced', {
         query: params.query,
-        mode: params.mode === 'semantic' ? 'hybrid' : 'keyword', // Map semantic to hybrid for better results
+        mode: 'conversational', // Use conversational mode for AI answers + citations
         limit: 20,
-        filters: params.filters || {}
+        filters: params.filters || {},
+        previousMessages: [] // Empty for single-shot Q&A
       });
-      const data = await response.json() as EnhancedSearchResponse;
-      console.log('🎯 Enhanced search results:', data);
+      const data = await response.json() as ConversationalSearchResponse;
+      console.log('🎯 Conversational search results:', data);
       return data;
     },
     onSuccess: (data) => {
-      setSearchResults(data.results);
+      setConversationalResult(data);
+      setSearchResults(data.relevantEntries); // Set citations as search results for consistency
     },
     onError: (error) => {
       console.error('Search error:', error);
+      setConversationalResult(null);
       setSearchResults([]);
     }
   });
