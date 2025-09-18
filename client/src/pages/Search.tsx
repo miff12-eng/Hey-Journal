@@ -40,6 +40,9 @@ export default function Search() {
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [selectedSentiment, setSelectedSentiment] = useState<'positive' | 'neutral' | 'negative' | ''>('')
   const [dateRange, setDateRange] = useState<{from?: string, to?: string}>({})
+  const [expandedEntryId, setExpandedEntryId] = useState<string | null>(null)
+  const [expandedEntry, setExpandedEntry] = useState<JournalEntryWithUser | null>(null)
+  const [isLoadingEntry, setIsLoadingEntry] = useState(false)
   
   // Enhanced search mutation using AI semantic search
   const searchMutation = useMutation({
@@ -102,6 +105,39 @@ export default function Search() {
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       performSearch();
+    }
+  };
+
+  // Fetch full journal entry
+  const fetchFullEntry = async (entryId: string) => {
+    setIsLoadingEntry(true);
+    try {
+      const response = await fetch(`/api/journal/entries/${entryId}`, {
+        credentials: 'include'
+      });
+      if (response.ok) {
+        const entry = await response.json() as JournalEntryWithUser;
+        setExpandedEntry(entry);
+        setExpandedEntryId(entryId);
+      } else {
+        console.error('Failed to fetch entry:', response.statusText);
+      }
+    } catch (error) {
+      console.error('Error fetching entry:', error);
+    } finally {
+      setIsLoadingEntry(false);
+    }
+  };
+
+  // Handle view full entry
+  const handleViewFullEntry = (entryId: string) => {
+    if (expandedEntryId === entryId) {
+      // If already expanded, collapse it
+      setExpandedEntryId(null);
+      setExpandedEntry(null);
+    } else {
+      // Expand the entry
+      fetchFullEntry(entryId);
     }
   };
 
@@ -269,16 +305,44 @@ export default function Search() {
                         <Button variant="outline" size="sm" 
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  console.log('View full entry:', result.entryId);
+                                  handleViewFullEntry(result.entryId);
                                 }}
+                                disabled={isLoadingEntry}
                                 data-testid={`button-view-entry-${result.entryId}`}>
-                          View Full Entry
+                          {isLoadingEntry && expandedEntryId === result.entryId ? 
+                            'Loading...' : 
+                            expandedEntryId === result.entryId ? 'Close Entry' : 'View Full Entry'
+                          }
                         </Button>
                         <div className="flex items-center gap-2 text-xs text-muted-foreground">
                           <Sparkles className="w-3 h-3" />
                           AI Enhanced Search
                         </div>
                       </div>
+
+                      {/* Expanded entry view */}
+                      {expandedEntryId === result.entryId && expandedEntry && (
+                        <div className="mt-4 border-t border-border pt-4">
+                          <div className="flex items-center justify-between mb-3">
+                            <h4 className="text-sm font-medium text-foreground">Full Entry</h4>
+                            <Button variant="ghost" size="sm" 
+                                    onClick={() => {
+                                      setExpandedEntryId(null);
+                                      setExpandedEntry(null);
+                                    }}
+                                    data-testid={`button-close-entry-${result.entryId}`}>
+                              Close
+                            </Button>
+                          </div>
+                          <JournalEntryCard 
+                            entry={expandedEntry}
+                            onEdit={() => {}}
+                            onShare={() => {}}
+                            onDelete={() => {}}
+                            className="border-0 shadow-none p-0"
+                          />
+                        </div>
+                      )}
                     </Card>
                   ))}
                 </div>
