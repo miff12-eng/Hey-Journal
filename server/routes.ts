@@ -30,6 +30,10 @@ const upload = multer({
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
 });
 
+// Global mutex and rate limiting for reprocessing
+let reprocessingInProgress = false;
+const reprocessingCooldown = new Map<string, number>();
+
 // Utility function to sync audio object ACL with audioPlayable setting
 async function syncAudioACL(userId: string, audioUrl: string | null, audioPlayable: boolean): Promise<void> {
   if (!audioUrl) return;
@@ -1473,11 +1477,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Reprocess ALL entries for ALL users (Development Database only) - No auth required for system operations
   app.post('/api/journal/reprocess-all-users', async (req, res) => {
     try {
-      // Extra security: require admin secret in production
+      // Prevent concurrent reprocessing runs
+      if (reprocessingInProgress) {
+        return res.status(429).json({ error: 'Reprocessing already in progress. Please wait.' });
+      }
+      
+      // Rate limiting: Check cooldown per user/IP
+      const userId = req.userId || req.ip || 'anonymous';
+      const now = Date.now();
+      const lastRun = reprocessingCooldown.get(userId) || 0;
+      const cooldownMs = 30 * 60 * 1000; // 30 minutes
+      
+      if (now - lastRun < cooldownMs) {
+        const remainingMs = cooldownMs - (now - lastRun);
+        const remainingMinutes = Math.ceil(remainingMs / 1000 / 60);
+        return res.status(429).json({ 
+          error: `Rate limit exceeded. Please wait ${remainingMinutes} minutes before retrying.` 
+        });
+      }
+      
+      // Set processing flag and update cooldown
+      reprocessingInProgress = true;
+      reprocessingCooldown.set(userId, now);
+      
+      // Critical security checks for production
       if (process.env.NODE_ENV === 'production') {
+        // Require explicit enable flag
+        if (process.env.ENABLE_REPROCESS_ALL !== 'true') {
+          return res.status(503).json({ error: 'Comprehensive reprocessing is disabled in production' });
+        }
+        
+        // Require admin authentication
         const adminSecret = req.headers['x-admin-secret'];
         if (adminSecret !== process.env.ADMIN_REPROCESS_SECRET) {
           return res.status(403).json({ error: 'Admin access required for production reprocessing' });
+        }
+        
+        // Verify user is in admin whitelist
+        const adminUserIds = (process.env.ADMIN_USER_IDS || '').split(',').filter(Boolean);
+        if (!req.userId || !adminUserIds.includes(req.userId)) {
+          return res.status(403).json({ error: 'Admin user access required' });
         }
       }
       
@@ -1612,6 +1651,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('❗ Error in comprehensive reprocessing:', error);
       return res.status(500).json({ error: 'Failed to reprocess entries for all users' });
+    } finally {
+      // Always release the processing mutex
+      reprocessingInProgress = false;
     }
   });
 
