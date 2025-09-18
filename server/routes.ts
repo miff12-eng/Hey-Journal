@@ -3,6 +3,8 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { generateAIResponse, transcribeAudio } from "./ai";
 import { analyzeEntry, semanticRank } from "./services/openai";
+import { enhancedAnalyzeEntry } from "./services/enhancedOpenAI";
+import EmbeddingProcessor from "./services/embeddingProcessor";
 import { insertJournalEntrySchema, insertAiChatSessionSchema, insertCommentSchema, updateUserProfileSchema } from "@shared/schema";
 import { z } from "zod";
 import multer from "multer";
@@ -264,12 +266,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (entryData.content || (entryData.mediaUrls && entryData.mediaUrls.length > 0)) {
         console.log('🤖 Analyzing journal entry with AI...');
         try {
-          // Analyze entry content (text + media)
-          aiInsights = await analyzeEntry(
+          // Use enhanced analysis with vector embeddings
+          console.log('🚀 Using enhanced AI analysis with vector embeddings');
+          const enhancedInsights = await enhancedAnalyzeEntry(
             entryData.content ?? '', 
             entryData.title ?? undefined, 
-            entryData.mediaUrls ?? []
+            entryData.mediaUrls ?? [],
+            entryData.audioUrl ?? undefined
           );
+          
+          aiInsights = enhancedInsights;
           
           // Store AI insights separately after entry creation
           // Note: aiInsights will be saved via updateAiInsights after createJournalEntry
@@ -285,11 +291,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      const entry = await storage.createJournalEntry(entryData, req.userId);
+      // Create entry with enhanced data if available
+      const createData = aiInsights && 'embeddingString' in aiInsights ? {
+        ...entryData,
+        searchableText: aiInsights.searchableText,
+        contentEmbedding: aiInsights.embeddingString,
+        embeddingVersion: 'v1',
+        lastEmbeddingUpdate: new Date()
+      } : entryData;
+      
+      const entry = await storage.createJournalEntry(createData, req.userId);
       
       // Update AI insights separately if analysis was successful
       if (aiInsights) {
         await storage.updateAiInsights(entry.id, aiInsights);
+        
+        // Queue for any additional processing if needed
+        const processor = EmbeddingProcessor.getInstance();
+        if (!('embeddingString' in aiInsights)) {
+          await processor.queueEntryForProcessing(entry.id);
+        }
       }
       
       // Sync audio object ACL with audioPlayable setting

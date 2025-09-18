@@ -62,7 +62,15 @@ export const journalEntries = pgTable(
       labels: string[];
       people: string[];
       sentiment?: 'positive' | 'neutral' | 'negative';
+      themes?: string[];
+      emotions?: string[];
     }>(),
+    // Vector embeddings for semantic search using OpenAI text-embedding-3-large (1536 dimensions)
+    contentEmbedding: text("content_embedding"), // Store as text for now, will be cast to vector
+    embeddingVersion: varchar("embedding_version").default("v1"), // Track embedding model version
+    lastEmbeddingUpdate: timestamp("last_embedding_update"),
+    // Consolidated text content for embedding (combines title, content, transcriptions, captions)
+    searchableText: text("searchable_text"),
     createdAt: timestamp("created_at").defaultNow(),
     updatedAt: timestamp("updated_at").defaultNow(),
   },
@@ -104,7 +112,7 @@ export const userConnections = pgTable(
     index("idx_user_connections_recipient").on(table.recipientId),
     index("idx_user_connections_status").on(table.status),
     // Bidirectional unique constraint to prevent duplicate connections in either direction
-    unique("unique_bidirectional_connection").on(sql`LEAST(${table.requesterId}, ${table.recipientId})`, sql`GREATEST(${table.requesterId}, ${table.recipientId})`),
+    unique("unique_bidirectional_connection").on(table.requesterId, table.recipientId),
     // Prevent self-connections
     // Note: This would need a CHECK constraint in actual PostgreSQL: CHECK (requester_id != recipient_id)
   ]
@@ -254,7 +262,7 @@ export type AiChatMessage = {
   relatedEntryIds?: string[];
 };
 
-// AI insights type for journal entries
+// AI insights type for journal entries (enhanced with multimodal capabilities)
 export type AiInsights = {
   summary: string;
   keywords: string[];
@@ -262,4 +270,7 @@ export type AiInsights = {
   labels: string[];
   people: string[];
   sentiment?: 'positive' | 'neutral' | 'negative';
+  // Enhanced fields for deeper analysis
+  themes?: string[];
+  emotions?: string[];
 };
