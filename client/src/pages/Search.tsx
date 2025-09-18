@@ -10,6 +10,27 @@ import ThemeToggle from '@/components/ThemeToggle'
 import { JournalEntryWithUser } from '@shared/schema'
 import { useMutation } from '@tanstack/react-query'
 import { apiRequest } from '@/lib/queryClient'
+import { Link } from 'wouter'
+
+// Function to parse AI answer and convert entry references to links
+function parseAnswerWithLinks(answer: string): React.ReactNode[] {
+  const parts = answer.split(/(\[entry:[a-fA-F0-9-]+\])/g)
+  
+  return parts.map((part, index) => {
+    const entryMatch = part.match(/\[entry:([a-fA-F0-9-]+)\]/)
+    if (entryMatch) {
+      const entryId = entryMatch[1]
+      return (
+        <Link key={index} href={`/e/${entryId}`}>
+          <span className="text-blue-600 dark:text-blue-400 underline hover:text-blue-800 dark:hover:text-blue-300 cursor-pointer">
+            this entry
+          </span>
+        </Link>
+      )
+    }
+    return <span key={index}>{part}</span>
+  })
+}
 
 // AnswerCard component for displaying AI-generated answers
 interface AnswerCardProps {
@@ -20,6 +41,8 @@ interface AnswerCardProps {
 }
 
 function AnswerCard({ answer, confidence, executionTime, totalResults }: AnswerCardProps) {
+  const parsedAnswer = parseAnswerWithLinks(answer)
+  
   return (
     <Card className="p-6 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/20 dark:to-purple-950/20 border-blue-200 dark:border-blue-800 mb-6" data-testid="answer-card">
       <div className="flex items-start gap-4">
@@ -35,9 +58,9 @@ function AnswerCard({ answer, confidence, executionTime, totalResults }: AnswerC
               {Math.round(confidence * 100)}% confident
             </Badge>
           </div>
-          <p className="text-blue-800 dark:text-blue-200 leading-relaxed" data-testid="answer-text">
-            {answer}
-          </p>
+          <div className="text-blue-800 dark:text-blue-200 leading-relaxed" data-testid="answer-text">
+            {parsedAnswer}
+          </div>
           <div className="flex items-center gap-4 text-xs text-blue-600 dark:text-blue-400">
             <span className="flex items-center gap-1">
               <Clock className="w-3 h-3" />
