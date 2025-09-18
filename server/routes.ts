@@ -492,18 +492,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/journal/entries/:id', async (req, res) => {
     try {
       const { id } = req.params;
-      const entry = await storage.getJournalEntry(id);
       
-      if (!entry) {
+      // Fetch entry with user data for JournalEntryCard compatibility
+      const entryWithUser = await storage.getJournalEntryWithUser(id);
+      
+      if (!entryWithUser) {
         return res.status(404).json({ error: 'Entry not found' });
       }
       
       // Verify entry belongs to the user
-      if (entry.userId !== req.userId) {
+      if (entryWithUser.userId !== req.userId) {
         return res.status(403).json({ error: 'Not authorized to access this entry' });
       }
       
-      res.json(entry);
+      res.json(entryWithUser);
     } catch (error) {
       console.error('Get Entry by ID Error:', error);
       res.status(500).json({ error: 'Failed to fetch journal entry' });

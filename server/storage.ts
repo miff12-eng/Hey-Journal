@@ -39,6 +39,7 @@ export interface IStorage {
   
   // Journal entry methods
   getJournalEntry(id: string): Promise<JournalEntry | undefined>;
+  getJournalEntryWithUser(id: string): Promise<JournalEntryWithUser | undefined>;
   getJournalEntriesByUserId(userId: string, limit?: number): Promise<JournalEntryWithUser[]>;
   getFeedJournalEntries(userId: string, limit?: number): Promise<JournalEntryWithUser[]>;
   getSharedJournalEntries(userId: string, limit?: number): Promise<JournalEntryWithUser[]>;
@@ -168,6 +169,82 @@ class DbStorage implements IStorage {
   async getJournalEntry(id: string): Promise<JournalEntry | undefined> {
     const result = await this.db.select().from(journalEntries).where(eq(journalEntries.id, id));
     return result[0];
+  }
+
+  async getJournalEntryWithUser(id: string): Promise<JournalEntryWithUser | undefined> {
+    const result = await this.db
+      .select({
+        // Journal entry fields
+        id: journalEntries.id,
+        userId: journalEntries.userId,
+        title: journalEntries.title,
+        content: journalEntries.content,
+        audioUrl: journalEntries.audioUrl,
+        audioPlayable: journalEntries.audioPlayable,
+        mediaUrls: journalEntries.mediaUrls,
+        tags: journalEntries.tags,
+        privacy: journalEntries.privacy,
+        sharedWith: journalEntries.sharedWith,
+        aiInsights: journalEntries.aiInsights,
+        createdAt: journalEntries.createdAt,
+        updatedAt: journalEntries.updatedAt,
+        // Add missing embedding-related fields
+        contentEmbedding: journalEntries.contentEmbedding,
+        embeddingVersion: journalEntries.embeddingVersion,
+        lastEmbeddingUpdate: journalEntries.lastEmbeddingUpdate,
+        searchableText: journalEntries.searchableText,
+        // User fields
+        userEmail: users.email,
+        userFirstName: users.firstName,
+        userLastName: users.lastName,
+        userUsername: users.username,
+        userBio: users.bio,
+        userProfileImageUrl: users.profileImageUrl,
+        userIsProfilePublic: users.isProfilePublic,
+        userCreatedAt: users.createdAt,
+        userUpdatedAt: users.updatedAt,
+      })
+      .from(journalEntries)
+      .leftJoin(users, eq(journalEntries.userId, users.id))
+      .where(eq(journalEntries.id, id));
+
+    if (result.length === 0) {
+      return undefined;
+    }
+
+    const row = result[0];
+    return {
+      id: row.id,
+      userId: row.userId,
+      title: row.title,
+      content: row.content,
+      audioUrl: row.audioUrl,
+      audioPlayable: row.audioPlayable,
+      mediaUrls: row.mediaUrls || [],
+      tags: row.tags || [],
+      privacy: row.privacy as "private" | "shared" | "public",
+      sharedWith: row.sharedWith || [],
+      aiInsights: row.aiInsights,
+      createdAt: row.createdAt!,
+      updatedAt: row.updatedAt!,
+      // Add missing embedding-related fields
+      contentEmbedding: row.contentEmbedding,
+      embeddingVersion: row.embeddingVersion,
+      lastEmbeddingUpdate: row.lastEmbeddingUpdate,
+      searchableText: row.searchableText,
+      user: {
+        id: row.userId,
+        email: row.userEmail!,
+        firstName: row.userFirstName!,
+        lastName: row.userLastName!,
+        username: row.userUsername,
+        bio: row.userBio,
+        profileImageUrl: row.userProfileImageUrl,
+        isProfilePublic: row.userIsProfilePublic,
+        createdAt: row.userCreatedAt!,
+        updatedAt: row.userUpdatedAt!,
+      }
+    };
   }
 
   async getJournalEntriesByUserId(userId: string, limit = 20): Promise<JournalEntryWithUser[]> {
