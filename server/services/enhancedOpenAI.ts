@@ -90,9 +90,9 @@ export async function enhancedAnalyzeTextContent(
     
     // Run analysis and embedding generation in parallel
     const [analysis, embedding] = await Promise.all([
-      // GPT-5 content analysis
+      // GPT-4o content analysis
       openai.chat.completions.create({
-        model: "gpt-5", // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
+        model: "gpt-4o", // Using gpt-4o for text analysis with OpenAI
         messages: [
           {
             role: "system",
@@ -211,7 +211,7 @@ export async function enhancedAnalyzeMediaContent(mediaUrls: string[]): Promise<
         console.log('🔍 Analyzing media URL:', normalizedUrl);
         
         const analysis = await openai.chat.completions.create({
-          model: "gpt-5", // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
+          model: "gpt-4o", // Using gpt-4o for vision analysis as it supports image processing
           messages: [
             {
               role: "system", 
@@ -258,7 +258,11 @@ export async function enhancedAnalyzeMediaContent(mediaUrls: string[]): Promise<
         }
         
       } catch (itemError) {
-        console.error('❌ Error analyzing individual media item:', itemError);
+        if (itemError?.error?.code === 'image_parse_error') {
+          console.warn('⚠️ OpenAI rejected image format/size:', mediaUrl, itemError.error.message);
+        } else {
+          console.error('❌ Error analyzing individual media item:', itemError);
+        }
         continue;
       }
     }
