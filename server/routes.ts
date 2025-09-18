@@ -993,6 +993,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Bulk fetch journal entries by IDs
+  app.post('/api/journal/entries/bulk', async (req, res) => {
+    try {
+      const { entryIds } = req.body;
+      
+      if (!Array.isArray(entryIds) || entryIds.length === 0) {
+        return res.status(400).json({ error: 'entryIds array is required' });
+      }
+      
+      if (entryIds.length > 50) {
+        return res.status(400).json({ error: 'Too many entries requested (max 50)' });
+      }
+      
+      // Fetch entries with user data, only returning entries the user can access
+      const entries = await storage.getBulkJournalEntriesWithUser(entryIds, req.userId);
+      res.json(entries);
+    } catch (error: any) {
+      console.error('Error fetching bulk entries:', error);
+      res.status(500).json({ error: 'Failed to fetch entries' });
+    }
+  });
+
   // Search journal entries endpoint  
   app.post(['/api/search', '/api/journal/search'], async (req, res) => {
     try {

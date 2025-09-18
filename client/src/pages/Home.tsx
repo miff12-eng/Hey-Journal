@@ -125,10 +125,39 @@ export default function Home() {
   // Use entries directly from API - they already contain proper author user data
   const displayEntries: JournalEntryWithUser[] = entries
 
-  // Enhanced search: If search query exists, show search results instead of all entries
+  // Bulk fetch search result entries with proper data
+  const bulkFetchMutation = useMutation({
+    mutationFn: async (entryIds: string[]) => {
+      if (entryIds.length === 0) return [];
+      const response = await apiRequest('POST', '/api/journal/entries/bulk', { entryIds });
+      return await response.json() as JournalEntryWithUser[];
+    }
+  });
+
+  // State to hold hydrated search entries
+  const [hydratedSearchEntries, setHydratedSearchEntries] = useState<JournalEntryWithUser[]>([]);
+
+  // When search results change, fetch full entry data
+  useEffect(() => {
+    if (searchResults.length > 0) {
+      const entryIds = searchResults.map(result => result.entryId);
+      bulkFetchMutation.mutate(entryIds, {
+        onSuccess: (fullEntries) => {
+          setHydratedSearchEntries(fullEntries);
+        },
+        onError: (error) => {
+          console.error('Failed to fetch search result entries:', error);
+          setHydratedSearchEntries([]);
+        }
+      });
+    } else {
+      setHydratedSearchEntries([]);
+    }
+  }, [searchResults]);
+
+  // Enhanced search: If search query exists, show hydrated search results instead of all entries
   const filteredEntries = searchQuery.trim() ? 
-    // When searching, map enhanced search results to entries for display
-    searchResults.map(result => entries.find(entry => entry.id === result.entryId)).filter(Boolean) as JournalEntryWithUser[] :
+    hydratedSearchEntries :
     // When not searching, show all entries (API already handles feed/shared filtering)
     displayEntries
 
