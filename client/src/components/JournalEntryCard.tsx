@@ -36,6 +36,7 @@ export default function JournalEntryCard({
   // Fetch comment count for the entry
   const { data: comments = [] } = useQuery<CommentWithPublicUser[]>({
     queryKey: ['/api/journal/entries', entry.id, 'comments'],
+    queryFn: () => fetch(`/api/journal/entries/${entry.id}/comments`, { credentials: 'include' }).then(res => res.json()),
   })
   
   const privacyIcon = {
