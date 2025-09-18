@@ -78,13 +78,15 @@ const VIDEO_FRAME_SAMPLING_CONFIG = {
 export async function enhancedAnalyzeTextContent(
   content: string, 
   title?: string | null,
-  audioTranscription?: string | null
+  audioTranscription?: string | null,
+  tags?: string[] | null
 ): Promise<Partial<AiInsights> & { searchableText: string; embedding: number[] }> {
   try {
     // Combine all text content for analysis
     let fullText = content;
     if (title) fullText = `Title: ${title}\n\n${fullText}`;
     if (audioTranscription) fullText = `${fullText}\n\nAudio Content: ${audioTranscription}`;
+    if (tags && tags.length > 0) fullText = `${fullText}\n\nTags: ${tags.join(', ')}`;
     
     console.log('🧠 Enhanced text analysis starting for content length:', fullText.length);
     
@@ -346,7 +348,8 @@ export async function enhancedAnalyzeEntry(
   content: string,
   title?: string | null,
   mediaUrls?: string[],
-  audioUrl?: string | null
+  audioUrl?: string | null,
+  tags?: string[] | null
 ): Promise<AiInsights & { 
   searchableText: string; 
   embedding: number[];
@@ -370,7 +373,7 @@ export async function enhancedAnalyzeEntry(
     
     // Step 2: Run text and media analysis in parallel
     const [textAnalysis, mediaAnalysis] = await Promise.all([
-      enhancedAnalyzeTextContent(content, title, audioTranscription),
+      enhancedAnalyzeTextContent(content, title, audioTranscription, tags),
       enhancedAnalyzeMediaContent(mediaUrls || [])
     ]);
 
