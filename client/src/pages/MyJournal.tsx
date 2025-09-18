@@ -1,47 +1,22 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
+import { Card } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Input } from '@/components/ui/input'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
-import { Search, Plus, Bell, Filter, TrendingUp, Copy, Share2, ExternalLink, Trash2, Users, RefreshCw } from 'lucide-react'
+import { Plus, Bell, TrendingUp, Copy, Share2, ExternalLink, Trash2, Users, RefreshCw } from 'lucide-react'
 import JournalEntryCard from '@/components/JournalEntryCard'
 import ThemeToggle from '@/components/ThemeToggle'
 import UserSelector from '@/components/UserSelector'
 import { JournalEntryWithUser } from '@shared/schema'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { queryClient, apiRequest } from '@/lib/queryClient'
-import { useLocation } from 'wouter'
 import { useToast } from '@/hooks/use-toast'
 import RecordDialog from '@/components/RecordDialog'
 
-type PrivacyFilter = 'all' | 'private' | 'shared' | 'public'
-
-// Enhanced search types for MyJournal search
-interface EnhancedSearchResult {
-  entryId: string
-  similarity: number
-  snippet: string
-  title?: string
-  matchReason: string
-}
-
-interface EnhancedSearchResponse {
-  query: string
-  mode: string
-  results: EnhancedSearchResult[]
-  totalResults: number
-  executionTime: number
-}
 
 export default function MyJournal() {
-  const [, setLocation] = useLocation()
-  const [searchQuery, setSearchQuery] = useState('')
-  const [searchResults, setSearchResults] = useState<EnhancedSearchResult[]>([])
-  const [isSearching, setIsSearching] = useState(false)
-  const [activeFilter, setActiveFilter] = useState<PrivacyFilter>('all')
   const [shareModalOpen, setShareModalOpen] = useState(false)
   const [sharingEntryId, setSharingEntryId] = useState<string | null>(null)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
@@ -54,31 +29,6 @@ export default function MyJournal() {
   const [isReprocessing, setIsReprocessing] = useState(false)
   const { toast } = useToast()
   
-  // Enhanced search mutation for MyJournal search
-  const searchMutation = useMutation({
-    mutationFn: async (params: { query: string; filter: PrivacyFilter }) => {
-      console.log('🚀 Performing enhanced MyJournal search:', params);
-      setIsSearching(true);
-      const response = await apiRequest('POST', '/api/search/enhanced', {
-        query: params.query,
-        mode: 'hybrid', // Use hybrid search for best results
-        limit: 20,
-        filters: { privacy: params.filter !== 'all' ? params.filter : undefined } // Pass privacy filter to API
-      });
-      const data = await response.json() as EnhancedSearchResponse;
-      console.log('🎯 Enhanced MyJournal search results:', data);
-      return data;
-    },
-    onSuccess: (data) => {
-      setSearchResults(data.results);
-      setIsSearching(false);
-    },
-    onError: (error) => {
-      console.error('MyJournal search error:', error);
-      setSearchResults([]);
-      setIsSearching(false);
-    }
-  });
 
   // Re-process photos mutation
   const reprocessPhotosMutation = useMutation({
@@ -107,21 +57,6 @@ export default function MyJournal() {
     }
   });
 
-  // Debounced search - trigger enhanced search when query changes
-  useEffect(() => {
-    if (searchQuery.trim()) {
-      const timer = setTimeout(() => {
-        searchMutation.mutate({ 
-          query: searchQuery, 
-          filter: activeFilter
-        });
-      }, 300); // Debounce search
-      return () => clearTimeout(timer);
-    } else {
-      setSearchResults([]);
-      setIsSearching(false);
-    }
-  }, [searchQuery, activeFilter]);
   
   // Fetch real user data
   const { data: user, isLoading: isLoadingUser } = useQuery<{
@@ -168,18 +103,8 @@ export default function MyJournal() {
     // Note: Keep audioUrl from server response, don't override it
   }))
 
-  // Enhanced search: If search query exists, show search results instead of filtered entries
-  const filteredEntries = searchQuery.trim() ? 
-    // When searching, map enhanced search results to entries and apply privacy filter
-    searchResults
-      .map(result => displayEntries.find(entry => entry.id === result.entryId))
-      .filter(Boolean)
-      .filter(entry => activeFilter === 'all' || entry.privacy === activeFilter) as JournalEntryWithUser[] :
-    // When not searching, apply privacy filter manually (API doesn't handle MyJournal privacy filtering)
-    displayEntries.filter(entry => {
-      if (activeFilter === 'all') return true;
-      return entry.privacy === activeFilter;
-    })
+  // Show all entries without filtering
+  const filteredEntries = displayEntries
 
   const handleEdit = (entryId: string) => {
     setEditingEntryId(entryId)
@@ -363,9 +288,6 @@ export default function MyJournal() {
     }
   }
 
-  const handlePlayAudio = (audioUrl: string) => {
-    console.log('Play audio:', audioUrl)
-  }
 
   return (
     <div className="flex flex-col h-screen bg-background">
@@ -408,18 +330,6 @@ export default function MyJournal() {
             <ThemeToggle />
           </div>
         </div>
-        
-        {/* Search bar */}
-        <div className="mt-3 relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search your journal entries..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10 pr-4"
-            data-testid="input-search-entries"
-          />
-        </div>
       </header>
 
       {/* Quick stats */}
@@ -429,7 +339,7 @@ export default function MyJournal() {
             <div className="flex items-center gap-2">
               <TrendingUp className="h-4 w-4 text-primary" />
               <div>
-                <p className="text-lg font-semibold text-foreground">{stats?.entriesThisWeek ?? 0}</p>
+                <p className="text-lg font-semibold text-foreground">{stats.entriesThisWeek ?? 0}</p>
                 <p className="text-xs text-muted-foreground">This week</p>
               </div>
             </div>
@@ -438,7 +348,7 @@ export default function MyJournal() {
             <div className="flex items-center gap-2">
               <div className="h-2 w-2 bg-accent rounded-full" />
               <div>
-                <p className="text-lg font-semibold text-foreground">{stats?.daysSinceLastEntry ?? 0}</p>
+                <p className="text-lg font-semibold text-foreground">{stats.daysSinceLastEntry ?? 0}</p>
                 <p className="text-xs text-muted-foreground">Days since last entry</p>
               </div>
             </div>
@@ -447,7 +357,7 @@ export default function MyJournal() {
             <div className="flex items-center gap-2">
               <div className="h-2 w-2 bg-primary rounded-full" />
               <div>
-                <p className="text-lg font-semibold text-foreground">{stats?.dayStreak ?? 0}</p>
+                <p className="text-lg font-semibold text-foreground">{stats.dayStreak ?? 0}</p>
                 <p className="text-xs text-muted-foreground">Day streak</p>
               </div>
             </div>
@@ -455,50 +365,6 @@ export default function MyJournal() {
         </div>
       </div>
 
-      {/* Filter tabs */}
-      <div className="px-4 py-2 border-b border-border">
-        <div className="flex items-center gap-2">
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            onClick={() => setActiveFilter('all')}
-            className={activeFilter === 'all' ? 'bg-primary/10 text-primary' : ''} 
-            data-testid="filter-all"
-          >
-            All
-          </Button>
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            onClick={() => setActiveFilter('private')}
-            className={activeFilter === 'private' ? 'bg-primary/10 text-primary' : ''} 
-            data-testid="filter-private"
-          >
-            Private
-          </Button>
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            onClick={() => setActiveFilter('shared')}
-            className={activeFilter === 'shared' ? 'bg-primary/10 text-primary' : ''} 
-            data-testid="filter-shared"
-          >
-            Shared
-          </Button>
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            onClick={() => setActiveFilter('public')}
-            className={activeFilter === 'public' ? 'bg-primary/10 text-primary' : ''} 
-            data-testid="filter-public"
-          >
-            Public
-          </Button>
-          <Button variant="ghost" size="icon" className="ml-auto" data-testid="button-filter-options">
-            <Filter className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
 
       {/* Journal feed */}
       <main className="flex-1">
