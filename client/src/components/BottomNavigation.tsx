@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'wouter'
 import { Button } from '@/components/ui/button'
-import { Home, Mic, Search, User, BookOpen } from 'lucide-react'
+import { Home, Search, User, BookOpen } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface NavItem {
@@ -13,7 +13,6 @@ interface NavItem {
 const navItems: NavItem[] = [
   { icon: BookOpen, label: 'My Journal', path: '/my-journal', testId: 'nav-my-journal' },
   { icon: Home, label: 'Feed', path: '/', testId: 'nav-feed' },
-  { icon: Mic, label: 'Record', path: '/record', testId: 'nav-record' },
   { icon: Search, label: 'Search', path: '/search', testId: 'nav-search' },
   { icon: User, label: 'Profile', path: '/profile', testId: 'nav-profile' }
 ]

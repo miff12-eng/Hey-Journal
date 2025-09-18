@@ -1,4 +1,4 @@
-import { Switch, Route } from "wouter"
+import { Switch, Route, Redirect } from "wouter"
 import { queryClient } from "./lib/queryClient"
 import { QueryClientProvider } from "@tanstack/react-query"
 import { Toaster } from "@/components/ui/toaster"
@@ -8,7 +8,6 @@ import NotFound from "@/pages/not-found"
 import Landing from "@/pages/Landing"
 import Home from "@/pages/Home"
 import MyJournal from "@/pages/MyJournal"
-import Record from "@/pages/Record"
 import Search from "@/pages/Search"
 import Profile from "@/pages/Profile"
 import PublicSearch from "@/pages/PublicSearch"
@@ -57,7 +56,7 @@ function Router() {
               <Switch>
                 <Route path="/" component={Home} />
                 <Route path="/my-journal" component={MyJournal} />
-                <Route path="/record" component={Record} />
+                <Route path="/record">{() => <Redirect to="/my-journal" />}</Route>
                 <Route path="/search" component={Search} />
                 <Route path="/profile" component={Profile} />
                 <Route component={NotFound} />
