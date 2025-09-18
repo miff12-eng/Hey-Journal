@@ -98,7 +98,8 @@ export class EmbeddingProcessor {
         entry.content,
         entry.title,
         entry.mediaUrls || [],
-        entry.audioUrl
+        entry.audioUrl,
+        entry.tags || []
       );
 
       // Update entry with new insights and embeddings
