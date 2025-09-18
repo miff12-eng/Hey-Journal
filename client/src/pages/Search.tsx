@@ -11,6 +11,49 @@ import { JournalEntryWithUser } from '@shared/schema'
 import { useMutation } from '@tanstack/react-query'
 import { apiRequest } from '@/lib/queryClient'
 
+// AnswerCard component for displaying AI-generated answers
+interface AnswerCardProps {
+  answer: string
+  confidence: number
+  executionTime: number
+  totalResults: number
+}
+
+function AnswerCard({ answer, confidence, executionTime, totalResults }: AnswerCardProps) {
+  return (
+    <Card className="p-6 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/20 dark:to-purple-950/20 border-blue-200 dark:border-blue-800 mb-6" data-testid="answer-card">
+      <div className="flex items-start gap-4">
+        <div className="flex-shrink-0">
+          <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center">
+            <Sparkles className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+          </div>
+        </div>
+        <div className="flex-1 space-y-3">
+          <div className="flex items-center gap-2">
+            <h3 className="font-medium text-blue-900 dark:text-blue-100">AI Answer</h3>
+            <Badge variant="outline" className="text-xs border-blue-300 text-blue-700 dark:border-blue-600 dark:text-blue-300">
+              {Math.round(confidence * 100)}% confident
+            </Badge>
+          </div>
+          <p className="text-blue-800 dark:text-blue-200 leading-relaxed" data-testid="answer-text">
+            {answer}
+          </p>
+          <div className="flex items-center gap-4 text-xs text-blue-600 dark:text-blue-400">
+            <span className="flex items-center gap-1">
+              <Clock className="w-3 h-3" />
+              {executionTime}ms
+            </span>
+            <span className="flex items-center gap-1">
+              <Hash className="w-3 h-3" />
+              {totalResults} source{totalResults !== 1 ? 's' : ''}
+            </span>
+          </div>
+        </div>
+      </div>
+    </Card>
+  )
+}
+
 // Search types
 type SearchMode = 'semantic'
 type FilterType = 'all' | 'tags' | 'date' | 'people' | 'sentiment'
@@ -288,9 +331,25 @@ export default function Search() {
                     </Card>
                   ))}
                 </div>
-              ) : searchMutation.data && searchMutation.data.results && searchMutation.data.results.length > 0 ? (
-                <div className="space-y-4">
-                  {searchMutation.data.results.map((result) => (
+              ) : conversationalResult ? (
+                <div className="space-y-6">
+                  {/* AI-generated answer */}
+                  <AnswerCard 
+                    answer={conversationalResult.answer}
+                    confidence={conversationalResult.confidence}
+                    executionTime={conversationalResult.executionTime}
+                    totalResults={conversationalResult.totalResults}
+                  />
+                  
+                  {/* Supporting entries/citations */}
+                  {conversationalResult.relevantEntries && conversationalResult.relevantEntries.length > 0 && (
+                    <div className="space-y-4">
+                      <h4 className="text-sm font-medium text-muted-foreground flex items-center gap-2" data-testid="citations-header">
+                        <Hash className="w-4 h-4" />
+                        Supporting Entries ({conversationalResult.relevantEntries.length})
+                      </h4>
+                      <div className="space-y-4">
+                        {conversationalResult.relevantEntries.map((result) => (
                     <Card key={result.entryId} className="p-4 hover-elevate cursor-pointer" 
                           onClick={() => console.log('Navigate to entry:', result.entryId)}
                           data-testid={`search-result-${result.entryId}`}>
@@ -359,7 +418,10 @@ export default function Search() {
                         </div>
                       )}
                     </Card>
-                  ))}
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               ) : searchMutation.error ? (
                 <Card className="p-8 text-center border-destructive/20">
