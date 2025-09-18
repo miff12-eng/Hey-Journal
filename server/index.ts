@@ -40,8 +40,8 @@ app.use((req, res, next) => {
 (async () => {
   const server = await registerRoutes(app);
   
-  // Add enhanced search routes AFTER authentication middleware
-  app.use(enhancedSearchRoutes);
+  // Add enhanced search routes to the /api chain
+  app.use('/api', enhancedSearchRoutes);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;

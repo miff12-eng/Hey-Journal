@@ -174,9 +174,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (enhancedInsights && 'embeddingString' in enhancedInsights) {
             // Update entry with enhanced data
             const updateData = {
-              searchableText: enhancedInsights.searchableText,
-              contentEmbedding: enhancedInsights.embeddingString,
-              embeddingVersion: 'v1',
+              searchableText: enhancedInsights.searchableText || undefined,
+              contentEmbedding: enhancedInsights.embeddingString || undefined,
+              embeddingVersion: 'v1' as string,
               lastEmbeddingUpdate: new Date()
             };
             
@@ -416,9 +416,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Create entry with enhanced data if available
       const createData = aiInsights && 'embeddingString' in aiInsights ? {
         ...entryData,
-        searchableText: aiInsights.searchableText,
-        contentEmbedding: aiInsights.embeddingString,
-        embeddingVersion: 'v1',
+        searchableText: aiInsights.searchableText || undefined,
+        contentEmbedding: aiInsights.embeddingString || undefined,
+        embeddingVersion: 'v1' as string,
         lastEmbeddingUpdate: new Date()
       } : entryData;
       
