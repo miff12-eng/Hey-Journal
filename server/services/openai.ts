@@ -47,7 +47,7 @@ export async function analyzeTextContent(content: string, title?: string | null)
     const fullText = title ? `Title: ${title}\n\nContent: ${content}` : content;
     
     const completion = await openai.chat.completions.create({
-      model: "gpt-5", // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
+      model: "gpt-4o", // Using GPT-4o for text analysis
       messages: [
         {
           role: "system",
@@ -58,7 +58,7 @@ export async function analyzeTextContent(content: string, title?: string | null)
           content: ANALYSIS_PROMPT + fullText
         }
       ],
-      // temperature: 0.3, // GPT-5 only supports default temperature of 1
+      temperature: 0.3,
       max_completion_tokens: 500,
     });
 
@@ -135,7 +135,7 @@ export async function analyzeMediaContent(mediaUrls: string[]): Promise<{ labels
     console.log('📸 Analyzing image URL:', mediaUrl);
     
     const completion = await openai.chat.completions.create({
-      model: "gpt-5", // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
+      model: "gpt-4o", // Using GPT-4o for vision analysis
       messages: [
         {
           role: "system", 
@@ -157,7 +157,7 @@ export async function analyzeMediaContent(mediaUrls: string[]): Promise<{ labels
           ]
         }
       ],
-      // temperature: 0.3, // GPT-5 only supports default temperature of 1
+      temperature: 0.3,
       max_completion_tokens: 300,
     });
 

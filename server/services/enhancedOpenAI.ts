@@ -73,7 +73,7 @@ const VIDEO_FRAME_SAMPLING_CONFIG = {
 };
 
 /**
- * Enhanced text content analysis using GPT-5 with deeper insights
+ * Enhanced text content analysis using GPT-4o with deeper insights
  */
 export async function enhancedAnalyzeTextContent(
   content: string, 
@@ -179,7 +179,7 @@ export async function enhancedAnalyzeTextContent(
 }
 
 /**
- * Enhanced media content analysis using GPT-5 vision with detailed insights
+ * Enhanced media content analysis using GPT-4o vision with detailed insights
  */
 export async function enhancedAnalyzeMediaContent(mediaUrls: string[]): Promise<{
   labels: string[];
