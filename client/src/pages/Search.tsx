@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { Separator } from '@/components/ui/separator'
 import { Search as SearchIcon, Filter, Calendar, Hash, User, Clock, Sparkles, Brain } from 'lucide-react'
 import JournalEntryCard from '@/components/JournalEntryCard'
 import ThemeToggle from '@/components/ThemeToggle'
@@ -104,7 +105,7 @@ function AnswerCard({ answer, confidence, executionTime, totalResults, relevantE
 
 // Search types
 type SearchMode = 'semantic'
-type FilterType = 'all' | 'tags' | 'date' | 'people' | 'sentiment'
+type FilterType = 'all' | 'tags' | 'date'
 
 // Enhanced search result from the backend API
 interface EnhancedSearchResult {
@@ -142,7 +143,6 @@ export default function Search() {
   const [searchResults, setSearchResults] = useState<EnhancedSearchResult[]>([])
   const [conversationalResult, setConversationalResult] = useState<ConversationalSearchResponse | null>(null)
   const [selectedTags, setSelectedTags] = useState<string[]>([])
-  const [selectedSentiment, setSelectedSentiment] = useState<'positive' | 'neutral' | 'negative' | ''>('')
   const [dateRange, setDateRange] = useState<{from?: string, to?: string}>({})
   const [expandedEntryId, setExpandedEntryId] = useState<string | null>(null)
   const [expandedEntry, setExpandedEntry] = useState<JournalEntryWithUser | null>(null)
@@ -206,16 +206,17 @@ export default function Search() {
     }
   });
 
-  // Build filters object based on selected values
+  // Build filters object based on selected values and active filter
   const buildFilters = () => {
     const filters: any = {};
     
-    if (selectedTags.length > 0) {
-      filters.tags = selectedTags;
+    // Add filter type based on active filter
+    if (activeFilter !== 'all') {
+      filters.filterType = activeFilter;
     }
     
-    if (selectedSentiment) {
-      filters.sentiment = selectedSentiment;
+    if (selectedTags.length > 0) {
+      filters.tags = selectedTags;
     }
     
     if (dateRange.from || dateRange.to) {
@@ -246,6 +247,13 @@ export default function Search() {
       performSearch();
     }
   };
+
+  // Re-run search when filters change
+  useEffect(() => {
+    if (hasSearched && searchQuery.trim()) {
+      performSearch();
+    }
+  }, [activeFilter, selectedTags, dateRange]);
 
   // Fetch full journal entry
   const fetchFullEntry = async (entryId: string) => {
@@ -284,7 +292,6 @@ export default function Search() {
   const filters = [
     { key: 'all' as const, label: 'All', icon: SearchIcon },
     { key: 'tags' as const, label: 'Tags', icon: Hash },
-    { key: 'sentiment' as const, label: 'Mood', icon: Sparkles },
     { key: 'date' as const, label: 'Date', icon: Calendar }
   ]
 
@@ -330,6 +337,82 @@ export default function Search() {
             )
           })}
         </div>
+
+        {/* Filter configuration panels */}
+        {activeFilter === 'tags' && (
+          <div className="mt-4 p-3 bg-muted/50 rounded-lg border border-border">
+            <h3 className="text-sm font-medium text-foreground mb-2 flex items-center gap-2">
+              <Hash className="h-4 w-4" />
+              Tag Filter
+            </h3>
+            <div className="space-y-2">
+              <Input
+                placeholder="Enter tags (e.g., travel, work, gratitude)"
+                value={selectedTags.join(', ')}
+                onChange={(e) => {
+                  const tags = e.target.value.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0);
+                  setSelectedTags(tags);
+                }}
+                data-testid="input-tag-filter"
+              />
+              {selectedTags.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-2">
+                  {selectedTags.map((tag, index) => (
+                    <Badge 
+                      key={index}
+                      variant="secondary" 
+                      className="cursor-pointer"
+                      onClick={() => setSelectedTags(selectedTags.filter((_, i) => i !== index))}
+                      data-testid={`tag-filter-${tag}`}
+                    >
+                      {tag} ×
+                    </Badge>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {activeFilter === 'date' && (
+          <div className="mt-4 p-3 bg-muted/50 rounded-lg border border-border">
+            <h3 className="text-sm font-medium text-foreground mb-2 flex items-center gap-2">
+              <Calendar className="h-4 w-4" />
+              Date Range Filter
+            </h3>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">From</label>
+                <Input
+                  type="date"
+                  value={dateRange.from || ''}
+                  onChange={(e) => setDateRange(prev => ({ ...prev, from: e.target.value }))}
+                  data-testid="input-date-from"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">To</label>
+                <Input
+                  type="date"
+                  value={dateRange.to || ''}
+                  onChange={(e) => setDateRange(prev => ({ ...prev, to: e.target.value }))}
+                  data-testid="input-date-to"
+                />
+              </div>
+            </div>
+            {(dateRange.from || dateRange.to) && (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => setDateRange({})}
+                className="mt-2"
+                data-testid="button-clear-date-filter"
+              >
+                Clear Date Filter
+              </Button>
+            )}
+          </div>
+        )}
       </header>
 
       <ScrollArea className="flex-1">
