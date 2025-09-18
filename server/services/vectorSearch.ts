@@ -190,10 +190,10 @@ ${contextText}`
       }
     ];
 
-    console.log('🔥 Sending RAG request to GPT-5 with', contextEntries.length, 'entries as context');
+    console.log('🔥 Sending RAG request to GPT-4o with', contextEntries.length, 'entries as context');
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-5", // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
+      model: "gpt-4o", // Using GPT-4o for conversational AI responses
       messages: messages as any,
       max_completion_tokens: 500
     });
