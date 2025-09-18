@@ -66,7 +66,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         req.originalUrl.startsWith('/api/login') ||
         req.originalUrl.startsWith('/api/callback') ||
         req.originalUrl.startsWith('/api/logout') ||
-        req.originalUrl.startsWith('/api/health')) {
+        req.originalUrl.startsWith('/api/health') ||
+        (req.originalUrl.startsWith('/api/journal/reprocess-all-users') && process.env.NODE_ENV !== 'production')) {
       return next();
     }
     
@@ -1466,6 +1467,151 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('❗ Error analyzing existing entries:', error);
       return res.status(500).json({ error: 'Failed to analyze entries' });
+    }
+  });
+
+  // Reprocess ALL entries for ALL users (Development Database only) - No auth required for system operations
+  app.post('/api/journal/reprocess-all-users', async (req, res) => {
+    try {
+      // Extra security: require admin secret in production
+      if (process.env.NODE_ENV === 'production') {
+        const adminSecret = req.headers['x-admin-secret'];
+        if (adminSecret !== process.env.ADMIN_REPROCESS_SECRET) {
+          return res.status(403).json({ error: 'Admin access required for production reprocessing' });
+        }
+      }
+      
+      console.log('🌍 Starting comprehensive reprocessing of ALL entries for ALL users in Development Database...');
+      
+      // Get all unique user IDs from the database
+      const { db } = await import('./db');
+      const { journalEntries } = await import('../shared/schema');
+      const { sql } = await import('drizzle-orm');
+      
+      // Pre-import analysis functions to avoid repeated dynamic imports
+      const { enhancedAnalyzeEntry, enhancedAnalyzeTextContent } = await import('./services/enhancedOpenAI');
+      
+      const userResults = await db.execute(sql`
+        SELECT DISTINCT user_id 
+        FROM journal_entries 
+        WHERE user_id IS NOT NULL
+        ORDER BY user_id
+      `);
+      
+      const userIds = userResults.rows.map((row: any) => row.user_id);
+      console.log(`👥 Found ${userIds.length} unique users in development database`);
+      
+      let totalAnalyzed = 0;
+      let totalErrors = 0;
+      let totalEntries = 0;
+      
+      // Process each user's entries
+      for (let i = 0; i < userIds.length; i++) {
+        const userId = userIds[i];
+        console.log(`\n👤 Processing user ${i + 1}/${userIds.length}: ${userId}`);
+        
+        try {
+          // Get ALL entries for this user (not just ones with media)
+          const userEntries = await storage.getJournalEntriesByUserId(userId);
+          console.log(`  📚 Found ${userEntries.length} entries for user ${userId}`);
+          
+          if (userEntries.length === 0) {
+            console.log(`  ⏩ No entries found for user ${userId}, skipping...`);
+            continue;
+          }
+          
+          totalEntries += userEntries.length;
+          
+          // Process each entry for this user
+          for (let j = 0; j < userEntries.length; j++) {
+            const entry = userEntries[j];
+            
+            try {
+              console.log(`  🔄 Processing entry ${j + 1}/${userEntries.length}: "${entry.title || entry.id.substring(0, 8)}"...`);
+              
+              // Use enhanced analysis for ALL entries (with or without media)
+              
+              let aiInsights;
+              if (entry.mediaUrls && entry.mediaUrls.length > 0) {
+                // Enhanced analysis for entries with media
+                aiInsights = await enhancedAnalyzeEntry(
+                  entry.content ?? '', 
+                  entry.title ?? undefined, 
+                  entry.mediaUrls ?? [],
+                  entry.audioUrl ?? undefined,
+                  entry.tags ?? []
+                );
+              } else {
+                // Enhanced text-only analysis for entries without media
+                const { enhancedAnalyzeTextContent } = await import('./services/enhancedOpenAI');
+                const textAnalysis = await enhancedAnalyzeTextContent(
+                  entry.content ?? '',
+                  entry.title ?? undefined,
+                  null, // no audio transcription
+                  entry.tags ?? []
+                );
+                
+                // Format as AiInsights with enhanced fields
+                aiInsights = {
+                  summary: textAnalysis.summary || "",
+                  keywords: textAnalysis.keywords || [],
+                  entities: textAnalysis.entities || [],
+                  labels: [], // No media labels for text-only entries
+                  people: [], // No people detected in text-only
+                  sentiment: textAnalysis.sentiment || "neutral",
+                  themes: textAnalysis.themes || [],
+                  emotions: textAnalysis.emotions || [],
+                  searchableText: textAnalysis.searchableText,
+                  embedding: textAnalysis.embedding,
+                  embeddingString: textAnalysis.embeddingString || ""
+                };
+              }
+
+              // Update the entry with new insights
+              await storage.updateAiInsights(entry.id, aiInsights);
+              
+              totalAnalyzed++;
+              console.log(`  ✅ Successfully processed "${entry.title || entry.id.substring(0, 8)}"`);
+              
+              // Add throttling to prevent API rate limit issues and reduce costs
+              await new Promise(resolve => setTimeout(resolve, 250));
+              
+            } catch (entryError) {
+              console.error(`  ❌ Failed to process entry ${entry.id}:`, entryError);
+              totalErrors++;
+            }
+          }
+          
+          console.log(`  🎯 User ${userId} complete: ${userEntries.length} entries processed`);
+          
+          // Delay between users to avoid overwhelming the system
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          
+        } catch (userError) {
+          console.error(`❌ Failed to process user ${userId}:`, userError);
+          totalErrors++;
+        }
+      }
+
+      console.log(`\n🎉 Comprehensive reprocessing complete!`);
+      console.log(`📊 Final Results:`);
+      console.log(`  👥 Users processed: ${userIds.length}`);
+      console.log(`  📚 Total entries found: ${totalEntries}`);
+      console.log(`  ✅ Successfully analyzed: ${totalAnalyzed}`);
+      console.log(`  ❌ Errors encountered: ${totalErrors}`);
+      
+      return res.json({ 
+        message: 'Comprehensive reprocessing completed',
+        usersProcessed: userIds.length,
+        totalEntries,
+        analyzed: totalAnalyzed,
+        errors: totalErrors,
+        successRate: totalEntries > 0 ? ((totalAnalyzed / totalEntries) * 100).toFixed(1) + '%' : '0%'
+      });
+      
+    } catch (error) {
+      console.error('❗ Error in comprehensive reprocessing:', error);
+      return res.status(500).json({ error: 'Failed to reprocess entries for all users' });
     }
   });
 
