@@ -376,19 +376,21 @@ export default function Home() {
             {!isLoading && !error && displayEntries.length === 0 && (
               <div className="text-center py-12">
                 <div className="h-16 w-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Plus className="h-8 w-8 text-muted-foreground" />
+                  {activeFilter === 'feed' ? (
+                    <Globe className="h-8 w-8 text-muted-foreground" />
+                  ) : (
+                    <UserCheck className="h-8 w-8 text-muted-foreground" />
+                  )}
                 </div>
-                <h3 className="text-lg font-medium text-foreground mb-2">No entries yet</h3>
-                <p className="text-sm text-muted-foreground mb-4 max-w-sm mx-auto">
-                  Start your journal journey by recording your first entry
+                <h3 className="text-lg font-medium text-foreground mb-2">
+                  {activeFilter === 'feed' ? 'No entries found' : 'No shared entries'}
+                </h3>
+                <p className="text-sm text-muted-foreground max-w-sm mx-auto">
+                  {activeFilter === 'feed' 
+                    ? 'There are no public entries or entries shared with you at the moment'
+                    : 'No one has shared any journal entries with you yet'
+                  }
                 </p>
-                <Button 
-                  size="lg" 
-                  onClick={() => setLocation('/record')}
-                  data-testid="button-create-first-entry"
-                >
-                  Create Your First Entry
-                </Button>
               </div>
             )}
           </div>
