@@ -157,7 +157,7 @@ export async function enhancedAnalyzeTextContent(
       summary: "",
       keywords: [],
       entities: [],
-      sentiment: "neutral",
+      sentiment: "neutral" as const,
       themes: [],
       emotions: [],
       labels: [],
@@ -165,6 +165,10 @@ export async function enhancedAnalyzeTextContent(
       searchableText: fullText,
       embedding,
       embeddingString: embedding.length > 0 ? formatVectorForPostgres(embedding) : ""
+    } as AiInsights & { 
+      searchableText: string; 
+      embedding: number[];
+      embeddingString: string;
     };
   }
 }
@@ -258,8 +262,13 @@ export async function enhancedAnalyzeMediaContent(mediaUrls: string[]): Promise<
         }
         
       } catch (itemError) {
-        if (itemError?.error?.code === 'image_parse_error') {
-          console.warn('⚠️ OpenAI rejected image format/size:', mediaUrl, itemError.error.message);
+        if (itemError && typeof itemError === 'object' && 'error' in itemError) {
+          const error = itemError as any;
+          if (error?.error?.code === 'image_parse_error') {
+            console.warn('⚠️ OpenAI rejected image format/size:', mediaUrl, error.error.message);
+          } else {
+            console.error('❌ Error analyzing individual media item:', itemError);
+          }
         } else {
           console.error('❌ Error analyzing individual media item:', itemError);
         }
