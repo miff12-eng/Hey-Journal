@@ -12,7 +12,7 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { icon: BookOpen, label: 'My Journal', path: '/my-journal', testId: 'nav-my-journal' },
-  { icon: Home, label: 'Feed', path: '/', testId: 'nav-feed' },
+  { icon: Home, label: 'Feed', path: '/feed', testId: 'nav-feed' },
   { icon: Search, label: 'Search', path: '/search', testId: 'nav-search' },
   { icon: User, label: 'Profile', path: '/profile', testId: 'nav-profile' }
 ]
