@@ -599,10 +599,38 @@ class DbStorage implements IStorage {
     return result[0];
   }
 
-  async updateAiInsights(entryId: string, insights: AiInsights | null): Promise<JournalEntry> {
+  async updateAiInsights(entryId: string, insights: AiInsights & { 
+    searchableText?: string; 
+    embedding?: number[];
+    embeddingString?: string;
+  } | null): Promise<JournalEntry> {
+    const updateData: any = { 
+      aiInsights: insights ? {
+        summary: insights.summary,
+        keywords: insights.keywords,
+        entities: insights.entities,
+        labels: insights.labels,
+        people: insights.people,
+        sentiment: insights.sentiment,
+        themes: insights.themes,
+        emotions: insights.emotions
+      } : null,
+      updatedAt: new Date() 
+    };
+    
+    // Include enhanced fields if provided
+    if (insights?.searchableText) {
+      updateData.searchableText = insights.searchableText;
+    }
+    if (insights?.embeddingString) {
+      updateData.contentEmbedding = insights.embeddingString;
+      updateData.embeddingVersion = 'v2';
+      updateData.lastEmbeddingUpdate = new Date();
+    }
+    
     const result = await this.db
       .update(journalEntries)
-      .set({ aiInsights: insights, updatedAt: new Date() })
+      .set(updateData)
       .where(eq(journalEntries.id, entryId))
       .returning();
     
