@@ -21,7 +21,7 @@ import {
 import { randomUUID } from "crypto";
 import { drizzle } from "drizzle-orm/neon-http";
 import { neon } from "@neondatabase/serverless";
-import { eq, desc, and, ilike, or, sql, ne } from "drizzle-orm";
+import { eq, desc, and, ilike, or, sql, ne, inArray } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { users, journalEntries, comments, aiChatSessions, userConnections } from "@shared/schema";
 
@@ -40,6 +40,7 @@ export interface IStorage {
   // Journal entry methods
   getJournalEntry(id: string): Promise<JournalEntry | undefined>;
   getJournalEntryWithUser(id: string): Promise<JournalEntryWithUser | undefined>;
+  getBulkJournalEntriesWithUser(entryIds: string[], userId: string): Promise<JournalEntryWithUser[]>;
   getJournalEntriesByUserId(userId: string, limit?: number): Promise<JournalEntryWithUser[]>;
   getFeedJournalEntries(userId: string, limit?: number): Promise<JournalEntryWithUser[]>;
   getSharedJournalEntries(userId: string, limit?: number): Promise<JournalEntryWithUser[]>;
@@ -245,6 +246,89 @@ class DbStorage implements IStorage {
         updatedAt: row.userUpdatedAt!,
       }
     };
+  }
+
+  async getBulkJournalEntriesWithUser(entryIds: string[], userId: string): Promise<JournalEntryWithUser[]> {
+    if (entryIds.length === 0) return [];
+    
+    const result = await this.db
+      .select({
+        // Journal entry fields
+        id: journalEntries.id,
+        userId: journalEntries.userId,
+        title: journalEntries.title,
+        content: journalEntries.content,
+        audioUrl: journalEntries.audioUrl,
+        audioPlayable: journalEntries.audioPlayable,
+        mediaUrls: journalEntries.mediaUrls,
+        tags: journalEntries.tags,
+        privacy: journalEntries.privacy,
+        sharedWith: journalEntries.sharedWith,
+        aiInsights: journalEntries.aiInsights,
+        createdAt: journalEntries.createdAt,
+        updatedAt: journalEntries.updatedAt,
+        contentEmbedding: journalEntries.contentEmbedding,
+        embeddingVersion: journalEntries.embeddingVersion,
+        lastEmbeddingUpdate: journalEntries.lastEmbeddingUpdate,
+        searchableText: journalEntries.searchableText,
+        // User fields
+        userEmail: users.email,
+        userFirstName: users.firstName,
+        userLastName: users.lastName,
+        userUsername: users.username,
+        userBio: users.bio,
+        userProfileImageUrl: users.profileImageUrl,
+        userIsProfilePublic: users.isProfilePublic,
+        userCreatedAt: users.createdAt,
+        userUpdatedAt: users.updatedAt,
+      })
+      .from(journalEntries)
+      .leftJoin(users, eq(journalEntries.userId, users.id))
+      .where(
+        and(
+          inArray(journalEntries.id, entryIds),
+          or(
+            // User's own entries
+            eq(journalEntries.userId, userId),
+            // Public entries
+            eq(journalEntries.privacy, 'public'),
+            // Entries shared with this user - use array position functions instead of @>
+            sql`${userId} = ANY(${journalEntries.sharedWith})`
+          )
+        )
+      );
+
+    return result.map(row => ({
+      id: row.id,
+      userId: row.userId,
+      title: row.title,
+      content: row.content,
+      audioUrl: row.audioUrl,
+      audioPlayable: row.audioPlayable,
+      mediaUrls: row.mediaUrls || [],
+      tags: row.tags || [],
+      privacy: row.privacy as "private" | "shared" | "public",
+      sharedWith: row.sharedWith || [],
+      aiInsights: row.aiInsights,
+      createdAt: row.createdAt!,
+      updatedAt: row.updatedAt!,
+      contentEmbedding: row.contentEmbedding,
+      embeddingVersion: row.embeddingVersion,
+      lastEmbeddingUpdate: row.lastEmbeddingUpdate,
+      searchableText: row.searchableText,
+      user: {
+        id: row.userId,
+        email: row.userEmail!,
+        firstName: row.userFirstName!,
+        lastName: row.userLastName!,
+        username: row.userUsername,
+        bio: row.userBio,
+        profileImageUrl: row.userProfileImageUrl,
+        isProfilePublic: row.userIsProfilePublic || false,
+        createdAt: row.userCreatedAt!,
+        updatedAt: row.userUpdatedAt!,
+      }
+    }));
   }
 
   async getJournalEntriesByUserId(userId: string, limit = 20): Promise<JournalEntryWithUser[]> {
@@ -1399,6 +1483,39 @@ export class MemStorage implements IStorage {
 
   async getJournalEntry(id: string): Promise<JournalEntry | undefined> {
     return this.journalEntries.get(id);
+  }
+
+  async getJournalEntryWithUser(id: string): Promise<JournalEntryWithUser | undefined> {
+    const entry = this.journalEntries.get(id);
+    if (!entry) return undefined;
+    
+    const user = await this.getUser(entry.userId);
+    if (!user) return undefined;
+    
+    return { ...entry, user };
+  }
+
+  async getBulkJournalEntriesWithUser(entryIds: string[], userId: string): Promise<JournalEntryWithUser[]> {
+    const entriesWithUser: JournalEntryWithUser[] = [];
+    
+    for (const entryId of entryIds) {
+      const entry = this.journalEntries.get(entryId);
+      if (!entry) continue;
+      
+      // Apply access control - only return entries user can access
+      const canAccess = entry.userId === userId || 
+                       entry.privacy === 'public' || 
+                       (entry.sharedWith && entry.sharedWith.includes(userId));
+                       
+      if (!canAccess) continue;
+      
+      const user = await this.getUser(entry.userId);
+      if (user) {
+        entriesWithUser.push({ ...entry, user });
+      }
+    }
+    
+    return entriesWithUser;
   }
 
   async getJournalEntriesByUserId(userId: string, limit = 20): Promise<JournalEntryWithUser[]> {
