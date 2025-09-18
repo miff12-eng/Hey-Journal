@@ -79,7 +79,8 @@ export async function enhancedAnalyzeTextContent(
   content: string, 
   title?: string | null,
   audioTranscription?: string | null,
-  tags?: string[] | null
+  tags?: string[] | null,
+  authorInfo?: { firstName?: string | null; lastName?: string | null; username?: string | null } | null
 ): Promise<Partial<AiInsights> & { searchableText: string; embedding: number[]; embeddingString: string }> {
   try {
     // Combine all text content for analysis
@@ -89,6 +90,18 @@ export async function enhancedAnalyzeTextContent(
     
     if (tags && tags.length > 0) {
       fullText = `${fullText}\n\nTags: ${tags.join(', ')}`;
+    }
+    
+    // Include author information for searchability
+    if (authorInfo) {
+      const authorParts = [];
+      if (authorInfo.firstName) authorParts.push(authorInfo.firstName);
+      if (authorInfo.lastName) authorParts.push(authorInfo.lastName);
+      if (authorInfo.username) authorParts.push(`@${authorInfo.username}`);
+      
+      if (authorParts.length > 0) {
+        fullText = `${fullText}\n\nAuthor: ${authorParts.join(' ')}`;
+      }
     }
     
     console.log('🧠 Enhanced text analysis starting for content length:', fullText.length);
@@ -352,7 +365,8 @@ export async function enhancedAnalyzeEntry(
   title?: string | null,
   mediaUrls?: string[],
   audioUrl?: string | null,
-  tags?: string[] | null
+  tags?: string[] | null,
+  authorInfo?: { firstName?: string | null; lastName?: string | null; username?: string | null } | null
 ): Promise<AiInsights & { 
   searchableText: string; 
   embedding: number[];
@@ -376,7 +390,7 @@ export async function enhancedAnalyzeEntry(
     
     // Step 2: Run text and media analysis in parallel
     const [textAnalysis, mediaAnalysis] = await Promise.all([
-      enhancedAnalyzeTextContent(content, title, audioTranscription, tags),
+      enhancedAnalyzeTextContent(content, title, audioTranscription, tags, authorInfo),
       enhancedAnalyzeMediaContent(mediaUrls || [])
     ]);
 

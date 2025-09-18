@@ -93,13 +93,28 @@ export class EmbeddingProcessor {
         }
       }
 
+      // Get user information for enhanced search with author names
+      const { users } = await import('../../shared/schema');
+      const [user] = await db
+        .select()
+        .from(users)
+        .where(eq(users.id, entry.userId))
+        .limit(1);
+        
+      const authorInfo = user ? {
+        firstName: user.firstName,
+        lastName: user.lastName,
+        username: user.username
+      } : null;
+
       // Generate enhanced analysis with embeddings
       const enhanced = await enhancedAnalyzeEntry(
         entry.content,
         entry.title,
         entry.mediaUrls || [],
         entry.audioUrl,
-        entry.tags || []
+        entry.tags || [],
+        authorInfo
       );
 
       // Update entry with new insights and embeddings
