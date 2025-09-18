@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -11,16 +11,35 @@ import JournalEntryCard from '@/components/JournalEntryCard'
 import ThemeToggle from '@/components/ThemeToggle'
 import UserSelector from '@/components/UserSelector'
 import { JournalEntryWithUser } from '@shared/schema'
-import { useQuery } from '@tanstack/react-query'
-import { queryClient } from '@/lib/queryClient'
+import { useQuery, useMutation } from '@tanstack/react-query'
+import { queryClient, apiRequest } from '@/lib/queryClient'
 import { useLocation } from 'wouter'
 import { useToast } from '@/hooks/use-toast'
 
 type FeedFilter = 'feed' | 'shared'
 
+// Enhanced search types for Home feed search
+interface EnhancedSearchResult {
+  entryId: string
+  similarity: number
+  snippet: string
+  title?: string
+  matchReason: string
+}
+
+interface EnhancedSearchResponse {
+  query: string
+  mode: string
+  results: EnhancedSearchResult[]
+  totalResults: number
+  executionTime: number
+}
+
 export default function Home() {
   const [, setLocation] = useLocation()
   const [searchQuery, setSearchQuery] = useState('')
+  const [searchResults, setSearchResults] = useState<EnhancedSearchResult[]>([])
+  const [isSearching, setIsSearching] = useState(false)
   const [activeFilter, setActiveFilter] = useState<FeedFilter>('feed')
   const [shareModalOpen, setShareModalOpen] = useState(false)
   const [sharingEntryId, setSharingEntryId] = useState<string | null>(null)
@@ -30,6 +49,48 @@ export default function Home() {
   const [selectedUsersForSharing, setSelectedUsersForSharing] = useState<{id: string, email: string, username?: string, firstName?: string, lastName?: string, profileImageUrl?: string}[]>([])
   const [isLoadingSharing, setIsLoadingSharing] = useState(false)
   const { toast } = useToast()
+  
+  // Enhanced search mutation for Feed search
+  const searchMutation = useMutation({
+    mutationFn: async (params: { query: string; filter: FeedFilter }) => {
+      console.log('🚀 Performing enhanced Feed search:', params);
+      setIsSearching(true);
+      const response = await apiRequest('POST', '/api/search/enhanced', {
+        query: params.query,
+        mode: 'hybrid', // Use hybrid search for best results
+        limit: 20,
+        filters: { type: params.filter } // Pass feed filter to API
+      });
+      const data = await response.json() as EnhancedSearchResponse;
+      console.log('🎯 Enhanced Feed search results:', data);
+      return data;
+    },
+    onSuccess: (data) => {
+      setSearchResults(data.results);
+      setIsSearching(false);
+    },
+    onError: (error) => {
+      console.error('Feed search error:', error);
+      setSearchResults([]);
+      setIsSearching(false);
+    }
+  });
+
+  // Debounced search - trigger enhanced search when query changes
+  useEffect(() => {
+    if (searchQuery.trim()) {
+      const timer = setTimeout(() => {
+        searchMutation.mutate({ 
+          query: searchQuery, 
+          filter: activeFilter
+        });
+      }, 300); // Debounce search
+      return () => clearTimeout(timer);
+    } else {
+      setSearchResults([]);
+      setIsSearching(false);
+    }
+  }, [searchQuery, activeFilter]);
   
   // Fetch real user data
   const { data: user, isLoading: isLoadingUser } = useQuery<{
@@ -64,20 +125,12 @@ export default function Home() {
   // Use entries directly from API - they already contain proper author user data
   const displayEntries: JournalEntryWithUser[] = entries
 
-  // Filter entries based on search query only (feed/shared filtering is handled by API)
-  const filteredEntries = displayEntries.filter(entry => {
-    // Apply search filter
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase().trim()
-      return (
-        entry.title?.toLowerCase().includes(query) ||
-        entry.content.toLowerCase().includes(query) ||
-        entry.tags?.some(tag => tag.toLowerCase().includes(query)) ||
-        false
-      )
-    }
-    return true
-  })
+  // Enhanced search: If search query exists, show search results instead of all entries
+  const filteredEntries = searchQuery.trim() ? 
+    // When searching, map enhanced search results to entries for display
+    searchResults.map(result => entries.find(entry => entry.id === result.entryId)).filter(Boolean) as JournalEntryWithUser[] :
+    // When not searching, show all entries (API already handles feed/shared filtering)
+    displayEntries
 
   const handleEdit = (entryId: string) => {
     setLocation(`/record?edit=${entryId}`)

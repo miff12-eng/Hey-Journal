@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -11,17 +11,36 @@ import JournalEntryCard from '@/components/JournalEntryCard'
 import ThemeToggle from '@/components/ThemeToggle'
 import UserSelector from '@/components/UserSelector'
 import { JournalEntryWithUser } from '@shared/schema'
-import { useQuery } from '@tanstack/react-query'
-import { queryClient } from '@/lib/queryClient'
+import { useQuery, useMutation } from '@tanstack/react-query'
+import { queryClient, apiRequest } from '@/lib/queryClient'
 import { useLocation } from 'wouter'
 import { useToast } from '@/hooks/use-toast'
 import RecordDialog from '@/components/RecordDialog'
 
 type PrivacyFilter = 'all' | 'private' | 'shared' | 'public'
 
+// Enhanced search types for MyJournal search
+interface EnhancedSearchResult {
+  entryId: string
+  similarity: number
+  snippet: string
+  title?: string
+  matchReason: string
+}
+
+interface EnhancedSearchResponse {
+  query: string
+  mode: string
+  results: EnhancedSearchResult[]
+  totalResults: number
+  executionTime: number
+}
+
 export default function MyJournal() {
   const [, setLocation] = useLocation()
   const [searchQuery, setSearchQuery] = useState('')
+  const [searchResults, setSearchResults] = useState<EnhancedSearchResult[]>([])
+  const [isSearching, setIsSearching] = useState(false)
   const [activeFilter, setActiveFilter] = useState<PrivacyFilter>('all')
   const [shareModalOpen, setShareModalOpen] = useState(false)
   const [sharingEntryId, setSharingEntryId] = useState<string | null>(null)
@@ -33,6 +52,48 @@ export default function MyJournal() {
   const [recordDialogOpen, setRecordDialogOpen] = useState(false)
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null)
   const { toast } = useToast()
+  
+  // Enhanced search mutation for MyJournal search
+  const searchMutation = useMutation({
+    mutationFn: async (params: { query: string; filter: PrivacyFilter }) => {
+      console.log('🚀 Performing enhanced MyJournal search:', params);
+      setIsSearching(true);
+      const response = await apiRequest('POST', '/api/search/enhanced', {
+        query: params.query,
+        mode: 'hybrid', // Use hybrid search for best results
+        limit: 20,
+        filters: { privacy: params.filter !== 'all' ? params.filter : undefined } // Pass privacy filter to API
+      });
+      const data = await response.json() as EnhancedSearchResponse;
+      console.log('🎯 Enhanced MyJournal search results:', data);
+      return data;
+    },
+    onSuccess: (data) => {
+      setSearchResults(data.results);
+      setIsSearching(false);
+    },
+    onError: (error) => {
+      console.error('MyJournal search error:', error);
+      setSearchResults([]);
+      setIsSearching(false);
+    }
+  });
+
+  // Debounced search - trigger enhanced search when query changes
+  useEffect(() => {
+    if (searchQuery.trim()) {
+      const timer = setTimeout(() => {
+        searchMutation.mutate({ 
+          query: searchQuery, 
+          filter: activeFilter
+        });
+      }, 300); // Debounce search
+      return () => clearTimeout(timer);
+    } else {
+      setSearchResults([]);
+      setIsSearching(false);
+    }
+  }, [searchQuery, activeFilter]);
   
   // Fetch real user data
   const { data: user, isLoading: isLoadingUser } = useQuery<{
@@ -79,27 +140,18 @@ export default function MyJournal() {
     // Note: Keep audioUrl from server response, don't override it
   }))
 
-  // Filter entries based on active filter and search query
-  const filteredEntries = displayEntries.filter(entry => {
-    // Apply privacy filter
-    let matchesFilter = true
-    if (activeFilter !== 'all') {
-      matchesFilter = entry.privacy === activeFilter
-    }
-
-    // Apply search filter
-    let matchesSearch = true
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase().trim()
-      matchesSearch = 
-        entry.title?.toLowerCase().includes(query) ||
-        entry.content.toLowerCase().includes(query) ||
-        entry.tags?.some(tag => tag.toLowerCase().includes(query)) ||
-        false
-    }
-
-    return matchesFilter && matchesSearch
-  })
+  // Enhanced search: If search query exists, show search results instead of filtered entries
+  const filteredEntries = searchQuery.trim() ? 
+    // When searching, map enhanced search results to entries and apply privacy filter
+    searchResults
+      .map(result => displayEntries.find(entry => entry.id === result.entryId))
+      .filter(Boolean)
+      .filter(entry => activeFilter === 'all' || entry.privacy === activeFilter) as JournalEntryWithUser[] :
+    // When not searching, apply privacy filter manually (API doesn't handle MyJournal privacy filtering)
+    displayEntries.filter(entry => {
+      if (activeFilter === 'all') return true;
+      return entry.privacy === activeFilter;
+    })
 
   const handleEdit = (entryId: string) => {
     setEditingEntryId(entryId)
