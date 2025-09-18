@@ -42,8 +42,18 @@ export interface IStorage {
   getJournalEntriesByUserId(userId: string, limit?: number): Promise<JournalEntryWithUser[]>;
   getFeedJournalEntries(userId: string, limit?: number): Promise<JournalEntryWithUser[]>;
   getSharedJournalEntries(userId: string, limit?: number): Promise<JournalEntryWithUser[]>;
-  createJournalEntry(entry: InsertJournalEntry, userId: string): Promise<JournalEntry>;
-  updateJournalEntry(id: string, entry: Partial<InsertJournalEntry>): Promise<JournalEntry>;
+  createJournalEntry(entry: InsertJournalEntry & { 
+    searchableText?: string;
+    contentEmbedding?: string;
+    embeddingVersion?: string;
+    lastEmbeddingUpdate?: Date;
+  }, userId: string): Promise<JournalEntry>;
+  updateJournalEntry(id: string, entry: Partial<InsertJournalEntry & {
+    searchableText?: string;
+    contentEmbedding?: string;
+    embeddingVersion?: string;
+    lastEmbeddingUpdate?: Date;
+  }>): Promise<JournalEntry>;
   updateAiInsights(entryId: string, insights: AiInsights | null): Promise<JournalEntry>;
   deleteJournalEntry(id: string): Promise<void>;
   
@@ -380,7 +390,12 @@ class DbStorage implements IStorage {
     return entriesWithUser;
   }
 
-  async createJournalEntry(entryData: InsertJournalEntry, userId: string): Promise<JournalEntry> {
+  async createJournalEntry(entryData: InsertJournalEntry & { 
+    searchableText?: string;
+    contentEmbedding?: string;
+    embeddingVersion?: string;
+    lastEmbeddingUpdate?: Date;
+  }, userId: string): Promise<JournalEntry> {
     console.log('🗂️ [DB] Creating entry for userId:', userId);
     const result = await this.db.insert(journalEntries).values({
       id: randomUUID(),
@@ -392,15 +407,24 @@ class DbStorage implements IStorage {
       tags: entryData.tags || [],
       privacy: entryData.privacy || "private",
       sharedWith: entryData.sharedWith || [],
+      searchableText: entryData.searchableText,
+      contentEmbedding: entryData.contentEmbedding,
+      embeddingVersion: entryData.embeddingVersion,
+      lastEmbeddingUpdate: entryData.lastEmbeddingUpdate,
       createdAt: new Date(),
       updatedAt: new Date(),
     }).returning();
     
-    console.log('🗂️ [DB] Created entry:', result[0].id);
+    console.log('🗂️ [DB] Created entry:', result[0].id, 'with embedding:', !!entryData.contentEmbedding);
     return result[0];
   }
 
-  async updateJournalEntry(id: string, updates: Partial<InsertJournalEntry>): Promise<JournalEntry> {
+  async updateJournalEntry(id: string, updates: Partial<InsertJournalEntry & {
+    searchableText?: string;
+    contentEmbedding?: string;
+    embeddingVersion?: string;
+    lastEmbeddingUpdate?: Date;
+  }>): Promise<JournalEntry> {
     const result = await this.db
       .update(journalEntries)
       .set({ ...updates, updatedAt: new Date() })
@@ -1379,7 +1403,12 @@ export class MemStorage implements IStorage {
     return entriesWithUser;
   }
 
-  async createJournalEntry(entryData: InsertJournalEntry, userId: string): Promise<JournalEntry> {
+  async createJournalEntry(entryData: InsertJournalEntry & { 
+    searchableText?: string;
+    contentEmbedding?: string;
+    embeddingVersion?: string;
+    lastEmbeddingUpdate?: Date;
+  }, userId: string): Promise<JournalEntry> {
     const id = randomUUID();
     const now = new Date();
     const entry: JournalEntry = {
@@ -1393,16 +1422,26 @@ export class MemStorage implements IStorage {
       tags: entryData.tags ?? [],
       privacy: entryData.privacy ?? "private",
       sharedWith: entryData.sharedWith ?? [],
+      searchableText: entryData.searchableText ?? null,
+      contentEmbedding: entryData.contentEmbedding ?? null,
+      embeddingVersion: entryData.embeddingVersion ?? null,
+      lastEmbeddingUpdate: entryData.lastEmbeddingUpdate ?? null,
       aiInsights: null,
       createdAt: now,
       updatedAt: now
     };
     
     this.journalEntries.set(id, entry);
+    console.log('🗂️ [MEM] Created entry:', id, 'with embedding:', !!entryData.contentEmbedding);
     return entry;
   }
 
-  async updateJournalEntry(id: string, updates: Partial<InsertJournalEntry>): Promise<JournalEntry> {
+  async updateJournalEntry(id: string, updates: Partial<InsertJournalEntry & {
+    searchableText?: string;
+    contentEmbedding?: string;
+    embeddingVersion?: string;
+    lastEmbeddingUpdate?: Date;
+  }>): Promise<JournalEntry> {
     const existing = this.journalEntries.get(id);
     if (!existing) {
       throw new Error('Journal entry not found');

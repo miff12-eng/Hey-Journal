@@ -160,16 +160,18 @@ router.get('/api/embeddings/status', async (req, res) => {
     const { journalEntries } = await import('../../shared/schema');
     const { eq, and, isNotNull, isNull, or } = await import('drizzle-orm');
 
+    const { count } = await import('drizzle-orm');
+    
     const [totalEntries, withEmbeddings, needsProcessing] = await Promise.all([
-      db.select({ count: db.count() }).from(journalEntries).where(eq(journalEntries.userId, userId)),
-      db.select({ count: db.count() }).from(journalEntries).where(
+      db.select({ count: count() }).from(journalEntries).where(eq(journalEntries.userId, userId)),
+      db.select({ count: count() }).from(journalEntries).where(
         and(
           eq(journalEntries.userId, userId),
           isNotNull(journalEntries.contentEmbedding),
           isNotNull(journalEntries.lastEmbeddingUpdate)
         )
       ),
-      db.select({ count: db.count() }).from(journalEntries).where(
+      db.select({ count: count() }).from(journalEntries).where(
         and(
           eq(journalEntries.userId, userId),
           or(

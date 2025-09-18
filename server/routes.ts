@@ -70,15 +70,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return next();
     }
     
+    // Dev/test authentication bypass (ONLY in non-production environments)
+    if (process.env.NODE_ENV !== 'production') {
+      const testAuth = req.headers['x-test-auth'] as string;
+      const testUserId = req.headers['x-test-user-id'] as string;
+      
+      if (testAuth === process.env.TEST_AUTH_TOKEN && testUserId) {
+        console.log('🧪 Dev authentication bypass used for userId:', testUserId);
+        req.userId = testUserId;
+        return next();
+      }
+      
+      // Also support Bearer token format for testing: Bearer dev:<userId>:<secret>
+      const authHeader = req.headers.authorization;
+      if (authHeader?.startsWith('Bearer dev:')) {
+        const [, , userId, secret] = authHeader.split(':');
+        if (secret === process.env.TEST_AUTH_TOKEN && userId) {
+          console.log('🧪 Dev bearer authentication used for userId:', userId);
+          req.userId = userId;
+          return next();
+        }
+      }
+    }
+    
     // Apply the isAuthenticated middleware which handles token refresh
     isAuthenticated(req, res, (err) => {
       if (err) {
+        console.log('❌ Authentication failed:', {
+          method: req.method,
+          path: req.path,
+          hasSession: !!req.session,
+          isAuthenticated: req.isAuthenticated?.(),
+          userClaimsSub: (req.user as any)?.claims?.sub
+        });
         return res.status(401).json({ message: 'Authentication required' });
       }
       
       // Set userId from OAuth claims (after token refresh if needed)
       const user = req.user as any;
       if (!user?.claims?.sub) {
+        console.log('❌ No user claims found:', {
+          method: req.method,
+          path: req.path,
+          hasUser: !!user,
+          userKeys: user ? Object.keys(user) : []
+        });
         return res.status(401).json({ message: 'Authentication required' });
       }
       
