@@ -1399,11 +1399,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       console.log('🔄 Starting analysis of existing entries without AI insights...');
       
-      // Get entries that have media but no AI insights
+      // Get entries that have media but no AI insights OR empty labels (failed image analysis)
       const entriesNeedingAnalysis = await storage.getJournalEntriesByUserId(userId);
-      const entriesToAnalyze = entriesNeedingAnalysis.filter((entry: any) => 
-        !entry.aiInsights && entry.mediaUrls && entry.mediaUrls.length > 0
-      );
+      const entriesToAnalyze = entriesNeedingAnalysis.filter((entry: any) => {
+        // Has media URLs
+        if (!entry.mediaUrls || entry.mediaUrls.length === 0) return false;
+        
+        // No AI insights at all, OR has AI insights but empty/missing labels (failed image analysis)
+        return !entry.aiInsights || 
+               !entry.aiInsights.labels || 
+               entry.aiInsights.labels.length === 0;
+      });
 
       console.log(`📊 Found ${entriesToAnalyze.length} entries that need AI analysis`);
 
@@ -1415,10 +1421,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         try {
           console.log(`🤖 Analyzing entry: "${entry.title || entry.id.substring(0, 8)}"...`);
           
-          const aiInsights = await analyzeEntry(
+          // Use enhanced analysis to generate insights with working gpt-4o model
+          const { enhancedAnalyzeEntry } = await import('./services/enhancedOpenAI');
+          const aiInsights = await enhancedAnalyzeEntry(
             entry.content ?? '', 
             entry.title ?? undefined, 
-            entry.mediaUrls ?? []
+            entry.mediaUrls ?? [],
+            entry.audioUrl ?? undefined
           );
 
           // Update the entry with AI insights
