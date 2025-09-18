@@ -1405,11 +1405,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Has media URLs
         if (!entry.mediaUrls || entry.mediaUrls.length === 0) return false;
         
-        
-        // No AI insights at all, OR has AI insights but empty/missing labels (failed image analysis)
+        // For reprocessing: Include entries that either:
+        // 1. Have no AI insights at all, OR
+        // 2. Have AI insights but empty/missing labels (failed image analysis), OR  
+        // 3. Have labels but may need updated embeddings (force reprocess all media entries for now)
         return !entry.aiInsights || 
                !entry.aiInsights.labels || 
-               entry.aiInsights.labels.length === 0;
+               entry.aiInsights.labels.length === 0 ||
+               (entry.aiInsights.labels && entry.aiInsights.labels.length > 0); // Force reprocess existing entries with labels
       });
 
       console.log(`📊 Found ${entriesToAnalyze.length} entries that need AI analysis`);
