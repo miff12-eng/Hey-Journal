@@ -1752,11 +1752,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Public entry detail endpoint (regex constraint to prevent capturing "search")
-  app.get('/api/public/entries/:entryId([0-9a-fA-F-]{10,})', async (req, res) => {
+  // Public entry detail endpoint (UUID pattern to prevent capturing "search")  
+  app.get('/api/public/entries/:entryId([0-9a-fA-F-]{8}-[0-9a-fA-F-]{4}-[0-9a-fA-F-]{4}-[0-9a-fA-F-]{4}-[0-9a-fA-F-]{12})', async (req, res) => {
     try {
       const { entryId } = req.params;
-      const entry = await storage.getPublicEntryById(entryId);
+      const userId = req.userId; // May be undefined for unauthenticated users
+      
+      const entry = await storage.getPublicEntryById(entryId, userId);
       
       if (!entry) {
         return res.status(404).json({ error: 'Entry not found' });

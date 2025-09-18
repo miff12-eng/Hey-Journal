@@ -1281,7 +1281,19 @@ class DbStorage implements IStorage {
     });
   }
 
-  async getPublicEntryById(id: string): Promise<PublicJournalEntry | undefined> {
+  async getPublicEntryById(id: string, requestingUserId?: string): Promise<PublicJournalEntry | undefined> {
+    // Build privacy conditions - allow public entries OR entries owned by the requesting user
+    let privacyConditions = eq(journalEntries.privacy, 'public');
+    if (requestingUserId) {
+      privacyConditions = or(
+        eq(journalEntries.privacy, 'public'),
+        and(
+          eq(journalEntries.userId, requestingUserId),
+          inArray(journalEntries.privacy, ['private', 'shared'])
+        )
+      );
+    }
+
     const result = await this.db
       .select({
         id: journalEntries.id,
@@ -1304,7 +1316,7 @@ class DbStorage implements IStorage {
       })
       .from(journalEntries)
       .leftJoin(users, eq(journalEntries.userId, users.id))
-      .where(and(eq(journalEntries.id, id), eq(journalEntries.privacy, 'public')));
+      .where(and(eq(journalEntries.id, id), privacyConditions));
 
     if (!result[0]) return undefined;
 

@@ -174,6 +174,7 @@ export async function performConversationalSearch(
 
 Guidelines:
 - Only summarize and reference what is explicitly written in the journal entries
+- When referencing a specific entry, include its ID in this format: [entry:ENTRY_ID]
 - Reference specific entries and dates when relevant
 - Identify patterns and themes that appear across the entries
 - Stay factual and descriptive - report what the user wrote, not what they should do
