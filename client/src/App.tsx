@@ -54,7 +54,7 @@ function Router() {
           return (
             <div className="relative">
               <Switch>
-                <Route path="/" component={Home} />
+                <Route path="/" component={MyJournal} />
                 <Route path="/my-journal" component={MyJournal} />
                 <Route path="/record">{() => <Redirect to="/my-journal" />}</Route>
                 <Route path="/search" component={Search} />
