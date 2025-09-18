@@ -76,9 +76,10 @@ export default function RecordDialog({ open, onOpenChange, editEntryId, onSaveSu
     }
   }, [editEntry, isEditMode])
   
-  // Reset form when dialog closes or switches between new/edit mode
+  // Reset form when dialog closes
   useEffect(() => {
-    if (!open || !isEditMode) {
+    if (!open) {
+      // Only reset when dialog actually closes, not when creating new entries
       setTitle('')
       setContent('')
       setTags([])
@@ -92,7 +93,26 @@ export default function RecordDialog({ open, onOpenChange, editEntryId, onSaveSu
       setIsSaving(false)
       setSelectedUsers([])
     }
-  }, [open, isEditMode])
+  }, [open])
+
+  // Reset form when switching from edit mode to create mode
+  useEffect(() => {
+    if (open && !isEditMode && !editEntry) {
+      // Reset form for new entries only when dialog opens for creation
+      setTitle('')
+      setContent('')
+      setTags([])
+      setNewTag('')
+      setPrivacy('private')
+      setIsRecording(false)
+      setIsTranscribing(false)
+      setMediaUrls([])
+      setAudioUrl('')
+      setAudioPlayable(false)
+      setIsSaving(false)
+      setSelectedUsers([])
+    }
+  }, [open, isEditMode, editEntry])
   
   // Function to load existing sharing information
   const loadSharingInfo = async (entryId: string) => {
