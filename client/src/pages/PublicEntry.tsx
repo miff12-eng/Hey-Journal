@@ -33,7 +33,7 @@ export default function PublicEntry() {
 
   // Fetch entry
   const entryQuery = useQuery<PublicJournalEntry>({
-    queryKey: ["/api/public/entries", entryId]
+    queryKey: [`/api/public/entries/${entryId}`]
   })
 
   if (entryQuery.isLoading) {

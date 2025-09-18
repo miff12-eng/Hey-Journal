@@ -65,13 +65,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // Authentication middleware for protected routes
   app.use('/api', async (req, res, next) => {
-    // Skip authentication for public routes and OAuth endpoints
-    if (req.originalUrl.startsWith('/api/public/') ||
-        req.originalUrl.startsWith('/api/login') ||
+    // Skip authentication for OAuth endpoints and health check
+    if (req.originalUrl.startsWith('/api/login') ||
         req.originalUrl.startsWith('/api/callback') ||
         req.originalUrl.startsWith('/api/logout') ||
         req.originalUrl.startsWith('/api/health') ||
         (req.originalUrl.startsWith('/api/journal/reprocess-all-users') && process.env.NODE_ENV !== 'production')) {
+      return next();
+    }
+    
+    // For public routes, try to extract user info but don't require authentication
+    if (req.originalUrl.startsWith('/api/public/')) {
+      const user = req.user as any;
+      if (user && user.claims && user.claims.sub) {
+        req.userId = user.claims.sub;
+      }
       return next();
     }
     
@@ -513,6 +521,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(entryWithUser);
     } catch (error) {
       console.error('Get Entry by ID Error:', error);
+      res.status(500).json({ error: 'Failed to fetch journal entry' });
+    }
+  });
+
+  // Get a single journal entry by ID (public access)
+  app.get('/api/public/entries/:id', async (req, res) => {
+    try {
+      const { id } = req.params;
+      
+      // Fetch entry with user data
+      const entryWithUser = await storage.getJournalEntryWithUser(id);
+      
+      if (!entryWithUser) {
+        return res.status(404).json({ error: 'Entry not found' });
+      }
+      
+      // Check if entry is public or if user has access
+      if (entryWithUser.privacy === 'private' && entryWithUser.userId !== req.userId) {
+        // For AI linking purposes, allow authenticated users to view their own private entries
+        // but deny access to other users' private entries
+        return res.status(404).json({ error: 'Entry not found' });
+      }
+      
+      // Return entry data in PublicEntry format
+      const publicEntry = {
+        id: entryWithUser.id,
+        userId: entryWithUser.userId,
+        title: entryWithUser.title,
+        content: entryWithUser.content,
+        audioUrl: entryWithUser.audioUrl,
+        audioPlayable: entryWithUser.audioPlayable,
+        mediaUrls: entryWithUser.mediaUrls || [],
+        tags: entryWithUser.tags || [],
+        createdAt: entryWithUser.createdAt,
+        updatedAt: entryWithUser.updatedAt,
+        user: entryWithUser.user
+      };
+      
+      res.json(publicEntry);
+    } catch (error) {
+      console.error('Get Public Entry by ID Error:', error);
       res.status(500).json({ error: 'Failed to fetch journal entry' });
     }
   });
