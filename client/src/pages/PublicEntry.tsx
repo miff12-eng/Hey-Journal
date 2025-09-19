@@ -1,3 +1,4 @@
+import { useState } from "react"
 import { useParams } from "wouter"
 import { useQuery } from "@tanstack/react-query"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -6,6 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Calendar, FileText, ArrowLeft, Volume2, User } from "lucide-react"
 import { Link } from "wouter"
+import PhotoModal from "@/components/PhotoModal"
 
 interface PublicJournalEntry {
   id: string
@@ -30,6 +32,8 @@ interface PublicJournalEntry {
 
 export default function PublicEntry() {
   const { entryId } = useParams<{ entryId: string }>()
+  const [selectedPhotoUrl, setSelectedPhotoUrl] = useState<string | null>(null)
+  const [selectedPhotoAlt, setSelectedPhotoAlt] = useState<string>('')
 
   // Fetch entry
   const entryQuery = useQuery<PublicJournalEntry>({
@@ -175,15 +179,22 @@ export default function PublicEntry() {
             {entry.mediaUrls.length > 0 && (
               <div className="mt-6">
                 <h4 className="font-semibold mb-3">Media</h4>
-                <div className="grid gap-2">
+                <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 md:grid-cols-3">
                   {entry.mediaUrls.map((url, index) => (
-                    <div key={index} className="border rounded-lg overflow-hidden">
+                    <div 
+                      key={index} 
+                      className="group border rounded-lg overflow-hidden cursor-pointer"
+                      onClick={() => {
+                        setSelectedPhotoUrl(url)
+                        setSelectedPhotoAlt(`Media ${index + 1} from public entry by ${entry.user.firstName || ''} ${entry.user.lastName || ''}`)
+                      }}
+                      data-testid={`media-image-${index}`}
+                    >
                       <img 
                         src={url} 
                         alt={`Media ${index + 1}`}
-                        className="w-full h-auto"
+                        className="w-full h-auto object-cover transition-transform duration-200 group-hover:scale-[1.02]"
                         loading="lazy"
-                        data-testid={`media-image-${index}`}
                       />
                     </div>
                   ))}
@@ -235,6 +246,19 @@ export default function PublicEntry() {
             </Link>
           </CardContent>
         </Card>
+        
+        {/* Photo Modal */}
+        <PhotoModal
+          open={selectedPhotoUrl !== null}
+          onOpenChange={(open) => {
+            if (!open) {
+              setSelectedPhotoUrl(null)
+              setSelectedPhotoAlt('')
+            }
+          }}
+          src={selectedPhotoUrl || ''}
+          alt={selectedPhotoAlt}
+        />
       </div>
     </div>
   )
