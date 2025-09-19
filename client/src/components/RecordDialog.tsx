@@ -6,7 +6,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Camera, Image, Users, Globe, Lock, Save, X, Upload, UserPlus, Loader2, Search, Plus, User } from 'lucide-react'
@@ -820,29 +820,9 @@ export default function RecordDialog({ open, onOpenChange, editEntryId, onSaveSu
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden p-0">
         <DialogHeader className="px-6 py-4 border-b border-border">
-          <div className="flex items-center justify-between">
-            <DialogTitle className="text-lg font-semibold">
-              {isEditMode ? 'Edit Entry' : 'New Journal Entry'}
-            </DialogTitle>
-            <Button 
-              onClick={handleSave}
-              disabled={!content.trim() || isSaving}
-              size="sm"
-              data-testid="button-save-entry"
-            >
-              {isSaving ? (
-                <>
-                  <div className="animate-spin h-4 w-4 mr-2 border-2 border-current border-t-transparent rounded-full" />
-                  Saving...
-                </>
-              ) : (
-                <>
-                  <Save className="h-4 w-4 mr-2" />
-                  Save
-                </>
-              )}
-            </Button>
-          </div>
+          <DialogTitle className="text-lg font-semibold">
+            {isEditMode ? 'Edit Entry' : 'New Journal Entry'}
+          </DialogTitle>
         </DialogHeader>
 
         <ScrollArea className="max-h-[calc(90vh-100px)]">
@@ -1343,6 +1323,26 @@ export default function RecordDialog({ open, onOpenChange, editEntryId, onSaveSu
             </div>
           </div>
         </ScrollArea>
+        
+        <DialogFooter className="px-6 py-4 border-t border-border">
+          <Button 
+            onClick={handleSave}
+            disabled={!content.trim() || isSaving}
+            data-testid="button-save-entry"
+          >
+            {isSaving ? (
+              <>
+                <div className="animate-spin h-4 w-4 mr-2 border-2 border-current border-t-transparent rounded-full" />
+                Saving...
+              </>
+            ) : (
+              <>
+                <Save className="h-4 w-4 mr-2" />
+                {isEditMode ? 'Update' : 'Save'}
+              </>
+            )}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   )
