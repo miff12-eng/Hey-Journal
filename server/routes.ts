@@ -393,6 +393,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // AI text analysis for people detection
+  app.post('/api/ai/analyze-text', async (req, res) => {
+    try {
+      const { text, analysisType } = req.body;
+      
+      if (!text || typeof text !== 'string') {
+        return res.status(400).json({ error: 'Text content is required' });
+      }
+      
+      // Use enhanced AI analysis to detect people
+      const { enhancedAnalyzeTextContent } = await import('./services/enhancedOpenAI');
+      const analysis = await enhancedAnalyzeTextContent(text);
+      
+      // Return the analysis in the expected format
+      if (analysisType === 'people') {
+        // Extract mentioned people from the analysis
+        const mentionedPeople = analysis.mentionedPeople || []
+        res.json({ mentionedPeople })
+      } else {
+        // Return full analysis
+        res.json(analysis)
+      }
+    } catch (error) {
+      console.error('AI Text Analysis Error:', error);
+      res.status(500).json({ error: 'Failed to analyze text' });
+    }
+  });
+
   // Journal entries endpoints
   app.post('/api/journal/entries', async (req, res) => {
     try {
