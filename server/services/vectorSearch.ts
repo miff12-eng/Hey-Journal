@@ -137,14 +137,23 @@ export async function performVectorSearch(
 
     for (const entry of entriesWithEmbeddings) {
       try {
-        if (!entry.contentEmbedding) continue;
+        if (!entry.contentEmbedding) {
+          console.log('⚠️ Entry has no embedding:', entry.id);
+          continue;
+        }
 
         // Parse the stored embedding
         const entryEmbedding = parseVectorFromPostgres(entry.contentEmbedding);
-        if (entryEmbedding.length === 0) continue;
+        console.log('🔍 Parsed embedding for entry', entry.id, '- dimensions:', entryEmbedding.length);
+        
+        if (entryEmbedding.length === 0) {
+          console.log('❌ Empty embedding after parsing for entry:', entry.id);
+          continue;
+        }
 
         // Calculate cosine similarity
         const similarity = calculateCosineSimilarity(queryEmbedding, entryEmbedding);
+        console.log('📊 Similarity for entry', entry.id, ':', similarity, '(threshold:', similarityThreshold, ')');
         
         if (similarity >= similarityThreshold) {
           // Create snippet from searchable text or content
