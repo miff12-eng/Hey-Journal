@@ -252,7 +252,7 @@ export default function JournalEntryCard({
                 <img 
                   src={url} 
                   alt={`Media ${index + 1}`}
-                  className="object-contain w-full h-full transition-transform duration-200 group-hover:scale-105"
+                  className="object-cover w-full h-full transition-transform duration-200 group-hover:scale-105"
                   loading="lazy"
                 />
                 {entry.mediaUrls!.length > 6 && index === 5 && (
