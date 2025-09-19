@@ -1393,6 +1393,107 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get aggregated person suggestions from recent journal entries
+  app.get('/api/people/suggestions', async (req, res) => {
+    try {
+      const userId = req.userId;
+      
+      // Get recent entries (limit to 5 for performance)
+      const recentEntries = await storage.getJournalEntriesByUserId(userId, 5);
+      
+      if (recentEntries.length === 0) {
+        return res.json({ suggestions: [] });
+      }
+      
+      // Get existing people to filter out duplicates
+      const existingPeople = await storage.getPersonsByUserId(userId);
+      const existingNames = new Set(
+        existingPeople.map(person => 
+          `${person.firstName || ''} ${person.lastName || ''}`.trim().toLowerCase()
+        ).concat(
+          existingPeople.map(person => person.firstName?.toLowerCase()).filter(Boolean)
+        )
+      );
+      
+      // Collect all suggestions from entries with AI insights
+      const allSuggestions: Array<{
+        entryId: string;
+        entryTitle: string;
+        originalText: string;
+        firstName: string;
+        lastName: string | null;
+        notes: string;
+        confidence: 'high' | 'medium' | 'low';
+      }> = [];
+      
+      for (const entry of recentEntries) {
+        try {
+          // Get AI insights for this entry
+          const aiInsights = await storage.getAiInsights(entry.id);
+          if (!aiInsights) continue;
+          
+          // Parse mentioned people from AI insights
+          let mentionedPeople: string[] = [];
+          try {
+            if (typeof aiInsights === 'object' && aiInsights !== null) {
+              // Handle both string and object formats
+              const insights = typeof aiInsights === 'string' ? JSON.parse(aiInsights) : aiInsights;
+              mentionedPeople = (insights as any).mentionedPeople || [];
+            }
+          } catch (parseError) {
+            console.error('Error parsing AI insights for entry:', entry.id, parseError);
+            continue;
+          }
+          
+          if (!mentionedPeople || mentionedPeople.length === 0) continue;
+          
+          // Filter out existing names and create suggestions
+          const newNames = mentionedPeople.filter(name => 
+            !existingNames.has(name.toLowerCase()) && 
+            name.length > 0 && 
+            name.length < 100 // Reasonable name length
+          );
+          
+          for (const name of newNames) {
+            const nameParts = name.trim().split(/\s+/);
+            const firstName = nameParts[0];
+            const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : null;
+            
+            allSuggestions.push({
+              entryId: entry.id,
+              entryTitle: entry.title || 'Untitled Entry',
+              originalText: name,
+              firstName,
+              lastName,
+              notes: `Mentioned in journal entry: "${entry.title || 'Untitled'}"`,
+              confidence: name.length > 1 && /^[A-Za-z\s'-]+$/.test(name) ? 'high' : 'medium'
+            });
+          }
+        } catch (error) {
+          console.error('Error processing suggestions for entry:', entry.id, error);
+          // Continue with other entries
+        }
+      }
+      
+      // Deduplicate suggestions by normalized name
+      const uniqueSuggestions = new Map<string, typeof allSuggestions[0]>();
+      for (const suggestion of allSuggestions) {
+        const normalizedName = `${suggestion.firstName} ${suggestion.lastName || ''}`.trim().toLowerCase();
+        if (!uniqueSuggestions.has(normalizedName)) {
+          uniqueSuggestions.set(normalizedName, suggestion);
+        }
+      }
+      
+      res.json({ 
+        suggestions: Array.from(uniqueSuggestions.values()),
+        totalEntries: recentEntries.length
+      });
+    } catch (error) {
+      console.error('Get Person Suggestions Error:', error);
+      res.status(500).json({ error: 'Failed to get person suggestions' });
+    }
+  });
+
   // Create multiple Person objects from suggestions
   app.post('/api/people/batch', async (req, res) => {
     try {
