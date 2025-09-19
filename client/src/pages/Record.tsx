@@ -7,7 +7,7 @@ import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
-import { Camera, Image, Users, Globe, Lock, Save, X, Upload } from 'lucide-react'
+import { Camera, Image, Users, Globe, Lock, Save, X, Upload, Sparkles } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { useLocation } from 'wouter'
 import { useQuery, useMutation } from '@tanstack/react-query'
@@ -38,7 +38,9 @@ export default function Record() {
   const [audioUrl, setAudioUrl] = useState<string>('')
   const [audioPlayable, setAudioPlayable] = useState<boolean>(false)
   const [isSaving, setIsSaving] = useState(false)
-  const [selectedUsers, setSelectedUsers] = useState<{id: string, email: string, username?: string, firstName?: string, lastName?: string, profileImageUrl?: string}[]>([])
+  const [selectedUsers, setSelectedUsers] = useState<{id: string, email: string, username?: string, firstName?: string, lastName?: string, profileImageUrl?: string}[]>([])  
+  const [suggestions, setSuggestions] = useState<{suggestedTitles: string[], suggestedTags: string[]}>({ suggestedTitles: [], suggestedTags: [] })
+  const [isGeneratingSuggestions, setIsGeneratingSuggestions] = useState(false)
   const { toast } = useToast()
   
   // Fetch entry data when in edit mode
@@ -252,6 +254,70 @@ export default function Record() {
     }
   }
 
+  const generateSuggestions = async () => {
+    if (!content.trim()) {
+      toast({
+        title: "No content to analyze",
+        description: "Please add some content to your thoughts before generating suggestions.",
+        variant: "destructive"
+      })
+      return
+    }
+
+    setIsGeneratingSuggestions(true)
+    try {
+      const response = await fetch('/api/ai/suggestions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include',
+        body: JSON.stringify({ content })
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setSuggestions(data)
+        toast({
+          title: "Suggestions generated!",
+          description: `Found ${data.suggestedTitles.length} title suggestions and ${data.suggestedTags.length} tag suggestions.`,
+        })
+      } else {
+        toast({
+          title: "Failed to generate suggestions",
+          description: "Unable to generate AI suggestions. Please try again.",
+          variant: "destructive"
+        })
+      }
+    } catch (error) {
+      toast({
+        title: "Connection error",
+        description: "Unable to connect to AI service. Please try again.",
+        variant: "destructive"
+      })
+    } finally {
+      setIsGeneratingSuggestions(false)
+    }
+  }
+
+  const applyTitleSuggestion = (suggestedTitle: string) => {
+    setTitle(suggestedTitle)
+    toast({
+      title: "Title applied",
+      description: `Title set to: "${suggestedTitle}"`
+    })
+  }
+
+  const applyTagSuggestion = (suggestedTag: string) => {
+    if (!tags.includes(suggestedTag)) {
+      setTags([...tags, suggestedTag])
+      toast({
+        title: "Tag added",
+        description: `Added tag: "${suggestedTag}"`
+      })
+    }
+  }
+
   const handlePhotoUpload = (uploadedUrls: string[]) => {
     setMediaUrls(prev => [...prev, ...uploadedUrls])
     toast({
@@ -406,7 +472,7 @@ export default function Record() {
             <ThemeToggle />
             <Button 
               onClick={handleSave}
-              disabled={!content.trim() || isSaving}
+              disabled={!content.trim() || !title.trim() || isSaving}
               size="sm"
               data-testid="button-save-entry"
             >
@@ -478,7 +544,29 @@ export default function Record() {
       <div className="flex-1 px-4 py-4 space-y-6 pb-20">
         {/* Title */}
         <div className="space-y-2">
-          <Label htmlFor="title" className="text-sm font-medium text-foreground">Title (optional)</Label>
+          <div className="flex items-center justify-between">
+            <Label htmlFor="title" className="text-sm font-medium text-foreground">Title</Label>
+            <Button 
+              type="button"
+              variant="outline" 
+              size="sm"
+              onClick={generateSuggestions}
+              disabled={!content.trim() || isGeneratingSuggestions}
+              data-testid="button-generate-suggestions"
+            >
+              {isGeneratingSuggestions ? (
+                <>
+                  <div className="animate-spin h-4 w-4 mr-2 border-2 border-current border-t-transparent rounded-full" />
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-4 w-4 mr-2" />
+                  AI Suggest
+                </>
+              )}
+            </Button>
+          </div>
           <Input
             id="title"
             placeholder="Give your entry a title..."
@@ -486,6 +574,28 @@ export default function Record() {
             onChange={(e) => setTitle(e.target.value)}
             data-testid="input-entry-title"
           />
+          
+          {/* Title suggestions */}
+          {suggestions.suggestedTitles.length > 0 && (
+            <div className="space-y-2">
+              <Label className="text-xs text-muted-foreground">Suggested Titles:</Label>
+              <div className="flex flex-wrap gap-2">
+                {suggestions.suggestedTitles.map((suggestedTitle, index) => (
+                  <Button
+                    key={index}
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => applyTitleSuggestion(suggestedTitle)}
+                    className="text-xs hover-elevate"
+                    data-testid={`button-apply-title-${index}`}
+                  >
+                    {suggestedTitle}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Content */}
@@ -583,6 +693,29 @@ export default function Record() {
                   <X className="h-3 w-3" />
                 </Badge>
               ))}
+            </div>
+          )}
+          
+          {/* Tag suggestions */}
+          {suggestions.suggestedTags.length > 0 && (
+            <div className="space-y-2">
+              <Label className="text-xs text-muted-foreground">Suggested Tags:</Label>
+              <div className="flex flex-wrap gap-2">
+                {suggestions.suggestedTags.map((suggestedTag, index) => (
+                  <Button
+                    key={index}
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => applyTagSuggestion(suggestedTag)}
+                    className="text-xs hover-elevate"
+                    disabled={tags.includes(suggestedTag)}
+                    data-testid={`button-apply-tag-${index}`}
+                  >
+                    #{suggestedTag}
+                  </Button>
+                ))}
+              </div>
             </div>
           )}
         </div>

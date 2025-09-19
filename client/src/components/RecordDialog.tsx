@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { Camera, Image, Users, Globe, Lock, Save, X, Upload, UserPlus, Loader2, Search, Plus, User } from 'lucide-react'
+import { Camera, Image, Users, Globe, Lock, Save, X, Upload, UserPlus, Loader2, Search, Plus, User, Sparkles } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { useQuery } from '@tanstack/react-query'
 import { apiRequest, queryClient } from '@/lib/queryClient'
@@ -62,6 +62,10 @@ export default function RecordDialog({ open, onOpenChange, editEntryId, onSaveSu
     lastName: '',
     notes: ''
   })
+  
+  // Title and tag suggestions state
+  const [titleTagSuggestions, setTitleTagSuggestions] = useState<{suggestedTitles: string[], suggestedTags: string[]}>({ suggestedTitles: [], suggestedTags: [] })
+  const [isGeneratingSuggestions, setIsGeneratingSuggestions] = useState(false)
   const { toast } = useToast()
   
   // Fetch entry data when in edit mode
@@ -160,6 +164,8 @@ export default function RecordDialog({ open, onOpenChange, editEntryId, onSaveSu
       setShowPersonSearch(false)
       setIsCreatingPerson(false)
       setNewPersonForm({ firstName: '', lastName: '', notes: '' })
+      setTitleTagSuggestions({ suggestedTitles: [], suggestedTags: [] })
+      setIsGeneratingSuggestions(false)
       hasInitializedRef.current = false
     }
   }, [open])
@@ -329,6 +335,70 @@ export default function RecordDialog({ open, onOpenChange, editEntryId, onSaveSu
 
   const removePhoto = (index: number) => {
     setMediaUrls(prev => prev.filter((_, i) => i !== index))
+  }
+
+  const generateTitleTagSuggestions = async () => {
+    if (!content.trim()) {
+      toast({
+        title: "No content to analyze",
+        description: "Please add some content to your thoughts before generating suggestions.",
+        variant: "destructive"
+      })
+      return
+    }
+
+    setIsGeneratingSuggestions(true)
+    try {
+      const response = await fetch('/api/ai/suggestions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include',
+        body: JSON.stringify({ content })
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setTitleTagSuggestions(data)
+        toast({
+          title: "Suggestions generated!",
+          description: `Found ${data.suggestedTitles.length} title suggestions and ${data.suggestedTags.length} tag suggestions.`,
+        })
+      } else {
+        toast({
+          title: "Failed to generate suggestions",
+          description: "Unable to generate AI suggestions. Please try again.",
+          variant: "destructive"
+        })
+      }
+    } catch (error) {
+      toast({
+        title: "Connection error",
+        description: "Unable to connect to AI service. Please try again.",
+        variant: "destructive"
+      })
+    } finally {
+      setIsGeneratingSuggestions(false)
+    }
+  }
+
+  const applyTitleSuggestion = (suggestedTitle: string) => {
+    setTitle(suggestedTitle)
+    toast({
+      title: "Title applied",
+      description: `Title set to: "${suggestedTitle}"`
+    })
+  }
+
+  const applyTagSuggestion = (suggestedTag: string) => {
+    if (!tags.includes(suggestedTag)) {
+      setTags([...tags, suggestedTag])
+      toast({
+        title: "Tag added",
+        description: `Added tag: "${suggestedTag}"`
+      })
+    }
   }
 
   const handleSave = async () => {
@@ -826,7 +896,7 @@ export default function RecordDialog({ open, onOpenChange, editEntryId, onSaveSu
             </DialogTitle>
             <Button 
               onClick={handleSave}
-              disabled={!content.trim() || isSaving}
+              disabled={!content.trim() || !title.trim() || isSaving}
               size="sm"
               data-testid="button-save-entry"
             >
@@ -899,7 +969,29 @@ export default function RecordDialog({ open, onOpenChange, editEntryId, onSaveSu
             <div className="space-y-6">
               {/* Title */}
               <div className="space-y-2">
-                <Label htmlFor="title" className="text-sm font-medium text-foreground">Title (optional)</Label>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="title" className="text-sm font-medium text-foreground">Title</Label>
+                  <Button 
+                    type="button"
+                    variant="outline" 
+                    size="sm"
+                    onClick={generateTitleTagSuggestions}
+                    disabled={!content.trim() || isGeneratingSuggestions}
+                    data-testid="button-generate-suggestions"
+                  >
+                    {isGeneratingSuggestions ? (
+                      <>
+                        <div className="animate-spin h-4 w-4 mr-2 border-2 border-current border-t-transparent rounded-full" />
+                        Generating...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="h-4 w-4 mr-2" />
+                        AI Suggest
+                      </>
+                    )}
+                  </Button>
+                </div>
                 <Input
                   id="title"
                   placeholder="Give your entry a title..."
@@ -907,6 +999,28 @@ export default function RecordDialog({ open, onOpenChange, editEntryId, onSaveSu
                   onChange={(e) => setTitle(e.target.value)}
                   data-testid="input-entry-title"
                 />
+                
+                {/* Title suggestions */}
+                {titleTagSuggestions.suggestedTitles.length > 0 && (
+                  <div className="space-y-2">
+                    <Label className="text-xs text-muted-foreground">Suggested Titles:</Label>
+                    <div className="flex flex-wrap gap-2">
+                      {titleTagSuggestions.suggestedTitles.map((suggestedTitle, index) => (
+                        <Button
+                          key={index}
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => applyTitleSuggestion(suggestedTitle)}
+                          className="text-xs hover-elevate"
+                          data-testid={`button-apply-title-${index}`}
+                        >
+                          {suggestedTitle}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Content */}
@@ -1285,6 +1399,29 @@ export default function RecordDialog({ open, onOpenChange, editEntryId, onSaveSu
                         <X className="h-3 w-3" />
                       </Badge>
                     ))}
+                  </div>
+                )}
+                
+                {/* Tag suggestions */}
+                {titleTagSuggestions.suggestedTags.length > 0 && (
+                  <div className="space-y-2">
+                    <Label className="text-xs text-muted-foreground">Suggested Tags:</Label>
+                    <div className="flex flex-wrap gap-2">
+                      {titleTagSuggestions.suggestedTags.map((suggestedTag, index) => (
+                        <Button
+                          key={index}
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => applyTagSuggestion(suggestedTag)}
+                          className="text-xs hover-elevate"
+                          disabled={tags.includes(suggestedTag)}
+                          data-testid={`button-apply-tag-${index}`}
+                        >
+                          #{suggestedTag}
+                        </Button>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>

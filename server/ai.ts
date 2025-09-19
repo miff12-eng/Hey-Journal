@@ -94,6 +94,53 @@ export async function transcribeAudio(audioBuffer: Buffer): Promise<{ text: stri
   }
 }
 
+export async function generateTitleAndTagSuggestions(content: string): Promise<{
+  suggestedTitles: string[];
+  suggestedTags: string[];
+}> {
+  try {
+    const response = await openai.chat.completions.create({
+      model: "gpt-4",
+      messages: [
+        {
+          role: "system",
+          content: `You are an expert at creating engaging titles and relevant tags for journal entries. Based on the journal content provided, suggest 3-5 compelling titles and 3-5 relevant tags. Respond in JSON format:
+          {
+            "suggestedTitles": ["array", "of", "3-5", "engaging", "titles"],
+            "suggestedTags": ["array", "of", "3-5", "relevant", "tags"]
+          }
+          
+          Guidelines:
+          - Titles should be engaging, concise, and capture the essence of the entry
+          - Tags should be single words or short phrases that categorize the content
+          - Avoid generic titles like "My Day" - be specific and compelling
+          - Tags should be lowercase and use common journaling categories`
+        },
+        {
+          role: "user",
+          content: content
+        }
+      ],
+      max_tokens: 300,
+      temperature: 0.7,
+    });
+
+    const suggestions = JSON.parse(response.choices[0].message.content || '{}');
+    
+    return {
+      suggestedTitles: Array.isArray(suggestions.suggestedTitles) ? suggestions.suggestedTitles : [],
+      suggestedTags: Array.isArray(suggestions.suggestedTags) ? suggestions.suggestedTags : []
+    };
+  } catch (error) {
+    console.error('Title and Tag Suggestion Error:', error);
+    // Return empty suggestions if AI fails
+    return {
+      suggestedTitles: [],
+      suggestedTags: []
+    };
+  }
+}
+
 export async function analyzeJournalEntry(content: string): Promise<{
   sentiment: 'positive' | 'negative' | 'neutral';
   emotions: string[];
