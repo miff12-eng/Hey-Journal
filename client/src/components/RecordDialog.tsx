@@ -108,7 +108,9 @@ export default function RecordDialog({ open, onOpenChange, editEntryId, onSaveSu
         setSelectedPeople(selectedPeopleFromTags)
       } else if (response.status !== 404) {
         // 404 is okay (no person tags), but other errors should be logged
-        console.error('Failed to load person tags for entry:', entryId)
+        console.error('Failed to load person tags for entry:', entryId, response.status)
+      } else {
+        setSelectedPeople([])
       }
     } catch (error) {
       console.error('Error loading person tags:', error)
