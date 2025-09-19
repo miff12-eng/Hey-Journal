@@ -71,7 +71,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         req.originalUrl.startsWith('/api/logout') ||
         req.originalUrl.startsWith('/api/health') ||
         req.originalUrl.startsWith('/api/debug') ||
-        (req.originalUrl.startsWith('/api/journal/reprocess-all-users') && process.env.NODE_ENV !== 'production')) {
+        (req.originalUrl.startsWith('/api/journal/reprocess-all-users') && process.env.NODE_ENV !== 'production') ||
+        (req.originalUrl.startsWith('/api/journal/bulk-create') && process.env.NODE_ENV !== 'production')) {
       return next();
     }
     
@@ -2375,6 +2376,219 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error('Error searching users:', error);
       res.status(500).json({ error: 'Failed to search users' });
+    }
+  });
+
+  // Bulk create journal entries endpoint (development only)
+  app.post('/api/journal/bulk-create', async (req, res) => {
+    try {
+      // Only allow in development environment
+      if (process.env.NODE_ENV === 'production') {
+        return res.status(403).json({ error: 'Bulk creation not allowed in production' });
+      }
+
+      // Use authenticated user ID or default for development
+      const userId = req.userId || '38345650';
+
+      const fs = await import('fs/promises');
+      const path = await import('path');
+      
+      // Define 15 diverse journal entries
+      const journalTemplates = [
+        {
+          title: "Morning Coffee Thoughts",
+          content: "Had the most amazing coffee this morning at the local café. The barista created this beautiful latte art that made me smile. Sometimes it's the small moments that make the biggest difference in our day. I've been thinking about how these tiny pleasures add up to create our overall happiness.",
+          tags: ["coffee", "morning", "mindfulness", "gratitude"]
+        },
+        {
+          title: "Weekend Adventure",
+          content: "Went hiking today and discovered a hidden waterfall. The sound of rushing water and the cool mist was incredibly refreshing. I spent about an hour just sitting on the rocks, listening to nature and feeling completely at peace. These outdoor adventures always remind me why I love exploring new places.",
+          tags: ["hiking", "nature", "adventure", "peace", "outdoors"]
+        },
+        {
+          title: "Cooking Experiment",
+          content: "Tried making homemade pasta for the first time today. It was messy, flour everywhere, but the end result was surprisingly delicious! The texture was so much better than store-bought pasta. I'm definitely going to make this a regular weekend activity. Cooking from scratch feels so satisfying.",
+          tags: ["cooking", "pasta", "homemade", "kitchen", "experiment"]
+        },
+        {
+          title: "Book Club Reflections",
+          content: "Tonight's book club discussion was particularly thought-provoking. We discussed themes of resilience and hope in the novel we're reading. Everyone had such different perspectives, which made the conversation rich and engaging. I love how books can bring people together and create meaningful discussions.",
+          tags: ["books", "reading", "community", "discussion", "learning"]
+        },
+        {
+          title: "Sunset Photography",
+          content: "Captured some beautiful sunset photos today. The sky was painted in shades of orange, pink, and purple that seemed almost too vibrant to be real. I love how photography forces you to really observe and appreciate the beauty around us. Each sunset is unique and fleeting.",
+          tags: ["photography", "sunset", "nature", "art", "beauty"]
+        },
+        {
+          title: "Fitness Journey Progress",
+          content: "Completed my first 5K run without stopping! Six months ago, I could barely run for two minutes. This journey has taught me so much about persistence and believing in myself. Every small step forward counts, and today I felt really proud of how far I've come.",
+          tags: ["fitness", "running", "progress", "achievement", "health"]
+        },
+        {
+          title: "Family Dinner Stories",
+          content: "Had dinner with the family tonight and heard the most hilarious stories from my grandmother's childhood. She has such a vivid memory and tells stories with such enthusiasm. These family gatherings remind me how important it is to preserve and share our family history.",
+          tags: ["family", "stories", "grandmother", "memories", "tradition"]
+        },
+        {
+          title: "Garden Growth Update",
+          content: "My tomatoes are finally starting to ripen! After months of watering, weeding, and waiting, I'm seeing the fruits of my labor. Gardening has taught me patience and given me a deeper appreciation for the food we eat. There's something magical about growing your own food.",
+          tags: ["gardening", "tomatoes", "growth", "patience", "sustainability"]
+        },
+        {
+          title: "Creative Writing Session",
+          content: "Spent the afternoon working on a short story I've been developing. The characters are starting to feel real to me, and the plot is taking some unexpected turns. Writing is such a wonderful escape and allows me to explore different worlds and perspectives. Creative expression feels essential to my well-being.",
+          tags: ["writing", "creativity", "story", "characters", "imagination"]
+        },
+        {
+          title: "Volunteer Experience",
+          content: "Volunteered at the local food bank today. It was eye-opening to see how many families in our community need support. The other volunteers were incredibly kind and dedicated. Giving back feels meaningful and reminds me of the importance of community care and compassion.",
+          tags: ["volunteer", "community", "service", "compassion", "giving"]
+        },
+        {
+          title: "Music Discovery",
+          content: "Found an amazing new artist today through a friend's recommendation. Their music has this unique blend of jazz and electronic elements that I've never heard before. Music has this incredible power to transport you and evoke emotions. I've been listening on repeat all evening.",
+          tags: ["music", "discovery", "jazz", "electronic", "emotions"]
+        },
+        {
+          title: "Mindfulness Practice",
+          content: "Started a daily meditation practice this week. Just ten minutes each morning, but I'm already noticing a difference in how I handle stress throughout the day. Being present and aware feels like a superpower in our busy, distracted world. Small practices can have big impacts.",
+          tags: ["meditation", "mindfulness", "stress", "practice", "wellness"]
+        },
+        {
+          title: "Travel Planning Dreams",
+          content: "Spent the evening researching potential destinations for next year's vacation. Looking at photos of distant places and reading travel blogs fills me with excitement and wanderlust. Travel broadens perspective and creates memories that last a lifetime. Already counting down the days!",
+          tags: ["travel", "planning", "adventure", "wanderlust", "dreams"]
+        },
+        {
+          title: "Technology Learning",
+          content: "Finally learned how to use that new app I've been putting off. Technology can be intimidating at first, but once you get the hang of it, it opens up so many possibilities. I'm excited about how this tool will help me be more organized and efficient in my daily life.",
+          tags: ["technology", "learning", "apps", "organization", "efficiency"]
+        },
+        {
+          title: "Seasonal Changes",
+          content: "The leaves are starting to change color, and there's a crisp feeling in the air that signals autumn is approaching. I love how the seasons mark the passage of time and bring different energies and activities. Each season has its own beauty and rhythm that I try to embrace fully.",
+          tags: ["autumn", "seasons", "change", "nature", "time"]
+        }
+      ];
+
+      const createdEntries = [];
+      const objectStorageService = new ObjectStorageService();
+
+      // Process each photo and create corresponding journal entry
+      for (let i = 1; i <= 15; i++) {
+        try {
+          const photoPath = path.join('Photos', `image ${i}.jpeg`);
+          const template = journalTemplates[i - 1];
+          
+          // Read the photo file
+          const photoBuffer = await fs.readFile(photoPath);
+          
+          // Get upload URL from object storage
+          const { uploadURL, objectPath } = await objectStorageService.getObjectEntityUploadURL();
+          
+          // Upload photo using the signed URL
+          const uploadResponse = await fetch(uploadURL, {
+            method: 'PUT',
+            body: photoBuffer,
+            headers: {
+              'Content-Type': 'image/jpeg'
+            }
+          });
+
+          if (!uploadResponse.ok) {
+            throw new Error(`Failed to upload photo ${i}: ${uploadResponse.statusText}`);
+          }
+          
+          // Set public ACL for the uploaded image
+          const aclPolicy = {
+            owner: userId,
+            visibility: "public" as const
+          };
+          await objectStorageService.trySetObjectEntityAclPolicy(objectPath, aclPolicy);
+          
+          // Create journal entry data
+          const entryData = {
+            title: template.title,
+            content: template.content,
+            tags: template.tags,
+            mediaUrls: [objectPath],
+            privacy: "public" as const,
+            userId: userId
+          };
+
+          // Analyze entry with AI (same as regular creation)
+          let aiInsights = null;
+          try {
+            const user = await storage.getUser(userId);
+            const authorInfo = user ? {
+              firstName: user.firstName,
+              lastName: user.lastName,
+              username: user.username
+            } : null;
+            
+            const enhancedInsights = await enhancedAnalyzeEntry(
+              entryData.content,
+              entryData.title,
+              entryData.mediaUrls,
+              undefined, // no audio
+              entryData.tags,
+              authorInfo
+            );
+            
+            aiInsights = enhancedInsights;
+          } catch (error) {
+            console.error(`❗ AI Analysis failed for entry ${i}:`, error);
+          }
+
+          // Create entry with enhanced data if available
+          const createData = aiInsights && 'embeddingString' in aiInsights ? {
+            ...entryData,
+            searchableText: aiInsights.searchableText || undefined,
+            contentEmbedding: aiInsights.embeddingString || undefined,
+            embeddingVersion: 'v1' as string,
+            lastEmbeddingUpdate: new Date()
+          } : {
+            ...entryData,
+            searchableText: undefined,
+            contentEmbedding: undefined,
+            embeddingVersion: undefined,
+            lastEmbeddingUpdate: undefined
+          };
+          
+          const entry = await storage.createJournalEntry(createData, userId);
+          
+          // Update AI insights separately if analysis was successful
+          if (aiInsights) {
+            try {
+              await storage.updateAiInsights(entry.id, aiInsights);
+            } catch (error) {
+              console.error(`❗ Failed to save AI insights for entry ${i}:`, error);
+            }
+          }
+          
+          createdEntries.push({
+            id: entry.id,
+            title: entry.title,
+            photoPath: objectPath
+          });
+          
+          console.log(`✅ Created journal entry ${i}/15: ${template.title}`);
+          
+        } catch (error) {
+          console.error(`❌ Failed to create entry ${i}:`, error);
+        }
+      }
+
+      res.json({
+        success: true,
+        message: `Successfully created ${createdEntries.length} journal entries`,
+        entries: createdEntries
+      });
+
+    } catch (error: any) {
+      console.error('❌ Bulk creation failed:', error);
+      res.status(500).json({ error: 'Failed to bulk create journal entries', details: error.message });
     }
   });
 
