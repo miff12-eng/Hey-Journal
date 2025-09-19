@@ -94,6 +94,9 @@ export async function performVectorSearch(
       eq(journalEntries.userId, userId),
       isNotNull(journalEntries.contentEmbedding)
     ];
+    
+    console.log('🔍 Built where conditions for userId:', userId);
+    console.log('🔍 Where conditions length:', whereConditions.length);
 
     // Apply filters
     if (filters?.tags && filters.tags.length > 0) {
@@ -104,24 +107,30 @@ export async function performVectorSearch(
     }
 
     if (filters?.dateRange) {
+      console.log('🗓️ Date filtering with:', filters.dateRange);
       if (filters.dateRange.from) {
-        whereConditions.push(gte(journalEntries.createdAt, new Date(filters.dateRange.from)));
+        const fromDate = new Date(filters.dateRange.from);
+        console.log('🗓️ FROM date parsed as:', fromDate.toISOString());
+        whereConditions.push(gte(journalEntries.createdAt, fromDate));
       }
       if (filters.dateRange.to) {
         // Add 1 day to include the entire "to" date
         const toDate = new Date(filters.dateRange.to);
         toDate.setDate(toDate.getDate() + 1);
+        console.log('🗓️ TO date (with +1 day) parsed as:', toDate.toISOString());
         whereConditions.push(lte(journalEntries.createdAt, toDate));
       }
     }
 
     // Get all entries with embeddings for this user
+    console.log('🔍 About to execute database query...');
     const entriesWithEmbeddings = await db
       .select()
       .from(journalEntries)
       .where(and(...whereConditions));
 
     console.log('📊 Found', entriesWithEmbeddings.length, 'entries with embeddings');
+    console.log('📊 Sample entry IDs:', entriesWithEmbeddings.slice(0, 3).map(e => e.id));
 
     // Step 3: Calculate similarities in memory (for PostgreSQL without pgvector operators)
     const similarities: VectorSearchResult[] = [];

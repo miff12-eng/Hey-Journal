@@ -221,8 +221,12 @@ export default function Search() {
     
     if (dateRange.from || dateRange.to) {
       filters.dateRange = {};
-      if (dateRange.from) filters.dateRange.from = dateRange.from;
-      if (dateRange.to) filters.dateRange.to = dateRange.to;
+      if (dateRange.from) {
+        filters.dateRange.from = dateRange.from;
+      }
+      if (dateRange.to) {
+        filters.dateRange.to = dateRange.to;
+      }
     }
     
     return filters;
@@ -248,10 +252,21 @@ export default function Search() {
     }
   };
 
-  // Re-run search when filters change
+  // Debounced search effect for filters
   useEffect(() => {
     if (hasSearched && searchQuery.trim()) {
-      performSearch();
+      // Debounce date input changes to prevent multiple searches while typing
+      const timeoutId = setTimeout(() => {
+        // Only perform search if date inputs are complete or empty
+        const isDateRangeValid = (!dateRange.from || dateRange.from.match(/^\d{4}-\d{2}-\d{2}$/)) &&
+                                 (!dateRange.to || dateRange.to.match(/^\d{4}-\d{2}-\d{2}$/));
+        
+        if (isDateRangeValid) {
+          performSearch();
+        }
+      }, 500); // 500ms debounce
+      
+      return () => clearTimeout(timeoutId);
     }
   }, [activeFilter, selectedTags, dateRange]);
 
