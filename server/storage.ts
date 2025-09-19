@@ -16,14 +16,19 @@ import {
   type AiChatMessage,
   type PublicUser,
   type PublicJournalEntry,
-  type AiInsights
+  type AiInsights,
+  type Person,
+  type InsertPerson,
+  type PersonWithTagCount,
+  type EntryPersonTag,
+  type InsertEntryPersonTag
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { drizzle } from "drizzle-orm/neon-http";
 import { neon } from "@neondatabase/serverless";
 import { eq, desc, and, ilike, or, sql, ne, inArray } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
-import { users, journalEntries, comments, aiChatSessions, userConnections } from "@shared/schema";
+import { users, journalEntries, comments, aiChatSessions, userConnections, people, entryPersonTags } from "@shared/schema";
 
 // modify the interface with any CRUD methods
 // you might need
@@ -82,6 +87,20 @@ export interface IStorage {
   getConnectionRequests(userId: string, type: 'received' | 'sent'): Promise<UserConnectionWithUser[]>;
   getConnections(userId: string): Promise<UserConnectionWithUser[]>;
   getConnectionStatus(requesterId: string, recipientId: string): Promise<UserConnection | undefined>;
+  
+  // Person methods
+  createPerson(person: InsertPerson, userId: string): Promise<Person>;
+  getPerson(id: string): Promise<Person | undefined>;
+  getPersonsByUserId(userId: string): Promise<PersonWithTagCount[]>;
+  updatePerson(id: string, updates: Partial<InsertPerson>): Promise<Person>;
+  deletePerson(id: string): Promise<void>;
+  searchPersonsByUserId(userId: string, query: string): Promise<Person[]>;
+  
+  // Entry-Person tag methods
+  tagPersonInEntry(entryId: string, personId: string): Promise<EntryPersonTag>;
+  untagPersonFromEntry(entryId: string, personId: string): Promise<void>;
+  getPersonTagsByEntryId(entryId: string, userId?: string): Promise<(EntryPersonTag & { person: Person })[]>;
+  getEntriesByPersonId(personId: string, userId: string): Promise<JournalEntryWithUser[]>;
   
   // Public-facing methods (no authentication required)
   getPublicUserByUsername(username: string): Promise<PublicUser | undefined>;
@@ -1412,6 +1431,236 @@ class DbStorage implements IStorage {
       };
     });
   }
+
+  // Person methods implementation
+  async createPerson(personData: InsertPerson, userId: string): Promise<Person> {
+    const result = await this.db.insert(people).values({
+      id: randomUUID(),
+      userId,
+      firstName: personData.firstName,
+      lastName: personData.lastName,
+      notes: personData.notes,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }).returning();
+    
+    return result[0];
+  }
+
+  async getPerson(id: string): Promise<Person | undefined> {
+    const result = await this.db.select().from(people).where(eq(people.id, id));
+    return result[0];
+  }
+
+  async getPersonsByUserId(userId: string): Promise<PersonWithTagCount[]> {
+    const result = await this.db
+      .select({
+        id: people.id,
+        userId: people.userId,
+        firstName: people.firstName,
+        lastName: people.lastName,
+        notes: people.notes,
+        createdAt: people.createdAt,
+        updatedAt: people.updatedAt,
+        tagCount: sql<number>`CAST(COUNT(${entryPersonTags.id}) AS INTEGER)`.as('tagCount')
+      })
+      .from(people)
+      .leftJoin(entryPersonTags, eq(people.id, entryPersonTags.personId))
+      .where(eq(people.userId, userId))
+      .groupBy(people.id, people.userId, people.firstName, people.lastName, people.notes, people.createdAt, people.updatedAt)
+      .orderBy(people.firstName);
+    
+    return result.map(row => ({
+      id: row.id,
+      userId: row.userId,
+      firstName: row.firstName,
+      lastName: row.lastName,
+      notes: row.notes,
+      createdAt: row.createdAt!,
+      updatedAt: row.updatedAt!,
+      tagCount: row.tagCount || 0
+    }));
+  }
+
+  async updatePerson(id: string, updates: Partial<InsertPerson>): Promise<Person> {
+    const result = await this.db
+      .update(people)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(people.id, id))
+      .returning();
+    
+    if (!result[0]) {
+      throw new Error('Person not found');
+    }
+    return result[0];
+  }
+
+  async deletePerson(id: string): Promise<void> {
+    await this.db.delete(people).where(eq(people.id, id));
+  }
+
+  async searchPersonsByUserId(userId: string, query: string): Promise<Person[]> {
+    const result = await this.db
+      .select()
+      .from(people)
+      .where(
+        and(
+          eq(people.userId, userId),
+          or(
+            ilike(people.firstName, `%${query}%`),
+            ilike(people.lastName, `%${query}%`)
+          )
+        )
+      )
+      .orderBy(people.firstName)
+      .limit(10);
+    return result;
+  }
+
+  // Entry-Person tag methods implementation
+  async tagPersonInEntry(entryId: string, personId: string): Promise<EntryPersonTag> {
+    const result = await this.db.insert(entryPersonTags).values({
+      id: randomUUID(),
+      entryId,
+      personId,
+      createdAt: new Date(),
+    }).returning();
+    
+    return result[0];
+  }
+
+  async untagPersonFromEntry(entryId: string, personId: string): Promise<void> {
+    await this.db
+      .delete(entryPersonTags)
+      .where(
+        and(
+          eq(entryPersonTags.entryId, entryId),
+          eq(entryPersonTags.personId, personId)
+        )
+      );
+  }
+
+  async getPersonTagsByEntryId(entryId: string, userId?: string): Promise<(EntryPersonTag & { person: Person })[]> {
+    let whereCondition = eq(entryPersonTags.entryId, entryId);
+    
+    // If userId is provided, only return person tags for that user's people
+    if (userId) {
+      whereCondition = and(
+        eq(entryPersonTags.entryId, entryId),
+        eq(people.userId, userId)
+      );
+    }
+    
+    const result = await this.db
+      .select({
+        id: entryPersonTags.id,
+        entryId: entryPersonTags.entryId,
+        personId: entryPersonTags.personId,
+        createdAt: entryPersonTags.createdAt,
+        // Person fields
+        personUserId: people.userId,
+        personFirstName: people.firstName,
+        personLastName: people.lastName,
+        personNotes: people.notes,
+        personCreatedAt: people.createdAt,
+        personUpdatedAt: people.updatedAt,
+      })
+      .from(entryPersonTags)
+      .leftJoin(people, eq(entryPersonTags.personId, people.id))
+      .where(whereCondition);
+    
+    return result.map(row => ({
+      id: row.id,
+      entryId: row.entryId,
+      personId: row.personId,
+      createdAt: row.createdAt!,
+      person: {
+        id: row.personId,
+        userId: row.personUserId!,
+        firstName: row.personFirstName!,
+        lastName: row.personLastName,
+        notes: row.personNotes,
+        createdAt: row.personCreatedAt!,
+        updatedAt: row.personUpdatedAt!,
+      }
+    }));
+  }
+
+  async getEntriesByPersonId(personId: string, userId: string): Promise<JournalEntryWithUser[]> {
+    const result = await this.db
+      .select({
+        // Journal entry fields
+        id: journalEntries.id,
+        userId: journalEntries.userId,
+        title: journalEntries.title,
+        content: journalEntries.content,
+        audioUrl: journalEntries.audioUrl,
+        audioPlayable: journalEntries.audioPlayable,
+        mediaUrls: journalEntries.mediaUrls,
+        tags: journalEntries.tags,
+        privacy: journalEntries.privacy,
+        sharedWith: journalEntries.sharedWith,
+        aiInsights: journalEntries.aiInsights,
+        createdAt: journalEntries.createdAt,
+        updatedAt: journalEntries.updatedAt,
+        contentEmbedding: journalEntries.contentEmbedding,
+        embeddingVersion: journalEntries.embeddingVersion,
+        lastEmbeddingUpdate: journalEntries.lastEmbeddingUpdate,
+        searchableText: journalEntries.searchableText,
+        // User fields
+        userEmail: users.email,
+        userFirstName: users.firstName,
+        userLastName: users.lastName,
+        userUsername: users.username,
+        userBio: users.bio,
+        userProfileImageUrl: users.profileImageUrl,
+        userIsProfilePublic: users.isProfilePublic,
+        userCreatedAt: users.createdAt,
+        userUpdatedAt: users.updatedAt,
+      })
+      .from(journalEntries)
+      .leftJoin(users, eq(journalEntries.userId, users.id))
+      .leftJoin(entryPersonTags, eq(journalEntries.id, entryPersonTags.entryId))
+      .where(
+        and(
+          eq(entryPersonTags.personId, personId),
+          eq(journalEntries.userId, userId) // Only return entries belonging to the same user
+        )
+      )
+      .orderBy(desc(journalEntries.createdAt));
+    
+    return result.map(row => ({
+      id: row.id,
+      userId: row.userId,
+      title: row.title,
+      content: row.content,
+      audioUrl: row.audioUrl,
+      audioPlayable: row.audioPlayable || false,
+      mediaUrls: row.mediaUrls || [],
+      tags: row.tags || [],
+      privacy: row.privacy as "private" | "shared" | "public",
+      sharedWith: row.sharedWith || [],
+      aiInsights: row.aiInsights,
+      createdAt: row.createdAt!,
+      updatedAt: row.updatedAt!,
+      contentEmbedding: row.contentEmbedding,
+      embeddingVersion: row.embeddingVersion,
+      lastEmbeddingUpdate: row.lastEmbeddingUpdate,
+      searchableText: row.searchableText,
+      user: {
+        id: row.userId,
+        email: row.userEmail!,
+        firstName: row.userFirstName!,
+        lastName: row.userLastName!,
+        username: row.userUsername,
+        bio: row.userBio,
+        profileImageUrl: row.userProfileImageUrl,
+        isProfilePublic: row.userIsProfilePublic || false,
+        createdAt: row.userCreatedAt!,
+        updatedAt: row.userUpdatedAt!,
+      }
+    }));
+  }
 }
 
 export class MemStorage implements IStorage {
@@ -1890,6 +2139,48 @@ export class MemStorage implements IStorage {
 
   async searchPublicEntries(query: string, limit?: number, cursor?: string): Promise<PublicJournalEntry[]> {
     throw new Error('Public methods not implemented in MemStorage - use DbStorage');
+  }
+
+  // Person methods (stub implementations for MemStorage)
+  async createPerson(person: InsertPerson, userId: string): Promise<Person> {
+    throw new Error('Person methods not implemented in MemStorage - use DbStorage');
+  }
+
+  async getPerson(id: string): Promise<Person | undefined> {
+    throw new Error('Person methods not implemented in MemStorage - use DbStorage');
+  }
+
+  async getPersonsByUserId(userId: string): Promise<PersonWithTagCount[]> {
+    throw new Error('Person methods not implemented in MemStorage - use DbStorage');
+  }
+
+  async updatePerson(id: string, updates: Partial<InsertPerson>): Promise<Person> {
+    throw new Error('Person methods not implemented in MemStorage - use DbStorage');
+  }
+
+  async deletePerson(id: string): Promise<void> {
+    throw new Error('Person methods not implemented in MemStorage - use DbStorage');
+  }
+
+  async searchPersonsByUserId(userId: string, query: string): Promise<Person[]> {
+    throw new Error('Person methods not implemented in MemStorage - use DbStorage');
+  }
+
+  // Entry-Person tag methods (stub implementations for MemStorage)
+  async tagPersonInEntry(entryId: string, personId: string): Promise<EntryPersonTag> {
+    throw new Error('Person tag methods not implemented in MemStorage - use DbStorage');
+  }
+
+  async untagPersonFromEntry(entryId: string, personId: string): Promise<void> {
+    throw new Error('Person tag methods not implemented in MemStorage - use DbStorage');
+  }
+
+  async getPersonTagsByEntryId(entryId: string, userId?: string): Promise<(EntryPersonTag & { person: Person })[]> {
+    throw new Error('Person tag methods not implemented in MemStorage - use DbStorage');
+  }
+
+  async getEntriesByPersonId(personId: string, userId: string): Promise<JournalEntryWithUser[]> {
+    throw new Error('Person tag methods not implemented in MemStorage - use DbStorage');
   }
 }
 

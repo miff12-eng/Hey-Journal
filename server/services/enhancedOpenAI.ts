@@ -17,6 +17,13 @@ Focus on:
 - Sentiment: Overall emotional tone with nuance (positive, negative, neutral)
 - Themes: Broader life themes and patterns (e.g., "personal growth", "relationships", "career", "health")
 - Emotions: Specific emotions expressed (e.g., "joy", "anxiety", "excitement", "nostalgia")
+- Mentioned People: Specific names of people mentioned in the content (first names, full names, nicknames, or clear references to individuals)
+
+Pay special attention to identifying person names mentioned in the journal entry. Look for:
+- First names (e.g., "Sarah", "Mike", "Jessica")
+- Full names (e.g., "John Smith", "Maria Garcia")
+- Nicknames or informal names (e.g., "Mom", "Dad", "Grandma", but also "Tommy", "Jen")
+- Clear personal references (e.g., "my brother", "my colleague Lisa", "Dr. Johnson")
 
 Return only valid JSON in this exact format:
 {
@@ -25,7 +32,8 @@ Return only valid JSON in this exact format:
   "entities": ["entity1", "entity2", "entity3"],
   "sentiment": "positive" | "negative" | "neutral",
   "themes": ["theme1", "theme2"],
-  "emotions": ["emotion1", "emotion2"]
+  "emotions": ["emotion1", "emotion2"],
+  "mentioned_people": ["person1", "person2", "person3"]
 }
 
 Content to analyze:
@@ -144,10 +152,12 @@ export async function enhancedAnalyzeTextContent(
       themes: Array.isArray(parsed.themes) ? parsed.themes : [],
       emotions: Array.isArray(parsed.emotions) ? parsed.emotions : [],
       labels: [], // Will be populated by media analysis
-      people: [], // Will be populated by media analysis
+      people: Array.isArray(parsed.mentioned_people) ? parsed.mentioned_people : [], // Names detected in text
       searchableText: fullText,
       embedding,
-      embeddingString: formatVectorForPostgres(embedding) // Add the formatted string for PostgreSQL storage
+      embeddingString: formatVectorForPostgres(embedding), // Add the formatted string for PostgreSQL storage
+      // Add detected names as a separate field for person tagging
+      mentionedPeople: Array.isArray(parsed.mentioned_people) ? parsed.mentioned_people : []
     };
 
     console.log('✅ Enhanced text analysis completed:', {
@@ -182,11 +192,13 @@ export async function enhancedAnalyzeTextContent(
       people: [],
       searchableText: fullText,
       embedding,
-      embeddingString: embedding.length > 0 ? formatVectorForPostgres(embedding) : ""
+      embeddingString: embedding.length > 0 ? formatVectorForPostgres(embedding) : "",
+      mentionedPeople: []
     } as AiInsights & { 
       searchableText: string; 
       embedding: number[];
       embeddingString: string;
+      mentionedPeople: string[];
     };
   }
 }
@@ -417,10 +429,17 @@ export async function enhancedAnalyzeEntry(
     // Generate embedding for the complete searchable text (including media labels)
     const combinedEmbedding = await generateTextEmbedding(enhancedSearchableText);
     
+    // Combine people from both text analysis (mentioned people) and media analysis (visual people)
+    const allPeople = [
+      ...(textAnalysis.mentionedPeople || []), // Names detected in text
+      ...(mediaAnalysis.people || []) // People detected in images
+    ];
+
     const combinedInsights: AiInsights & { 
       searchableText: string; 
       embedding: number[];
       embeddingString: string;
+      mentionedPeople: string[];
     } = {
       summary: textAnalysis.summary || "",
       keywords: [
@@ -429,11 +448,12 @@ export async function enhancedAnalyzeEntry(
       ].slice(0, 10), // Limit to 10 total keywords
       entities: textAnalysis.entities || [],
       labels: mediaAnalysis.labels || [],
-      people: mediaAnalysis.people || [],
+      people: allPeople, // Combined list of people from text and media
       sentiment: textAnalysis.sentiment || "neutral",
       searchableText: enhancedSearchableText,
       embedding: combinedEmbedding,
-      embeddingString: formatVectorForPostgres(combinedEmbedding)
+      embeddingString: formatVectorForPostgres(combinedEmbedding),
+      mentionedPeople: textAnalysis.mentionedPeople || [] // Specifically the names mentioned in text
     };
 
     console.log('🎯 Enhanced multimodal analysis completed:', {
@@ -466,7 +486,8 @@ export async function enhancedAnalyzeEntry(
       sentiment: "neutral",
       searchableText: content,
       embedding: fallbackEmbedding,
-      embeddingString: formatVectorForPostgres(fallbackEmbedding)
+      embeddingString: formatVectorForPostgres(fallbackEmbedding),
+      mentionedPeople: []
     };
   }
 }

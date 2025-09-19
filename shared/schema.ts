@@ -328,9 +328,11 @@ export type AiInsights = {
   keywords: string[];
   entities: string[];
   labels: string[];
-  people: string[];
+  people: string[]; // People detected in images or general references
   sentiment?: 'positive' | 'neutral' | 'negative';
   // Enhanced fields for deeper analysis
   themes?: string[];
   emotions?: string[];
+  // Person name detection for tagging system
+  mentionedPeople?: string[]; // Specific person names mentioned in text content
 };
