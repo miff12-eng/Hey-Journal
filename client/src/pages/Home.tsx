@@ -468,7 +468,7 @@ export default function Home() {
       {/* Journal feed */}
       <main className="flex-1">
         <ScrollArea className="h-full">
-          <div className="p-4 space-y-4 pb-20"> {/* Extra bottom padding for navigation */}
+          <div className="p-4 pb-20 grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"> {/* Responsive grid layout */}
             {/* Loading state */}
             {isLoading && (
               <div className="text-center py-12">
