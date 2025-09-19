@@ -70,6 +70,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         req.originalUrl.startsWith('/api/callback') ||
         req.originalUrl.startsWith('/api/logout') ||
         req.originalUrl.startsWith('/api/health') ||
+        req.originalUrl.startsWith('/api/debug') ||
         (req.originalUrl.startsWith('/api/journal/reprocess-all-users') && process.env.NODE_ENV !== 'production')) {
       return next();
     }
@@ -1099,6 +1100,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: 'Failed to fetch entries' });
     }
   });
+
 
   // Search journal entries endpoint  
   app.post(['/api/search', '/api/journal/search'], async (req, res) => {
