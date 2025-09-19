@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Camera, Image, Users, Globe, Lock, Save, X, Upload } from 'lucide-react'
+import { Camera, Image, Users, Globe, Lock, Save, X, Upload, UserPlus, Loader2 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { useQuery } from '@tanstack/react-query'
 import { apiRequest, queryClient } from '@/lib/queryClient'
@@ -42,6 +42,14 @@ export default function RecordDialog({ open, onOpenChange, editEntryId, onSaveSu
   const [audioPlayable, setAudioPlayable] = useState<boolean>(false)
   const [isSaving, setIsSaving] = useState(false)
   const [selectedUsers, setSelectedUsers] = useState<{id: string, email: string, username?: string, firstName?: string, lastName?: string, profileImageUrl?: string}[]>([])
+  // People tagging state
+  const [selectedPeople, setSelectedPeople] = useState<{id: string, firstName: string, lastName: string | null}[]>([])
+  const [isScanning, setIsScanning] = useState(false)
+  const [suggestions, setSuggestions] = useState<{
+    existingPeople: {id: string, firstName: string, lastName: string | null}[];
+    newPeople: {originalText: string, firstName: string, lastName: string | null, confidence: string}[];
+  } | null>(null)
+  const [showSuggestions, setShowSuggestions] = useState(false)
   const { toast } = useToast()
   
   // Fetch entry data when in edit mode
@@ -74,8 +82,38 @@ export default function RecordDialog({ open, onOpenChange, editEntryId, onSaveSu
       if (editEntry.privacy === 'shared' && editEntry.id) {
         loadSharingInfo(editEntry.id)
       }
+
+      // Load existing person tags for this entry
+      if (editEntry.id) {
+        loadPersonTags(editEntry.id)
+      }
     }
   }, [editEntry, isEditMode])
+
+  // Load existing person tags for an entry
+  const loadPersonTags = async (entryId: string) => {
+    try {
+      const response = await fetch(`/api/journal/entries/${entryId}/people`, {
+        credentials: 'include'
+      })
+      
+      if (response.ok) {
+        const personTags = await response.json()
+        // Set the selected people based on existing tags
+        const selectedPeopleFromTags = personTags.map((tag: any) => ({
+          id: tag.person.id,
+          firstName: tag.person.firstName,
+          lastName: tag.person.lastName
+        }))
+        setSelectedPeople(selectedPeopleFromTags)
+      } else if (response.status !== 404) {
+        // 404 is okay (no person tags), but other errors should be logged
+        console.error('Failed to load person tags for entry:', entryId)
+      }
+    } catch (error) {
+      console.error('Error loading person tags:', error)
+    }
+  }
   
   // Reset form when dialog closes
   useEffect(() => {
@@ -93,6 +131,10 @@ export default function RecordDialog({ open, onOpenChange, editEntryId, onSaveSu
       setAudioPlayable(false)
       setIsSaving(false)
       setSelectedUsers([])
+      setSelectedPeople([])
+      setSuggestions(null)
+      setShowSuggestions(false)
+      setIsScanning(false)
       hasInitializedRef.current = false
     }
   }, [open])
@@ -335,6 +377,47 @@ export default function RecordDialog({ open, onOpenChange, editEntryId, onSaveSu
             console.error('Error sharing entry:', shareError)
           }
         }
+
+        // Handle person tagging for selected people
+        if (selectedPeople.length > 0 && entryId) {
+          try {
+            const tagPromises = selectedPeople.map(async (person) => {
+              const tagResponse = await fetch(`/api/journal/entries/${entryId}/people/${person.id}`, {
+                method: 'POST',
+                credentials: 'include'
+              })
+              
+              if (!tagResponse.ok) {
+                console.error(`Failed to tag person ${person.firstName} ${person.lastName}`)
+                return false
+              } else {
+                console.log(`Tagged person ${person.firstName} ${person.lastName} successfully`)
+                return true
+              }
+            })
+
+            const results = await Promise.allSettled(tagPromises)
+            const successful = results.filter(r => r.status === 'fulfilled' && r.value === true).length
+            const failed = results.length - successful
+
+            if (failed > 0) {
+              toast({
+                title: "Partial success",
+                description: `Entry saved but ${failed} person tags failed. ${successful} people were tagged successfully.`,
+                variant: "destructive"
+              })
+            } else if (successful > 0) {
+              console.log(`Successfully tagged ${successful} people in entry`)
+            }
+          } catch (tagError) {
+            console.error('Error tagging people in entry:', tagError)
+            toast({
+              title: "Partial success", 
+              description: "Entry saved but people tagging failed. You can tag people manually later.",
+              variant: "destructive"
+            })
+          }
+        }
         
         // Success! For new entries, clear the form. For edits, keep the form populated
         if (!isEditMode) {
@@ -346,6 +429,9 @@ export default function RecordDialog({ open, onOpenChange, editEntryId, onSaveSu
           setAudioUrl('')
           setAudioPlayable(false)
           setSelectedUsers([])
+          setSelectedPeople([])
+          setSuggestions(null)
+          setShowSuggestions(false)
         }
         
         toast({
@@ -392,6 +478,185 @@ export default function RecordDialog({ open, onOpenChange, editEntryId, onSaveSu
       console.error('Error saving entry:', error)
     } finally {
       setIsSaving(false)
+    }
+  }
+
+  // Handle scanning text for people names
+  const handleScanForPeople = async () => {
+    if (!content.trim()) {
+      toast({
+        title: "No content to scan",
+        description: "Please write some content in your entry first.",
+        variant: "destructive"
+      })
+      return
+    }
+
+    setIsScanning(true)
+    try {
+      // First, get AI insights to detect mentioned people
+      const response = await fetch('/api/ai/analyze-text', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({ 
+          text: content,
+          analysisType: 'people' // Focus on people detection
+        })
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to scan for people')
+      }
+
+      const aiResult = await response.json()
+      const mentionedPeople = aiResult.mentionedPeople || []
+      
+      if (mentionedPeople.length === 0) {
+        setSuggestions({ existingPeople: [], newPeople: [] })
+        setShowSuggestions(true)
+        toast({
+          title: "No people detected",
+          description: "AI didn't detect any names in your entry.",
+        })
+        return
+      }
+
+      // Get existing people to match against
+      const peopleResponse = await fetch('/api/people', {
+        credentials: 'include'
+      })
+      
+      if (!peopleResponse.ok) {
+        throw new Error('Failed to fetch existing people')
+      }
+
+      const existingPeople = await peopleResponse.json()
+      const existingNames = new Set(
+        existingPeople.map((person: any) => 
+          `${person.firstName || ''} ${person.lastName || ''}`.trim().toLowerCase()
+        )
+      )
+
+      // Separate into existing and new people
+      const existingSuggestions: {id: string, firstName: string, lastName: string | null}[] = []
+      const newSuggestions: {originalText: string, firstName: string, lastName: string | null, confidence: string}[] = []
+
+      for (const name of mentionedPeople) {
+        const nameParts = name.trim().split(/\s+/)
+        const firstName = nameParts[0]
+        const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : null
+        const fullName = `${firstName} ${lastName || ''}`.trim().toLowerCase()
+
+        // Check if this person already exists
+        const existingPerson = existingPeople.find((person: any) => 
+          `${person.firstName || ''} ${person.lastName || ''}`.trim().toLowerCase() === fullName
+        )
+
+        if (existingPerson) {
+          // Don't add duplicates to existing suggestions
+          if (!existingSuggestions.find(p => p.id === existingPerson.id)) {
+            existingSuggestions.push({
+              id: existingPerson.id,
+              firstName: existingPerson.firstName,
+              lastName: existingPerson.lastName
+            })
+          }
+        } else {
+          // Add as new person suggestion
+          const confidence = name.length > 1 && /^[A-Za-z\s'-]+$/.test(name) ? 'high' : 'medium'
+          newSuggestions.push({
+            originalText: name,
+            firstName,
+            lastName,
+            confidence
+          })
+        }
+      }
+
+      setSuggestions({
+        existingPeople: existingSuggestions,
+        newPeople: newSuggestions
+      })
+      setShowSuggestions(true)
+
+      toast({
+        title: "People detected!",
+        description: `Found ${existingSuggestions.length} existing people and ${newSuggestions.length} new names.`,
+      })
+
+    } catch (error) {
+      console.error('Error scanning for people:', error)
+      toast({
+        title: "Scan failed",
+        description: "Unable to scan for people. Please try again.",
+        variant: "destructive"
+      })
+    } finally {
+      setIsScanning(false)
+    }
+  }
+
+  // Handle toggling people selection
+  const togglePersonSelection = (person: {id: string, firstName: string, lastName: string | null}, isExisting: boolean) => {
+    if (isExisting) {
+      setSelectedPeople(prev => {
+        const isSelected = prev.find(p => p.id === person.id)
+        if (isSelected) {
+          return prev.filter(p => p.id !== person.id)
+        } else {
+          return [...prev, person]
+        }
+      })
+    }
+  }
+
+  // Handle creating and selecting new people
+  const handleCreateAndSelectNewPerson = async (suggestion: {originalText: string, firstName: string, lastName: string | null}) => {
+    try {
+      const personData = {
+        firstName: suggestion.firstName,
+        lastName: suggestion.lastName || '',
+        notes: `Mentioned in journal entry: "${title || 'Untitled'}"`
+      }
+
+      const response = await apiRequest('POST', '/api/people', personData)
+      const newPerson = await response.json()
+      
+      // Add to selected people
+      setSelectedPeople(prev => [...prev, {
+        id: newPerson.id,
+        firstName: newPerson.firstName,
+        lastName: newPerson.lastName
+      }])
+
+      // Remove from new suggestions and add to existing
+      setSuggestions(prev => {
+        if (!prev) return prev
+        return {
+          existingPeople: [...prev.existingPeople, {
+            id: newPerson.id,
+            firstName: newPerson.firstName,
+            lastName: newPerson.lastName
+          }],
+          newPeople: prev.newPeople.filter(p => p.originalText !== suggestion.originalText)
+        }
+      })
+
+      toast({
+        title: "Person created!",
+        description: `${suggestion.firstName} ${suggestion.lastName || ''} has been added to your people.`,
+      })
+
+    } catch (error) {
+      console.error('Error creating person:', error)
+      toast({
+        title: "Creation failed",
+        description: "Unable to create person. Please try again.",
+        variant: "destructive"
+      })
     }
   }
 
@@ -546,6 +811,146 @@ export default function RecordDialog({ open, onOpenChange, editEntryId, onSaveSu
                   data-testid="textarea-entry-content"
                 />
               </div>
+
+              {/* People Section */}
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Users className="h-4 w-4" />
+                    People
+                  </CardTitle>
+                  <p className="text-xs text-muted-foreground">
+                    Tag people mentioned in your entry. AI can automatically detect names for you.
+                  </p>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {/* Add People Button */}
+                    <Button
+                      variant="outline"
+                      className="w-full justify-center hover-elevate"
+                      onClick={handleScanForPeople}
+                      disabled={isScanning || !content.trim()}
+                      data-testid="button-scan-people"
+                    >
+                      {isScanning ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Scanning for people...
+                        </>
+                      ) : (
+                        <>
+                          <UserPlus className="h-4 w-4 mr-2" />
+                          Scan for People
+                        </>
+                      )}
+                    </Button>
+
+                    {/* Selected People Display */}
+                    {selectedPeople.length > 0 && (
+                      <div>
+                        <h4 className="text-sm font-medium mb-2">Tagged People:</h4>
+                        <div className="flex flex-wrap gap-2">
+                          {selectedPeople.map((person) => (
+                            <Badge 
+                              key={person.id} 
+                              variant="secondary"
+                              className="gap-1 cursor-pointer hover-elevate"
+                              onClick={() => togglePersonSelection(person, true)}
+                              data-testid={`tagged-person-${person.id}`}
+                            >
+                              {person.firstName} {person.lastName || ''}
+                              <X className="h-3 w-3" />
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* People Suggestions */}
+                    {showSuggestions && suggestions && (
+                      <div className="space-y-3">
+                        {suggestions.existingPeople.length > 0 && (
+                          <div>
+                            <h4 className="text-sm font-medium mb-2">Existing People:</h4>
+                            <div className="space-y-2">
+                              {suggestions.existingPeople.map((person) => {
+                                const isSelected = selectedPeople.find(p => p.id === person.id)
+                                return (
+                                  <div
+                                    key={person.id}
+                                    className={cn(
+                                      "flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-colors hover-elevate",
+                                      isSelected ? 'border-primary bg-primary/10' : 'border-border'
+                                    )}
+                                    onClick={() => togglePersonSelection(person, true)}
+                                    data-testid={`existing-person-${person.id}`}
+                                  >
+                                    <span className="text-sm font-medium">
+                                      {person.firstName} {person.lastName || ''}
+                                    </span>
+                                    <div className={cn(
+                                      'h-4 w-4 rounded-full border-2 transition-colors',
+                                      isSelected ? 'border-primary bg-primary' : 'border-muted-foreground'
+                                    )}>
+                                      {isSelected && (
+                                        <div className="h-full w-full rounded-full bg-background scale-50" />
+                                      )}
+                                    </div>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        )}
+
+                        {suggestions.newPeople.length > 0 && (
+                          <div>
+                            <h4 className="text-sm font-medium mb-2">New People:</h4>
+                            <div className="space-y-2">
+                              {suggestions.newPeople.map((suggestion, index) => (
+                                <div
+                                  key={`${suggestion.originalText}-${index}`}
+                                  className="flex items-center justify-between p-3 rounded-lg border border-border hover-elevate"
+                                  data-testid={`new-person-suggestion-${index}`}
+                                >
+                                  <div className="flex-1">
+                                    <span className="text-sm font-medium">
+                                      {suggestion.firstName} {suggestion.lastName || ''}
+                                    </span>
+                                    <div className="flex items-center gap-2 mt-1">
+                                      <Badge variant="outline" className="text-xs">
+                                        {suggestion.confidence}
+                                      </Badge>
+                                      <span className="text-xs text-muted-foreground">
+                                        from "{suggestion.originalText}"
+                                      </span>
+                                    </div>
+                                  </div>
+                                  <Button
+                                    size="sm"
+                                    onClick={() => handleCreateAndSelectNewPerson(suggestion)}
+                                    data-testid={`create-person-${index}`}
+                                  >
+                                    <UserPlus className="h-3 w-3 mr-1" />
+                                    Create & Tag
+                                  </Button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {suggestions.existingPeople.length === 0 && suggestions.newPeople.length === 0 && (
+                          <p className="text-sm text-muted-foreground text-center py-4" data-testid="no-people-detected">
+                            No people detected in your entry.
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
 
               {/* Media upload */}
               <Card>
