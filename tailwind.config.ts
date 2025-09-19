@@ -9,19 +9,8 @@ export default {
         lg: ".5625rem", /* 9px */
         md: ".375rem", /* 6px */
         sm: ".1875rem", /* 3px */
-        // NestNotes Border Radius
-        xl: "1rem",
-        "2xl": "1.5rem",
       },
       colors: {
-        // NestNotes Brand Colors
-        brand: {
-          coral: "#FF6B6B",
-          blue: "#4A90E2", 
-          beige: "#FFF8F0",
-          navy: "#2E3A59",
-          gray: "#6B7280",
-        },
         // Flat / base colors (regular buttons)
         background: "hsl(var(--background) / <alpha-value>)",
         foreground: "hsl(var(--foreground) / <alpha-value>)",
@@ -97,13 +86,6 @@ export default {
         sans: ["var(--font-sans)"],
         serif: ["var(--font-serif)"],
         mono: ["var(--font-mono)"],
-        // NestNotes Typography
-        heading: ["Poppins", "sans-serif"],
-        body: ["Inter", "sans-serif"],
-      },
-      boxShadow: {
-        // NestNotes Box Shadow
-        soft: "0 4px 12px rgba(0, 0, 0, 0.08)",
       },
       keyframes: {
         "accordion-down": {

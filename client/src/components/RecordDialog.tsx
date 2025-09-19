@@ -821,14 +821,13 @@ export default function RecordDialog({ open, onOpenChange, editEntryId, onSaveSu
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden p-0">
         <DialogHeader className="px-6 py-4 border-b border-border">
           <div className="flex items-center justify-between">
-            <DialogTitle className="text-xl font-heading font-bold text-brand-navy">
+            <DialogTitle className="text-lg font-semibold">
               {isEditMode ? 'Edit Entry' : 'New Journal Entry'}
             </DialogTitle>
             <Button 
               onClick={handleSave}
               disabled={!content.trim() || isSaving}
               size="sm"
-              className="bg-brand-coral hover:bg-red-500 text-white font-heading font-semibold"
               data-testid="button-save-entry"
             >
               {isSaving ? (
@@ -851,7 +850,7 @@ export default function RecordDialog({ open, onOpenChange, editEntryId, onSaveSu
             {/* Recording interface */}
             <div className="mb-6 py-6 bg-gradient-to-b from-background to-muted/30 -mx-6 px-6 rounded-lg">
               <div className="text-center space-y-4">
-                <h2 className="text-xl font-heading font-bold text-brand-navy">Voice Recording</h2>
+                <h2 className="text-xl font-medium text-foreground">Voice Recording</h2>
                 <p className="text-sm text-muted-foreground max-w-sm mx-auto">
                   {isRecording ? 'Recording in progress... Speak clearly for better transcription' :
                    isTranscribing ? 'Processing your recording with AI transcription...' :
