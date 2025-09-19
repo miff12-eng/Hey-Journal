@@ -5,7 +5,7 @@ import { generateAIResponse, transcribeAudio } from "./ai";
 import { analyzeEntry, semanticRank } from "./services/openai";
 import { enhancedAnalyzeEntry } from "./services/enhancedOpenAI";
 import EmbeddingProcessor from "./services/embeddingProcessor";
-import { insertJournalEntrySchema, insertAiChatSessionSchema, insertCommentSchema, updateUserProfileSchema } from "@shared/schema";
+import { insertJournalEntrySchema, insertAiChatSessionSchema, insertCommentSchema, updateUserProfileSchema, insertPersonSchema, insertEntryPersonTagSchema } from "@shared/schema";
 import { z } from "zod";
 import multer from "multer";
 import {
@@ -1077,6 +1077,363 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Achievements calculation error:', error);
       res.status(500).json({ error: 'Failed to calculate achievements' });
+    }
+  });
+
+  // === PERSON MANAGEMENT ROUTES ===
+  
+  // Get all people for the current user
+  app.get('/api/people', async (req, res) => {
+    try {
+      const people = await storage.getPersonsByUserId(req.userId);
+      res.json(people);
+    } catch (error) {
+      console.error('Get People Error:', error);
+      res.status(500).json({ error: 'Failed to fetch people' });
+    }
+  });
+
+  // Create a new person
+  app.post('/api/people', async (req, res) => {
+    try {
+      const personData = insertPersonSchema.parse(req.body);
+      const person = await storage.createPerson(personData, req.userId);
+      res.status(201).json(person);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: 'Invalid person data', details: error.errors });
+      }
+      console.error('Create Person Error:', error);
+      res.status(500).json({ error: 'Failed to create person' });
+    }
+  });
+
+  // Get a specific person by ID
+  app.get('/api/people/:id', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const person = await storage.getPerson(id);
+      
+      if (!person) {
+        return res.status(404).json({ error: 'Person not found' });
+      }
+      
+      // Verify person belongs to the user
+      if (person.userId !== req.userId) {
+        return res.status(403).json({ error: 'Not authorized to access this person' });
+      }
+      
+      res.json(person);
+    } catch (error) {
+      console.error('Get Person Error:', error);
+      res.status(500).json({ error: 'Failed to fetch person' });
+    }
+  });
+
+  // Update a person
+  app.put('/api/people/:id', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const updates = insertPersonSchema.partial().parse(req.body);
+      
+      // Verify person exists and belongs to the user
+      const existingPerson = await storage.getPerson(id);
+      if (!existingPerson) {
+        return res.status(404).json({ error: 'Person not found' });
+      }
+      
+      if (existingPerson.userId !== req.userId) {
+        return res.status(403).json({ error: 'Not authorized to update this person' });
+      }
+      
+      const updatedPerson = await storage.updatePerson(id, updates);
+      res.json(updatedPerson);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: 'Invalid person data', details: error.errors });
+      }
+      console.error('Update Person Error:', error);
+      res.status(500).json({ error: 'Failed to update person' });
+    }
+  });
+
+  // Delete a person
+  app.delete('/api/people/:id', async (req, res) => {
+    try {
+      const { id } = req.params;
+      
+      // Verify person exists and belongs to the user
+      const existingPerson = await storage.getPerson(id);
+      if (!existingPerson) {
+        return res.status(404).json({ error: 'Person not found' });
+      }
+      
+      if (existingPerson.userId !== req.userId) {
+        return res.status(403).json({ error: 'Not authorized to delete this person' });
+      }
+      
+      await storage.deletePerson(id);
+      res.status(204).send(); // 204 No Content for successful deletion
+    } catch (error) {
+      console.error('Delete Person Error:', error);
+      res.status(500).json({ error: 'Failed to delete person' });
+    }
+  });
+
+  // Search people by name
+  app.get('/api/people/search/:query', async (req, res) => {
+    try {
+      const { query } = req.params;
+      if (!query || query.trim().length === 0) {
+        return res.status(400).json({ error: 'Search query is required' });
+      }
+      
+      const people = await storage.searchPersonsByUserId(req.userId, query.trim());
+      res.json(people);
+    } catch (error) {
+      console.error('Search People Error:', error);
+      res.status(500).json({ error: 'Failed to search people' });
+    }
+  });
+
+  // === PERSON TAGGING ROUTES ===
+  
+  // Get person tags for a specific entry
+  app.get('/api/journal/entries/:entryId/people', async (req, res) => {
+    try {
+      const { entryId } = req.params;
+      
+      // Verify entry exists and user has access to it
+      const entry = await storage.getJournalEntry(entryId);
+      if (!entry) {
+        return res.status(404).json({ error: 'Entry not found' });
+      }
+      
+      const canAccess = 
+        entry.userId === req.userId || // Owner can always access
+        entry.privacy === 'public' || // Public entries allow anyone to view
+        (entry.privacy === 'shared' && entry.sharedWith?.includes(req.userId)); // Shared with user
+      
+      if (!canAccess) {
+        return res.status(403).json({ error: 'Not authorized to view this entry' });
+      }
+      
+      // Get person tags, filtered by user (privacy-aware)
+      const personTags = await storage.getPersonTagsByEntryId(entryId, req.userId);
+      res.json(personTags);
+    } catch (error) {
+      console.error('Get Person Tags Error:', error);
+      res.status(500).json({ error: 'Failed to fetch person tags' });
+    }
+  });
+
+  // Tag a person in an entry
+  app.post('/api/journal/entries/:entryId/people/:personId', async (req, res) => {
+    try {
+      const { entryId, personId } = req.params;
+      
+      // Verify entry exists and belongs to the user (only owners can tag people)
+      const entry = await storage.getJournalEntry(entryId);
+      if (!entry) {
+        return res.status(404).json({ error: 'Entry not found' });
+      }
+      
+      if (entry.userId !== req.userId) {
+        return res.status(403).json({ error: 'Only entry owners can tag people' });
+      }
+      
+      // Verify person exists and belongs to the user
+      const person = await storage.getPerson(personId);
+      if (!person) {
+        return res.status(404).json({ error: 'Person not found' });
+      }
+      
+      if (person.userId !== req.userId) {
+        return res.status(403).json({ error: 'Not authorized to use this person' });
+      }
+      
+      const personTag = await storage.tagPersonInEntry(entryId, personId);
+      res.status(201).json(personTag);
+    } catch (error) {
+      console.error('Tag Person Error:', error);
+      res.status(500).json({ error: 'Failed to tag person' });
+    }
+  });
+
+  // Untag a person from an entry
+  app.delete('/api/journal/entries/:entryId/people/:personId', async (req, res) => {
+    try {
+      const { entryId, personId } = req.params;
+      
+      // Verify entry exists and belongs to the user (only owners can untag people)
+      const entry = await storage.getJournalEntry(entryId);
+      if (!entry) {
+        return res.status(404).json({ error: 'Entry not found' });
+      }
+      
+      if (entry.userId !== req.userId) {
+        return res.status(403).json({ error: 'Only entry owners can untag people' });
+      }
+      
+      await storage.untagPersonFromEntry(entryId, personId);
+      res.status(204).send(); // 204 No Content for successful deletion
+    } catch (error) {
+      console.error('Untag Person Error:', error);
+      res.status(500).json({ error: 'Failed to untag person' });
+    }
+  });
+
+  // Get all entries for a specific person
+  app.get('/api/people/:personId/entries', async (req, res) => {
+    try {
+      const { personId } = req.params;
+      
+      // Verify person exists and belongs to the user
+      const person = await storage.getPerson(personId);
+      if (!person) {
+        return res.status(404).json({ error: 'Person not found' });
+      }
+      
+      if (person.userId !== req.userId) {
+        return res.status(403).json({ error: 'Not authorized to access this person' });
+      }
+      
+      const entries = await storage.getEntriesByPersonId(personId, req.userId);
+      res.json(entries);
+    } catch (error) {
+      console.error('Get Entries by Person Error:', error);
+      res.status(500).json({ error: 'Failed to fetch entries for person' });
+    }
+  });
+
+  // === PERSON NAME SUGGESTIONS ===
+  
+  // Get suggestions for creating Person objects from detected names in a journal entry
+  app.get('/api/journal/entries/:entryId/person-suggestions', async (req, res) => {
+    try {
+      const { entryId } = req.params;
+      
+      // Verify entry exists and belongs to the user
+      const entry = await storage.getJournalEntry(entryId);
+      if (!entry) {
+        return res.status(404).json({ error: 'Entry not found' });
+      }
+      
+      if (entry.userId !== req.userId) {
+        return res.status(403).json({ error: 'Not authorized to access this entry' });
+      }
+      
+      // Get AI insights for the entry
+      const aiInsights = await storage.getAiInsights(entryId);
+      if (!aiInsights) {
+        return res.json({ suggestions: [] }); // No AI insights available
+      }
+      
+      // Parse the AI insights to extract mentioned people
+      let mentionedPeople: string[] = [];
+      try {
+        if (typeof aiInsights.insights === 'string') {
+          const parsed = JSON.parse(aiInsights.insights);
+          mentionedPeople = parsed.mentionedPeople || [];
+        } else if (aiInsights.insights && typeof aiInsights.insights === 'object') {
+          mentionedPeople = (aiInsights.insights as any).mentionedPeople || [];
+        }
+      } catch (error) {
+        console.error('Error parsing AI insights:', error);
+        return res.json({ suggestions: [] });
+      }
+      
+      if (!mentionedPeople || mentionedPeople.length === 0) {
+        return res.json({ suggestions: [] });
+      }
+      
+      // Get existing people for the user to avoid duplicate suggestions
+      const existingPeople = await storage.getPersonsByUserId(req.userId);
+      const existingNames = new Set(
+        existingPeople.map(person => 
+          `${person.firstName || ''} ${person.lastName || ''}`.trim().toLowerCase()
+        ).concat(
+          existingPeople.map(person => person.firstName?.toLowerCase()).filter(Boolean)
+        )
+      );
+      
+      // Filter out names that already exist as Person objects
+      const newNames = mentionedPeople.filter(name => 
+        !existingNames.has(name.toLowerCase()) && 
+        name.length > 0 && 
+        name.length < 100 // Reasonable name length
+      );
+      
+      // Create suggestions for new names
+      const suggestions = newNames.map(name => {
+        // Try to split into first and last name
+        const nameParts = name.trim().split(' ');
+        const firstName = nameParts[0];
+        const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : null;
+        
+        return {
+          originalText: name,
+          firstName,
+          lastName,
+          notes: `Mentioned in journal entry: "${entry.title || 'Untitled'}"`,
+          // Include entry context for better suggestions
+          entryId: entryId,
+          confidence: name.length > 1 && /^[A-Za-z\s'-]+$/.test(name) ? 'high' : 'medium'
+        };
+      });
+      
+      res.json({ 
+        suggestions,
+        entryTitle: entry.title,
+        entryContent: entry.content?.substring(0, 200) + (entry.content?.length > 200 ? '...' : '')
+      });
+    } catch (error) {
+      console.error('Get Person Suggestions Error:', error);
+      res.status(500).json({ error: 'Failed to get person suggestions' });
+    }
+  });
+
+  // Create multiple Person objects from suggestions
+  app.post('/api/people/batch', async (req, res) => {
+    try {
+      const batchSchema = z.object({
+        people: z.array(insertPersonSchema).max(10) // Limit to 10 people at once
+      });
+      
+      const { people } = batchSchema.parse(req.body);
+      
+      if (people.length === 0) {
+        return res.status(400).json({ error: 'No people provided' });
+      }
+      
+      const createdPeople = [];
+      const errors = [];
+      
+      for (const personData of people) {
+        try {
+          const person = await storage.createPerson(personData, req.userId);
+          createdPeople.push(person);
+        } catch (error) {
+          errors.push({
+            personData,
+            error: error instanceof Error ? error.message : 'Unknown error'
+          });
+        }
+      }
+      
+      res.status(201).json({
+        created: createdPeople,
+        errors,
+        totalRequested: people.length,
+        totalCreated: createdPeople.length,
+        totalErrors: errors.length
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: 'Invalid batch data', details: error.errors });
+      }
+      console.error('Batch Create People Error:', error);
+      res.status(500).json({ error: 'Failed to create people in batch' });
     }
   });
 
