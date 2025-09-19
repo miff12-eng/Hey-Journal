@@ -20,6 +20,7 @@ export default function AudioPlayer({
   const [isLoading, setIsLoading] = useState(true)
   const [isMuted, setIsMuted] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [hasInteracted, setHasInteracted] = useState(false)
   
   const audioRef = useRef<HTMLAudioElement>(null)
   const progressRef = useRef<HTMLDivElement>(null)
@@ -42,8 +43,24 @@ export default function AudioPlayer({
       setCurrentTime(0)
     }
 
-    const handleError = () => {
-      setError('Failed to load audio')
+    const handleError = (e?: Event) => {
+      const errorEvent = e as ErrorEvent
+      console.error('Audio load error:', {
+        audioUrl,
+        error: errorEvent?.error,
+        message: errorEvent?.message,
+        readyState: audio.readyState,
+        networkState: audio.networkState
+      })
+      
+      // Different error messages based on the audio state
+      if (audio.networkState === 3) { // NETWORK_NO_SOURCE
+        setError('Audio file not accessible')
+      } else if (audio.readyState === 0) { // HAVE_NOTHING
+        setError('Audio unavailable - may require login')
+      } else {
+        setError('Audio unavailable')
+      }
       setIsLoading(false)
     }
 
@@ -75,12 +92,30 @@ export default function AudioPlayer({
         audio.pause()
         setIsPlaying(false)
       } else {
+        // Mark that user has interacted
+        setHasInteracted(true)
         await audio.play()
         setIsPlaying(true)
       }
-    } catch (err) {
-      console.error('Error playing audio:', err)
-      setError('Failed to play audio')
+    } catch (err: any) {
+      console.error('Error playing audio:', {
+        audioUrl,
+        error: err?.name,
+        message: err?.message,
+        code: err?.code,
+        hasInteracted,
+        readyState: audio.readyState,
+        networkState: audio.networkState
+      })
+      
+      // Handle specific mobile browser audio policy errors
+      if (err?.name === 'NotAllowedError' || err?.name === 'AbortError') {
+        setError('Audio requires user interaction - tap to play')
+      } else if (err?.name === 'NotSupportedError') {
+        setError('Audio format not supported')
+      } else {
+        setError('Failed to play audio')
+      }
     }
   }
 
@@ -121,7 +156,7 @@ export default function AudioPlayer({
         className
       )}>
         <VolumeX className="h-4 w-4 text-destructive" />
-        <span className="text-sm text-destructive">Audio unavailable</span>
+        <span className="text-sm text-destructive">{error}</span>
       </div>
     )
   }
