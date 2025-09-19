@@ -68,10 +68,15 @@ export async function performVectorSearch(
   queryText: string,
   userId: string,
   limit: number = 10,
-  similarityThreshold: number = 0.3
+  similarityThreshold: number = 0.3,
+  filters?: {
+    filterType?: 'tags' | 'date';
+    tags?: string[];
+    dateRange?: { from?: string; to?: string };
+  }
 ): Promise<VectorSearchResult[]> {
   try {
-    console.log('🔍 Performing vector search for:', queryText);
+    console.log('🔍 Performing vector search for:', queryText, filters ? 'with filters' : '');
     
     // Step 1: Generate embedding for the search query
     const queryEmbedding = await generateTextEmbedding(queryText);
@@ -82,18 +87,39 @@ export async function performVectorSearch(
     // In a production environment, you'd use pgvector's cosine similarity operators
     const { db } = await import('../db');
     const { journalEntries } = await import('../../shared/schema');
-    const { eq, and, isNotNull } = await import('drizzle-orm');
+    const { eq, and, isNotNull, gte, lte, arrayContains } = await import('drizzle-orm');
+
+    // Build where conditions
+    const whereConditions = [
+      eq(journalEntries.userId, userId),
+      isNotNull(journalEntries.contentEmbedding)
+    ];
+
+    // Apply filters
+    if (filters?.tags && filters.tags.length > 0) {
+      // Check if any of the provided tags exist in the entry's tags array
+      filters.tags.forEach(tag => {
+        whereConditions.push(arrayContains(journalEntries.tags, [tag]));
+      });
+    }
+
+    if (filters?.dateRange) {
+      if (filters.dateRange.from) {
+        whereConditions.push(gte(journalEntries.createdAt, new Date(filters.dateRange.from)));
+      }
+      if (filters.dateRange.to) {
+        // Add 1 day to include the entire "to" date
+        const toDate = new Date(filters.dateRange.to);
+        toDate.setDate(toDate.getDate() + 1);
+        whereConditions.push(lte(journalEntries.createdAt, toDate));
+      }
+    }
 
     // Get all entries with embeddings for this user
     const entriesWithEmbeddings = await db
       .select()
       .from(journalEntries)
-      .where(
-        and(
-          eq(journalEntries.userId, userId),
-          isNotNull(journalEntries.contentEmbedding)
-        )
-      );
+      .where(and(...whereConditions));
 
     console.log('📊 Found', entriesWithEmbeddings.length, 'entries with embeddings');
 
@@ -158,13 +184,18 @@ export async function performVectorSearch(
 export async function performConversationalSearch(
   query: string,
   userId: string,
-  previousMessages: Array<{role: string, content: string}> = []
+  previousMessages: Array<{role: string, content: string}> = [],
+  filters?: {
+    filterType?: 'tags' | 'date';
+    tags?: string[];
+    dateRange?: { from?: string; to?: string };
+  }
 ): Promise<ConversationalSearchResult> {
   try {
-    console.log('🤖 Starting conversational search for:', query);
+    console.log('🤖 Starting conversational search for:', query, filters ? 'with filters' : '');
 
     // Step 1: Perform semantic vector search to get relevant context (semantic-only, no keywords)
-    const relevantEntries = await performVectorSearch(query, userId, 8, 0.15);
+    const relevantEntries = await performVectorSearch(query, userId, 8, 0.15, filters);
     
     if (relevantEntries.length === 0) {
       return {
@@ -295,15 +326,20 @@ export async function performHybridSearch(
   query: string,
   userId: string,
   limit: number = 10,
-  mode: 'balanced' | 'semantic' | 'keyword' = 'balanced'
+  mode: 'balanced' | 'semantic' | 'keyword' = 'balanced',
+  filters?: {
+    filterType?: 'tags' | 'date';
+    tags?: string[];
+    dateRange?: { from?: string; to?: string };
+  }
 ): Promise<VectorSearchResult[]> {
   try {
-    console.log('🔀 Performing hybrid search:', { query, mode, limit });
+    console.log('🔀 Performing hybrid search:', { query, mode, limit, filters });
 
     // Get both vector and keyword results
     const [vectorResults, keywordResults] = await Promise.all([
-      performVectorSearch(query, userId, limit * 2, 0.15), // Lower threshold for more results
-      performKeywordSearch(query, userId, limit * 2) // Helper function for keyword search
+      performVectorSearch(query, userId, limit * 2, 0.15, filters), // Lower threshold for more results
+      performKeywordSearch(query, userId, limit * 2, filters) // Helper function for keyword search
     ]);
 
     // Combine and weight results based on mode
@@ -363,28 +399,56 @@ export async function performHybridSearch(
 /**
  * Simple keyword search helper (fallback implementation)
  */
-async function performKeywordSearch(query: string, userId: string, limit: number): Promise<VectorSearchResult[]> {
+async function performKeywordSearch(
+  query: string, 
+  userId: string, 
+  limit: number,
+  filters?: {
+    filterType?: 'tags' | 'date';
+    tags?: string[];
+    dateRange?: { from?: string; to?: string };
+  }
+): Promise<VectorSearchResult[]> {
   try {
     const { db } = await import('../db');
     const { journalEntries } = await import('../../shared/schema');
-    const { eq, and, or, ilike } = await import('drizzle-orm');
+    const { eq, and, or, ilike, gte, lte, arrayContains } = await import('drizzle-orm');
 
     const queryLower = query.toLowerCase();
     const queryWords = queryLower.split(/\s+/).filter(word => word.length > 0);
 
+    // Build where conditions
+    const whereConditions = [
+      eq(journalEntries.userId, userId),
+      or(
+        ilike(journalEntries.title, `%${query}%`),
+        ilike(journalEntries.content, `%${query}%`),
+        ilike(journalEntries.searchableText, `%${query}%`)
+      )
+    ];
+
+    // Apply filters
+    if (filters?.tags && filters.tags.length > 0) {
+      filters.tags.forEach(tag => {
+        whereConditions.push(arrayContains(journalEntries.tags, [tag]));
+      });
+    }
+
+    if (filters?.dateRange) {
+      if (filters.dateRange.from) {
+        whereConditions.push(gte(journalEntries.createdAt, new Date(filters.dateRange.from)));
+      }
+      if (filters.dateRange.to) {
+        const toDate = new Date(filters.dateRange.to);
+        toDate.setDate(toDate.getDate() + 1);
+        whereConditions.push(lte(journalEntries.createdAt, toDate));
+      }
+    }
+
     const entries = await db
       .select()
       .from(journalEntries)
-      .where(
-        and(
-          eq(journalEntries.userId, userId),
-          or(
-            ilike(journalEntries.title, `%${query}%`),
-            ilike(journalEntries.content, `%${query}%`),
-            ilike(journalEntries.searchableText, `%${query}%`)
-          )
-        )
-      )
+      .where(and(...whereConditions))
       .limit(limit);
 
     return entries.map(entry => {
