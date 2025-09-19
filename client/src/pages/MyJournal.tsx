@@ -306,10 +306,10 @@ export default function MyJournal() {
               </AvatarFallback>
             </Avatar>
             <div>
-              <h1 className="text-xl font-heading font-bold text-brand-navy" data-testid="text-page-title">
+              <h1 className="text-lg font-semibold text-foreground" data-testid="text-page-title">
                 My Journal
               </h1>
-              <p className="text-xs text-brand-gray">Your personal thoughts and reflections</p>
+              <p className="text-xs text-muted-foreground">Your personal thoughts and reflections</p>
             </div>
           </div>
           
@@ -335,30 +335,30 @@ export default function MyJournal() {
       {/* Quick stats */}
       <div className="px-4 py-3 border-b border-border">
         <div className="grid grid-cols-3 gap-4">
-          <Card className="p-4 rounded-2xl shadow-soft">
+          <Card className="p-3">
             <div className="flex items-center gap-2">
-              <TrendingUp className="h-4 w-4 text-brand-blue" />
+              <TrendingUp className="h-4 w-4 text-primary" />
               <div>
-                <p className="text-lg font-heading font-bold text-brand-navy">{stats.entriesThisWeek ?? 0}</p>
-                <p className="text-xs text-brand-gray font-body">This week</p>
+                <p className="text-lg font-semibold text-foreground">{stats.entriesThisWeek ?? 0}</p>
+                <p className="text-xs text-muted-foreground">This week</p>
               </div>
             </div>
           </Card>
-          <Card className="p-4 rounded-2xl shadow-soft">
+          <Card className="p-3">
             <div className="flex items-center gap-2">
-              <div className="h-2 w-2 bg-brand-coral rounded-full" />
+              <div className="h-2 w-2 bg-accent rounded-full" />
               <div>
-                <p className="text-lg font-heading font-bold text-brand-navy">{stats.daysSinceLastEntry ?? 0}</p>
-                <p className="text-xs text-brand-gray font-body">Days since last entry</p>
+                <p className="text-lg font-semibold text-foreground">{stats.daysSinceLastEntry ?? 0}</p>
+                <p className="text-xs text-muted-foreground">Days since last entry</p>
               </div>
             </div>
           </Card>
-          <Card className="p-4 rounded-2xl shadow-soft">
+          <Card className="p-3">
             <div className="flex items-center gap-2">
-              <div className="h-2 w-2 bg-brand-blue rounded-full" />
+              <div className="h-2 w-2 bg-primary rounded-full" />
               <div>
-                <p className="text-lg font-heading font-bold text-brand-navy">{stats.dayStreak ?? 0}</p>
-                <p className="text-xs text-brand-gray font-body">Day streak</p>
+                <p className="text-lg font-semibold text-foreground">{stats.dayStreak ?? 0}</p>
+                <p className="text-xs text-muted-foreground">Day streak</p>
               </div>
             </div>
           </Card>
@@ -375,7 +375,7 @@ export default function MyJournal() {
               <div className="mb-6">
                 <Button 
                   size="default"
-                  className="w-full bg-brand-coral hover:bg-red-500 text-white font-heading font-semibold rounded-2xl shadow-soft py-4"
+                  className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-medium"
                   onClick={handleCreateNew}
                   data-testid="button-create-entry"
                 >
@@ -423,16 +423,15 @@ export default function MyJournal() {
             {/* Empty state */}
             {!isLoading && !error && displayEntries.length === 0 && (
               <div className="text-center py-12">
-                <div className="h-16 w-16 bg-brand-beige border-2 border-brand-coral rounded-2xl flex items-center justify-center mx-auto mb-4">
-                  <Plus className="h-8 w-8 text-brand-coral" />
+                <div className="h-16 w-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Plus className="h-8 w-8 text-muted-foreground" />
                 </div>
-                <h3 className="text-xl font-heading font-bold text-brand-navy mb-2">No entries yet</h3>
-                <p className="text-sm font-body text-brand-gray mb-6 max-w-sm mx-auto">
+                <h3 className="text-lg font-medium text-foreground mb-2">No entries yet</h3>
+                <p className="text-sm text-muted-foreground mb-4 max-w-sm mx-auto">
                   Start your journal journey by recording your first entry
                 </p>
                 <Button 
                   size="lg" 
-                  className="bg-brand-coral hover:bg-red-500 text-white font-heading font-semibold px-8 py-4 rounded-2xl shadow-soft"
                   onClick={handleCreateNew}
                   data-testid="button-create-first-entry"
                 >
