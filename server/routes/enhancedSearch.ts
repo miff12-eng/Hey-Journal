@@ -16,25 +16,33 @@ router.post('/search/enhanced', async (req, res) => {
       query: z.string().min(1, 'Search query is required'),
       mode: z.enum(['vector', 'conversational', 'hybrid']).default('hybrid'),
       limit: z.number().int().min(1).max(50).default(10),
-      threshold: z.number().min(0).max(1).default(0.3)
+      threshold: z.number().min(0).max(1).default(0.3),
+      filters: z.object({
+        filterType: z.enum(['tags', 'date']).optional(),
+        tags: z.array(z.string()).optional(),
+        dateRange: z.object({
+          from: z.string().optional(),
+          to: z.string().optional()
+        }).optional()
+      }).optional()
     });
 
-    const { query, mode, limit, threshold } = searchSchema.parse(req.body);
+    const { query, mode, limit, threshold, filters } = searchSchema.parse(req.body);
     const userId = req.userId!;
     
-    console.log('🚀 Enhanced search request:', { query, mode, userId });
+    console.log('🚀 Enhanced search request:', { query, mode, userId, filters });
 
     let results;
     const startTime = Date.now();
 
     switch (mode) {
       case 'vector':
-        results = await performVectorSearch(query, userId, limit, threshold);
+        results = await performVectorSearch(query, userId, limit, threshold, filters);
         break;
       
       case 'conversational':
         const previousMessages = req.body.previousMessages || [];
-        const conversationalResult = await performConversationalSearch(query, userId, previousMessages);
+        const conversationalResult = await performConversationalSearch(query, userId, previousMessages, filters);
         return res.json({
           query,
           mode,
@@ -47,7 +55,7 @@ router.post('/search/enhanced', async (req, res) => {
       
       case 'hybrid':
       default:
-        results = await performHybridSearch(query, userId, limit, 'balanced');
+        results = await performHybridSearch(query, userId, limit, 'balanced', filters);
         break;
     }
 
