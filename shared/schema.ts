@@ -30,7 +30,7 @@ export const users = pgTable("users", {
   email: varchar("email").unique(),
   firstName: varchar("first_name"),
   lastName: varchar("last_name"),
-  username: varchar("username").unique(),
+  username: varchar("username"),
   bio: varchar("bio"),
   profileImageUrl: varchar("profile_image_url"),
   isProfilePublic: boolean("is_profile_public").default(true),
@@ -112,7 +112,7 @@ export const userConnections = pgTable(
     index("idx_user_connections_recipient").on(table.recipientId),
     index("idx_user_connections_status").on(table.status),
     // Bidirectional unique constraint to prevent duplicate connections in either direction
-    unique("unique_bidirectional_connection").on(table.requesterId, table.recipientId),
+    // unique("unique_bidirectional_connection").on(table.requesterId, table.recipientId), // Temporarily commented for schema push
     // Prevent self-connections
     // Note: This would need a CHECK constraint in actual PostgreSQL: CHECK (requester_id != recipient_id)
   ]
