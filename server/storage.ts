@@ -62,6 +62,7 @@ export interface IStorage {
     lastEmbeddingUpdate?: Date;
   }>): Promise<JournalEntry>;
   updateAiInsights(entryId: string, insights: AiInsights | null): Promise<JournalEntry>;
+  getAiInsights(entryId: string): Promise<AiInsights | null>;
   deleteJournalEntry(id: string): Promise<void>;
   
   // AI Chat methods
@@ -657,6 +658,21 @@ class DbStorage implements IStorage {
       throw new Error('Journal entry not found');
     }
     return result[0];
+  }
+
+  async getAiInsights(entryId: string): Promise<AiInsights | null> {
+    const result = await this.db
+      .select({
+        aiInsights: journalEntries.aiInsights
+      })
+      .from(journalEntries)
+      .where(eq(journalEntries.id, entryId));
+    
+    if (!result[0]) {
+      throw new Error('Journal entry not found');
+    }
+    
+    return result[0].aiInsights;
   }
 
   async deleteJournalEntry(id: string): Promise<void> {
@@ -1955,6 +1971,15 @@ export class MemStorage implements IStorage {
     
     this.journalEntries.set(entryId, updated);
     return updated;
+  }
+
+  async getAiInsights(entryId: string): Promise<AiInsights | null> {
+    const existing = this.journalEntries.get(entryId);
+    if (!existing) {
+      throw new Error('Journal entry not found');
+    }
+    
+    return existing.aiInsights;
   }
 
   async deleteJournalEntry(id: string): Promise<void> {

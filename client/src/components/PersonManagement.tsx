@@ -45,6 +45,8 @@ export default function PersonManagement({ isOpen, onOpenChange }: PersonManagem
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [selectedPerson, setSelectedPerson] = useState<Person | null>(null)
+  const [selectedSuggestions, setSelectedSuggestions] = useState<Set<string>>(new Set())
+  const [showSuggestions, setShowSuggestions] = useState(true)
   const [personForm, setPersonForm] = useState<PersonFormData>({
     firstName: '',
     lastName: '',
@@ -57,12 +59,26 @@ export default function PersonManagement({ isOpen, onOpenChange }: PersonManagem
     enabled: isOpen
   })
 
-  // Fetch recent journal entries to suggest person creation from
-  const { data: recentEntries, isLoading: entriesLoading } = useQuery<Array<{ id: string; title: string }>>({
-    queryKey: ['/api/journal/entries'],
+  // Fetch person suggestions from the consolidated backend endpoint
+  const { data: suggestionsResponse, isLoading: suggestionsLoading, error: suggestionsError } = useQuery<{
+    suggestions: Array<{
+      entryId: string;
+      entryTitle: string;
+      originalText: string;
+      firstName: string;
+      lastName: string | null;
+      notes: string;
+      confidence: 'high' | 'medium' | 'low';
+    }>;
+    totalEntries: number;
+  }>({
+    queryKey: ['/api/people/suggestions'],
     enabled: isOpen,
-    select: (data: any) => data?.slice(0, 5).map((entry: any) => ({ id: entry.id, title: entry.title })) || []
+    staleTime: 5 * 60 * 1000, // 5 minutes
   })
+
+  // Use suggestions from the consolidated endpoint
+  const allPersonSuggestions = suggestionsResponse?.suggestions || []
 
   // Create person mutation
   const createPersonMutation = useMutation({
@@ -134,6 +150,28 @@ export default function PersonManagement({ isOpen, onOpenChange }: PersonManagem
     }
   })
 
+  // Batch create people from suggestions mutation
+  const batchCreatePeopleMutation = useMutation({
+    mutationFn: (people: PersonFormData[]) => 
+      apiRequest('POST', '/api/people/batch', { people }),
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/people'] })
+      queryClient.invalidateQueries({ queryKey: ['/api/people/suggestions'] })
+      toast({
+        title: "People created",
+        description: `Successfully created ${data.totalCreated} people from suggestions.`,
+      })
+    },
+    onError: (error) => {
+      console.error('Error batch creating people:', error)
+      toast({
+        title: "Error", 
+        description: "Failed to create people from suggestions. Please try again.",
+        variant: "destructive"
+      })
+    }
+  })
+
   // Filter people based on search query
   const filteredPeople = people?.filter(person =>
     `${person.firstName} ${person.lastName || ''}`.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -187,6 +225,50 @@ export default function PersonManagement({ isOpen, onOpenChange }: PersonManagem
     return `${person.firstName || ''} ${person.lastName || ''}`.trim() || 'Unnamed Person'
   }
 
+  // Handle suggestion selection with unique keys
+  const getSuggestionKey = (suggestion: typeof allPersonSuggestions[0]) => {
+    return `${suggestion.entryId}:${suggestion.originalText}`
+  }
+
+  const handleSuggestionToggle = (suggestionKey: string) => {
+    setSelectedSuggestions(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(suggestionKey)) {
+        newSet.delete(suggestionKey)
+      } else {
+        newSet.add(suggestionKey)
+      }
+      return newSet
+    })
+  }
+
+  const handleCreateFromSuggestions = () => {
+    const suggestionsToCreate = allPersonSuggestions.filter(suggestion => 
+      selectedSuggestions.has(getSuggestionKey(suggestion))
+    )
+    
+    const peopleToCreate: PersonFormData[] = suggestionsToCreate.map(suggestion => ({
+      firstName: suggestion.firstName,
+      lastName: suggestion.lastName || '',
+      notes: suggestion.notes
+    }))
+    
+    if (peopleToCreate.length > 0) {
+      batchCreatePeopleMutation.mutate(peopleToCreate)
+      setSelectedSuggestions(new Set()) // Clear selections after creating
+    }
+  }
+
+  const handleSelectAllSuggestions = () => {
+    if (selectedSuggestions.size === allPersonSuggestions.length) {
+      // Deselect all
+      setSelectedSuggestions(new Set())
+    } else {
+      // Select all using unique keys
+      setSelectedSuggestions(new Set(allPersonSuggestions.map(suggestion => getSuggestionKey(suggestion))))
+    }
+  }
+
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-hidden" data-testid="dialog-person-management">
@@ -221,6 +303,115 @@ export default function PersonManagement({ isOpen, onOpenChange }: PersonManagem
               Add Person
             </Button>
           </div>
+
+          {/* AI Person Suggestions */}
+          {allPersonSuggestions.length > 0 && (
+            <Card className="border-primary/20 bg-primary/5">
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-primary" />
+                    AI-Detected People ({allPersonSuggestions.length})
+                  </CardTitle>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowSuggestions(!showSuggestions)}
+                    data-testid="button-toggle-suggestions"
+                  >
+                    {showSuggestions ? 'Hide' : 'Show'}
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  AI found these people mentioned in your recent journal entries. Select names to quickly create Person objects.
+                </p>
+              </CardHeader>
+              {showSuggestions && (
+                <CardContent className="pt-0 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleSelectAllSuggestions}
+                      data-testid="button-select-all-suggestions"
+                    >
+                      {selectedSuggestions.size === allPersonSuggestions.length ? 'Deselect All' : 'Select All'}
+                    </Button>
+                    {selectedSuggestions.size > 0 && (
+                      <Button
+                        size="sm"
+                        onClick={handleCreateFromSuggestions}
+                        disabled={batchCreatePeopleMutation.isPending}
+                        data-testid="button-create-from-suggestions"
+                      >
+                        {batchCreatePeopleMutation.isPending ? (
+                          <>
+                            <Loader2 className="h-3 w-3 mr-2 animate-spin" />
+                            Creating...
+                          </>
+                        ) : (
+                          <>
+                            <UserPlus className="h-3 w-3 mr-2" />
+                            Create {selectedSuggestions.size} People
+                          </>
+                        )}
+                      </Button>
+                    )}
+                  </div>
+                  
+                  <div className="grid gap-2 max-h-40 overflow-y-auto">
+                    {allPersonSuggestions.map((suggestion, index) => {
+                      const suggestionKey = getSuggestionKey(suggestion);
+                      return (
+                        <div 
+                          key={suggestionKey}
+                          className={cn(
+                            "flex items-center gap-3 p-2 rounded border cursor-pointer transition-colors",
+                            selectedSuggestions.has(suggestionKey)
+                              ? "border-primary bg-primary/10"
+                              : "border-border hover:border-primary/50 hover:bg-muted/50"
+                          )}
+                          onClick={() => handleSuggestionToggle(suggestionKey)}
+                          data-testid={`suggestion-${index}`}
+                        >
+                        <div className="flex items-center">
+                          <div className={cn(
+                            "w-4 h-4 rounded border-2 flex items-center justify-center",
+                            selectedSuggestions.has(suggestionKey)
+                              ? "border-primary bg-primary"
+                              : "border-muted-foreground"
+                          )}>
+                            {selectedSuggestions.has(suggestionKey) && (
+                              <div className="w-2 h-2 bg-primary-foreground rounded-full" />
+                            )}
+                          </div>
+                        </div>
+                        <Avatar className="h-6 w-6">
+                          <AvatarFallback className="text-xs">
+                            {suggestion.firstName[0]}{suggestion.lastName?.[0] || ''}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium" data-testid={`text-suggestion-name-${index}`}>
+                            {suggestion.firstName} {suggestion.lastName || ''}
+                          </p>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline" className="text-xs">
+                              {suggestion.confidence}
+                            </Badge>
+                            <span className="text-xs text-muted-foreground truncate">
+                              from "{suggestion.entryTitle}"
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                      )
+                    })}
+                  </div>
+                </CardContent>
+              )}
+            </Card>
+          )}
 
           {/* People list */}
           <div className="flex-1 overflow-y-auto space-y-3">
