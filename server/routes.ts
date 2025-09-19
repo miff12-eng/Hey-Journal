@@ -421,6 +421,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // AI suggestions endpoint for generating title and tag suggestions
+  app.post('/api/ai/suggestions', async (req, res) => {
+    try {
+      const { content } = req.body;
+      
+      if (!content || typeof content !== 'string') {
+        return res.status(400).json({ error: 'Content is required' });
+      }
+      
+      // Generate title and tag suggestions
+      const { generateTitleAndTagSuggestions } = await import('./ai');
+      const suggestions = await generateTitleAndTagSuggestions(content);
+      
+      res.json(suggestions);
+    } catch (error) {
+      console.error('AI Suggestions Error:', error);
+      res.status(500).json({ error: 'Failed to generate suggestions' });
+    }
+  });
+
   // Journal entries endpoints
   app.post('/api/journal/entries', async (req, res) => {
     try {
