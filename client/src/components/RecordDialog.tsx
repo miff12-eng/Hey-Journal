@@ -8,7 +8,8 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Camera, Image, Users, Globe, Lock, Save, X, Upload, UserPlus, Loader2 } from 'lucide-react'
+import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Camera, Image, Users, Globe, Lock, Save, X, Upload, UserPlus, Loader2, Search, Plus, User } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { useQuery } from '@tanstack/react-query'
 import { apiRequest, queryClient } from '@/lib/queryClient'
@@ -16,6 +17,7 @@ import RecordButton from '@/components/RecordButton'
 import { ObjectUploader } from '@/components/ObjectUploader'
 import UserSelector from '@/components/UserSelector'
 import { cn } from '@/lib/utils'
+import type { Person } from '@shared/schema'
 
 type PrivacyLevel = 'private' | 'shared' | 'public'
 
@@ -50,6 +52,16 @@ export default function RecordDialog({ open, onOpenChange, editEntryId, onSaveSu
     newPeople: {originalText: string, firstName: string, lastName: string | null, confidence: string}[];
   } | null>(null)
   const [showSuggestions, setShowSuggestions] = useState(false)
+
+  // Manual person search and creation state
+  const [personSearchQuery, setPersonSearchQuery] = useState('')
+  const [showPersonSearch, setShowPersonSearch] = useState(false)
+  const [isCreatingPerson, setIsCreatingPerson] = useState(false)
+  const [newPersonForm, setNewPersonForm] = useState({
+    firstName: '',
+    lastName: '',
+    notes: ''
+  })
   const { toast } = useToast()
   
   // Fetch entry data when in edit mode
@@ -65,6 +77,12 @@ export default function RecordDialog({ open, onOpenChange, editEntryId, onSaveSu
       }
       return response.json()
     }
+  })
+
+  // Fetch people for manual search
+  const { data: allPeople, isLoading: isLoadingPeople } = useQuery<Person[]>({
+    queryKey: ['/api/people'],
+    enabled: open && showPersonSearch
   })
   
   // Populate form when entry data is loaded
@@ -137,6 +155,11 @@ export default function RecordDialog({ open, onOpenChange, editEntryId, onSaveSu
       setSuggestions(null)
       setShowSuggestions(false)
       setIsScanning(false)
+      // Reset manual person state
+      setPersonSearchQuery('')
+      setShowPersonSearch(false)
+      setIsCreatingPerson(false)
+      setNewPersonForm({ firstName: '', lastName: '', notes: '' })
       hasInitializedRef.current = false
     }
   }, [open])
@@ -601,7 +624,7 @@ export default function RecordDialog({ open, onOpenChange, editEntryId, onSaveSu
     }
   }
 
-  // Handle toggling people selection
+  // Handle toggling people selection (with deduplication)
   const togglePersonSelection = (person: {id: string, firstName: string, lastName: string | null}, isExisting: boolean) => {
     if (isExisting) {
       setSelectedPeople(prev => {
@@ -609,6 +632,10 @@ export default function RecordDialog({ open, onOpenChange, editEntryId, onSaveSu
         if (isSelected) {
           return prev.filter(p => p.id !== person.id)
         } else {
+          // Ensure no duplicates by ID
+          if (prev.some(p => p.id === person.id)) {
+            return prev
+          }
           return [...prev, person]
         }
       })
@@ -659,6 +686,87 @@ export default function RecordDialog({ open, onOpenChange, editEntryId, onSaveSu
         description: "Unable to create person. Please try again.",
         variant: "destructive"
       })
+    }
+  }
+
+  // Manual person creation function
+  const handleCreateManualPerson = async () => {
+    if (!newPersonForm.firstName.trim()) {
+      toast({
+        title: "First name required",
+        description: "Please enter a first name for the person.",
+        variant: "destructive"
+      })
+      return
+    }
+
+    setIsCreatingPerson(true)
+    try {
+      const personData = {
+        firstName: newPersonForm.firstName.trim(),
+        lastName: newPersonForm.lastName.trim() || '',
+        notes: newPersonForm.notes.trim() || `Added from journal entry: "${title || 'Untitled'}"`
+      }
+
+      const response = await apiRequest('POST', '/api/people', personData)
+      const newPerson = await response.json()
+      
+      // Normalize lastName and add to selected people (with deduplication)
+      const normalizedPerson = {
+        id: newPerson.id,
+        firstName: newPerson.firstName,
+        lastName: newPerson.lastName || null
+      }
+
+      setSelectedPeople(prev => {
+        // Check for duplicates
+        if (prev.some(p => p.id === normalizedPerson.id)) {
+          return prev
+        }
+        return [...prev, normalizedPerson]
+      })
+
+      // Clear form and invalidate cache
+      setNewPersonForm({ firstName: '', lastName: '', notes: '' })
+      queryClient.invalidateQueries({ queryKey: ['/api/people'] })
+
+      toast({
+        title: "Person created!",
+        description: `${newPerson.firstName} ${newPerson.lastName || ''} has been added and tagged.`,
+      })
+
+    } catch (error) {
+      console.error('Error creating person:', error)
+      toast({
+        title: "Creation failed",
+        description: "Unable to create person. Please try again.",
+        variant: "destructive"
+      })
+    } finally {
+      setIsCreatingPerson(false)
+    }
+  }
+
+  // Helper functions for person management
+  const getPersonDisplayName = (person: Person) => 
+    `${person.firstName}${person.lastName ? ` ${person.lastName}` : ''}`
+
+  const getPersonInitials = (person: Person) => 
+    `${person.firstName[0]}${person.lastName?.[0] || ''}`
+
+  // Filter people based on search query
+  const filteredPeople = allPeople?.filter((person) => {
+    if (!personSearchQuery.trim()) return true
+    const query = personSearchQuery.toLowerCase()
+    const fullName = getPersonDisplayName(person).toLowerCase()
+    return fullName.includes(query)
+  }) || []
+
+  // Toggle manual person search
+  const togglePersonSearch = () => {
+    setShowPersonSearch(!showPersonSearch)
+    if (!showPersonSearch) {
+      setPersonSearchQuery('')
     }
   }
 
@@ -827,26 +935,167 @@ export default function RecordDialog({ open, onOpenChange, editEntryId, onSaveSu
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
-                    {/* Add People Button */}
-                    <Button
-                      variant="outline"
-                      className="w-full justify-center hover-elevate"
-                      onClick={handleScanForPeople}
-                      disabled={isScanning || !content.trim()}
-                      data-testid="button-scan-people"
-                    >
-                      {isScanning ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Scanning for people...
-                        </>
-                      ) : (
-                        <>
-                          <UserPlus className="h-4 w-4 mr-2" />
-                          Scan for People
-                        </>
-                      )}
-                    </Button>
+                    {/* Add People Controls */}
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        className="flex-1 justify-center hover-elevate"
+                        onClick={handleScanForPeople}
+                        disabled={isScanning || !content.trim()}
+                        data-testid="button-scan-people"
+                      >
+                        {isScanning ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Scanning...
+                          </>
+                        ) : (
+                          <>
+                            <UserPlus className="h-4 w-4 mr-2" />
+                            Scan Text
+                          </>
+                        )}
+                      </Button>
+                      <Button
+                        variant={showPersonSearch ? "default" : "outline"}
+                        className="flex-1 justify-center hover-elevate"
+                        onClick={togglePersonSearch}
+                        data-testid="button-manual-add"
+                      >
+                        <Search className="h-4 w-4 mr-2" />
+                        Manual Add
+                      </Button>
+                    </div>
+
+                    {/* Manual Person Search and Creation */}
+                    {showPersonSearch && (
+                      <div className="space-y-3 border rounded-lg p-3 bg-muted/50">
+                        {/* Search Existing People */}
+                        <div className="space-y-2">
+                          <Label className="text-sm font-medium">Search Existing People</Label>
+                          <div className="relative">
+                            <Search className="absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                            <Input
+                              placeholder="Search by name..."
+                              value={personSearchQuery}
+                              onChange={(e) => setPersonSearchQuery(e.target.value)}
+                              className="pl-8"
+                              data-testid="input-person-search"
+                            />
+                          </div>
+                        </div>
+
+                        {/* People Search Results */}
+                        {personSearchQuery.trim() && (
+                          <div className="space-y-1 max-h-32 overflow-y-auto">
+                            {isLoadingPeople ? (
+                              <div className="flex items-center justify-center py-4" data-testid="status-people-loading">
+                                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                <span className="text-xs text-muted-foreground">Searching people...</span>
+                              </div>
+                            ) : filteredPeople.length > 0 ? (
+                              filteredPeople.map((person) => {
+                                const isSelected = selectedPeople.find(p => p.id === person.id)
+                                return (
+                                  <div
+                                    key={person.id}
+                                    className={cn(
+                                      "flex items-center gap-3 p-2 rounded-lg border cursor-pointer transition-colors hover-elevate text-sm",
+                                      isSelected ? 'border-primary bg-primary/10' : 'border-border'
+                                    )}
+                                    onClick={() => togglePersonSelection({
+                                      id: person.id,
+                                      firstName: person.firstName,
+                                      lastName: person.lastName
+                                    }, true)}
+                                    data-testid={`person-search-result-${person.id}`}
+                                  >
+                                    <Avatar className="h-6 w-6">
+                                      <AvatarFallback className="text-xs">
+                                        {getPersonInitials(person)}
+                                      </AvatarFallback>
+                                    </Avatar>
+                                    <span className="flex-1">{getPersonDisplayName(person)}</span>
+                                    <div className={cn(
+                                      'h-3 w-3 rounded-full border transition-colors',
+                                      isSelected ? 'border-primary bg-primary' : 'border-muted-foreground'
+                                    )}>
+                                      {isSelected && (
+                                        <div className="h-full w-full rounded-full bg-background scale-50" />
+                                      )}
+                                    </div>
+                                  </div>
+                                )
+                              })
+                            ) : (
+                              <div className="text-center py-2">
+                                <p className="text-xs text-muted-foreground mb-2">
+                                  No people found matching "{personSearchQuery}"
+                                </p>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => setNewPersonForm(prev => ({
+                                    ...prev,
+                                    firstName: personSearchQuery.split(' ')[0] || '',
+                                    lastName: personSearchQuery.split(' ').slice(1).join(' ') || ''
+                                  }))}
+                                  data-testid="button-create-from-search"
+                                >
+                                  <Plus className="h-3 w-3 mr-1" />
+                                  Create "{personSearchQuery}"
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Create New Person Form */}
+                        <div className="space-y-2 pt-2 border-t">
+                          <Label className="text-sm font-medium">Create New Person</Label>
+                          <div className="grid grid-cols-2 gap-2">
+                            <Input
+                              placeholder="First name *"
+                              value={newPersonForm.firstName}
+                              onChange={(e) => setNewPersonForm(prev => ({ ...prev, firstName: e.target.value }))}
+                              data-testid="input-manual-first-name"
+                            />
+                            <Input
+                              placeholder="Last name"
+                              value={newPersonForm.lastName}
+                              onChange={(e) => setNewPersonForm(prev => ({ ...prev, lastName: e.target.value }))}
+                              data-testid="input-manual-last-name"
+                            />
+                          </div>
+                          <Textarea
+                            placeholder="Notes about this person..."
+                            value={newPersonForm.notes}
+                            onChange={(e) => setNewPersonForm(prev => ({ ...prev, notes: e.target.value }))}
+                            className="resize-none"
+                            rows={2}
+                            data-testid="textarea-manual-notes"
+                          />
+                          <Button
+                            onClick={handleCreateManualPerson}
+                            disabled={!newPersonForm.firstName.trim() || isCreatingPerson}
+                            className="w-full"
+                            data-testid="button-create-manual-person"
+                          >
+                            {isCreatingPerson ? (
+                              <>
+                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                Creating...
+                              </>
+                            ) : (
+                              <>
+                                <Plus className="h-4 w-4 mr-2" />
+                                Create & Tag Person
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                      </div>
+                    )}
 
                     {/* Selected People Display */}
                     {selectedPeople.length > 0 && (
