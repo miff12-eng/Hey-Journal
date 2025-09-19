@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils'
 import { JournalEntryWithUser, CommentWithPublicUser } from '@shared/schema'
 import CommentsList from './CommentsList'
 import AudioPlayer from './AudioPlayer'
+import PhotoModal from './PhotoModal'
 
 interface JournalEntryCardProps {
   entry: JournalEntryWithUser
@@ -32,6 +33,8 @@ export default function JournalEntryCard({
   const [isExpanded, setIsExpanded] = useState(false)
   const [isLiked, setIsLiked] = useState(false)
   const [showComments, setShowComments] = useState(false)
+  const [selectedPhotoUrl, setSelectedPhotoUrl] = useState<string | null>(null)
+  const [selectedPhotoAlt, setSelectedPhotoAlt] = useState<string>('')
   
   // Fetch comment count for the entry
   const { data: comments = [] } = useQuery<CommentWithPublicUser[]>({
@@ -235,17 +238,22 @@ export default function JournalEntryCard({
 
         {/* Media grid */}
         {hasMedia && (
-          <div className="mt-4 grid gap-2 grid-cols-2 sm:grid-cols-3">
+          <div className="mt-4 grid gap-2 grid-cols-1 sm:grid-cols-2 md:grid-cols-3">
             {entry.mediaUrls!.slice(0, 6).map((url, index) => (
               <div 
                 key={index} 
-                className="relative aspect-square rounded-md overflow-hidden bg-muted hover-elevate cursor-pointer"
+                className="group relative aspect-square rounded-md overflow-hidden bg-muted cursor-pointer"
                 data-testid={`media-${entry.id}-${index}`}
+                onClick={() => {
+                  setSelectedPhotoUrl(url)
+                  setSelectedPhotoAlt(`Media ${index + 1} from entry by ${entry.user.firstName} ${entry.user.lastName || ''}`)
+                }}
               >
                 <img 
                   src={url} 
                   alt={`Media ${index + 1}`}
-                  className="object-cover w-full h-full transition-transform hover:scale-105"
+                  className="object-cover w-full h-full transition-transform duration-200 group-hover:scale-105"
+                  loading="lazy"
                 />
                 {entry.mediaUrls!.length > 6 && index === 5 && (
                   <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
@@ -318,6 +326,19 @@ export default function JournalEntryCard({
           className="mt-4"
         />
       )}
+      
+      {/* Photo Modal */}
+      <PhotoModal
+        open={selectedPhotoUrl !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSelectedPhotoUrl(null)
+            setSelectedPhotoAlt('')
+          }
+        }}
+        src={selectedPhotoUrl || ''}
+        alt={selectedPhotoAlt}
+      />
     </Card>
   )
 }
