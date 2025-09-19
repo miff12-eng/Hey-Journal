@@ -155,6 +155,43 @@ export const comments = pgTable(
   ]
 );
 
+// People that users want to tag in their journal entries
+export const people = pgTable(
+  "people",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    firstName: varchar("first_name", { length: 100 }).notNull(),
+    lastName: varchar("last_name", { length: 100 }),
+    notes: text("notes"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_people_user_id").on(table.userId),
+    index("idx_people_first_name").on(table.firstName),
+    // Ensure unique person names per user
+    unique("unique_user_person_name").on(table.userId, table.firstName, table.lastName),
+  ]
+);
+
+// Association table for tagging people in journal entries
+export const entryPersonTags = pgTable(
+  "entry_person_tags",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    entryId: varchar("entry_id").notNull().references(() => journalEntries.id, { onDelete: "cascade" }),
+    personId: varchar("person_id").notNull().references(() => people.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_entry_person_tags_entry_id").on(table.entryId),
+    index("idx_entry_person_tags_person_id").on(table.personId),
+    // Prevent duplicate tags of same person in same entry
+    unique("unique_entry_person_tag").on(table.entryId, table.personId),
+  ]
+);
+
 // Insert schemas for forms
 export const insertJournalEntrySchema = createInsertSchema(journalEntries).omit({
   id: true,
@@ -184,6 +221,18 @@ export const insertCommentSchema = createInsertSchema(comments).omit({
   updatedAt: true,
 });
 
+export const insertPersonSchema = createInsertSchema(people).omit({
+  id: true,
+  userId: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertEntryPersonTagSchema = createInsertSchema(entryPersonTags).omit({
+  id: true,
+  createdAt: true,
+});
+
 export const updateUserProfileSchema = createInsertSchema(users).omit({
   id: true,
   createdAt: true,
@@ -206,6 +255,12 @@ export type UserConnection = typeof userConnections.$inferSelect;
 export type InsertComment = z.infer<typeof insertCommentSchema>;
 export type Comment = typeof comments.$inferSelect;
 
+export type InsertPerson = z.infer<typeof insertPersonSchema>;
+export type Person = typeof people.$inferSelect;
+
+export type InsertEntryPersonTag = z.infer<typeof insertEntryPersonTagSchema>;
+export type EntryPersonTag = typeof entryPersonTags.$inferSelect;
+
 export type UpdateUserProfile = z.infer<typeof updateUserProfileSchema>;
 
 export type JournalMention = typeof journalMentions.$inferSelect;
@@ -214,6 +269,11 @@ export type JournalMention = typeof journalMentions.$inferSelect;
 export type JournalEntryWithUser = JournalEntry & {
   user: User;
   mentions?: (JournalMention & { user: User })[];
+  personTags?: (EntryPersonTag & { person: Person })[];
+};
+
+export type PersonWithTagCount = Person & {
+  tagCount?: number;
 };
 
 export type CommentWithUser = Comment & {
