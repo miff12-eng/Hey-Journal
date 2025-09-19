@@ -10,11 +10,12 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { useToast } from '@/hooks/use-toast'
-import { Settings, LogOut, Edit, Share2, Calendar, BookOpen, TrendingUp, Users, Loader2, Upload, Lock, X, Trophy, Mic, Volume2, Flame, Award, Globe, Camera, Check } from 'lucide-react'
+import { Settings, LogOut, Edit, Share2, Calendar, BookOpen, TrendingUp, Users, Loader2, Upload, Lock, X, Trophy, Mic, Volume2, Flame, Award, Globe, Camera, Check, UserPlus } from 'lucide-react'
 import ThemeToggle from '@/components/ThemeToggle'
 import { apiRequest } from '@/lib/queryClient'
 import { ObjectUploader } from '@/components/ObjectUploader'
 import ConnectionManager from '@/components/ConnectionManager'
+import PersonManagement from '@/components/PersonManagement'
 import type { User } from '@shared/schema'
 
 export default function Profile() {
@@ -23,6 +24,7 @@ export default function Profile() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isPrivacySettingsOpen, setIsPrivacySettingsOpen] = useState(false)
   const [isConnectionManagerOpen, setIsConnectionManagerOpen] = useState(false)
+  const [isPersonManagementOpen, setIsPersonManagementOpen] = useState(false)
   
   // Fetch user profile data
   const { data: user, isLoading: userLoading, error: userError } = useQuery<User>({
@@ -432,6 +434,16 @@ export default function Profile() {
                 Manage Connections
               </Button>
               
+              <Button 
+                variant="outline" 
+                className="w-full justify-start" 
+                onClick={() => setIsPersonManagementOpen(true)}
+                data-testid="button-manage-people"
+              >
+                <UserPlus className="h-4 w-4 mr-3" />
+                Manage People
+              </Button>
+              
               <Separator className="my-3" />
               
               <Button 
@@ -761,6 +773,12 @@ export default function Profile() {
       <ConnectionManager 
         isOpen={isConnectionManagerOpen}
         onClose={() => setIsConnectionManagerOpen(false)}
+      />
+
+      {/* Person Management Dialog */}
+      <PersonManagement 
+        isOpen={isPersonManagementOpen}
+        onOpenChange={setIsPersonManagementOpen}
       />
     </div>
   )
