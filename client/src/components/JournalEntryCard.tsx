@@ -242,7 +242,7 @@ export default function JournalEntryCard({
             {entry.mediaUrls!.slice(0, 6).map((url, index) => (
               <div 
                 key={index} 
-                className="group relative aspect-[4/3] rounded-md overflow-hidden bg-muted cursor-pointer"
+                className="group relative rounded-md overflow-hidden bg-muted cursor-pointer min-h-[120px] max-h-[300px] flex items-center justify-center"
                 data-testid={`media-${entry.id}-${index}`}
                 onClick={() => {
                   setSelectedPhotoUrl(url)
@@ -252,7 +252,7 @@ export default function JournalEntryCard({
                 <img 
                   src={url} 
                   alt={`Media ${index + 1}`}
-                  className="object-cover w-full h-full transition-transform duration-200 group-hover:scale-105"
+                  className="object-contain w-full h-full max-w-full max-h-full transition-transform duration-200 group-hover:scale-105"
                   loading="lazy"
                 />
                 {entry.mediaUrls!.length > 6 && index === 5 && (
