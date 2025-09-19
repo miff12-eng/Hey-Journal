@@ -68,7 +68,7 @@ export async function performVectorSearch(
   queryText: string,
   userId: string,
   limit: number = 10,
-  similarityThreshold: number = 0.3,
+  similarityThreshold: number = 0.2,
   filters?: {
     filterType?: 'tags' | 'date';
     tags?: string[];
@@ -94,9 +94,6 @@ export async function performVectorSearch(
       eq(journalEntries.userId, userId),
       isNotNull(journalEntries.contentEmbedding)
     ];
-    
-    console.log('🔍 Built where conditions for userId:', userId);
-    console.log('🔍 Where conditions length:', whereConditions.length);
 
     // Apply filters
     if (filters?.tags && filters.tags.length > 0) {
@@ -123,37 +120,24 @@ export async function performVectorSearch(
     }
 
     // Get all entries with embeddings for this user
-    console.log('🔍 About to execute database query...');
     const entriesWithEmbeddings = await db
       .select()
       .from(journalEntries)
       .where(and(...whereConditions));
-
-    console.log('📊 Found', entriesWithEmbeddings.length, 'entries with embeddings');
-    console.log('📊 Sample entry IDs:', entriesWithEmbeddings.slice(0, 3).map(e => e.id));
 
     // Step 3: Calculate similarities in memory (for PostgreSQL without pgvector operators)
     const similarities: VectorSearchResult[] = [];
 
     for (const entry of entriesWithEmbeddings) {
       try {
-        if (!entry.contentEmbedding) {
-          console.log('⚠️ Entry has no embedding:', entry.id);
-          continue;
-        }
+        if (!entry.contentEmbedding) continue;
 
         // Parse the stored embedding
         const entryEmbedding = parseVectorFromPostgres(entry.contentEmbedding);
-        console.log('🔍 Parsed embedding for entry', entry.id, '- dimensions:', entryEmbedding.length);
-        
-        if (entryEmbedding.length === 0) {
-          console.log('❌ Empty embedding after parsing for entry:', entry.id);
-          continue;
-        }
+        if (entryEmbedding.length === 0) continue;
 
         // Calculate cosine similarity
         const similarity = calculateCosineSimilarity(queryEmbedding, entryEmbedding);
-        console.log('📊 Similarity for entry', entry.id, ':', similarity, '(threshold:', similarityThreshold, ')');
         
         if (similarity >= similarityThreshold) {
           // Create snippet from searchable text or content
