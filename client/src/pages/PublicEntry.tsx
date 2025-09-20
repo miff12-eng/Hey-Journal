@@ -277,9 +277,9 @@ export default function PublicEntry() {
                           />
                         )}
                         
-                        {/* Play button overlay for videos (desktop only) */}
+                        {/* Play button overlay for videos */}
                         {isVideoFile && (
-                          <div className="absolute inset-0 flex items-center justify-center opacity-80 group-hover:opacity-100 transition-opacity duration-200 hidden sm:flex">
+                          <div className="absolute inset-0 flex items-center justify-center opacity-80 group-hover:opacity-100 transition-opacity duration-200">
                             <div className="bg-black/50 backdrop-blur-sm rounded-full p-3 border border-white/20">
                               <Play className="h-6 w-6 text-white fill-white" />
                             </div>
