@@ -15,6 +15,27 @@ import CommentsList from './CommentsList'
 import AudioPlayer from './AudioPlayer'
 import PhotoModal from './PhotoModal'
 import { AspectRatio } from '@/components/ui/aspect-ratio'
+import { useVideoPoster } from '@/hooks/useVideoPoster'
+
+// VideoThumbnail component for mobile Safari poster support
+function VideoThumbnail({ url, entryId, index }: { url: string; entryId: string; index: number }) {
+  const posterUrl = useVideoPoster(url, true)
+  
+  return (
+    <AspectRatio ratio={16/9}>
+      <video 
+        src={url} 
+        className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
+        data-testid={`video-${entryId}-${index}`}
+        muted
+        playsInline
+        preload="metadata"
+        poster={posterUrl || undefined}
+        style={{ minHeight: '100px' }}
+      />
+    </AspectRatio>
+  )
+}
 
 interface JournalEntryCardProps {
   entry: JournalEntryWithUser
@@ -374,17 +395,7 @@ export default function JournalEntryCard({
                   }}
                 >
                   {isVideoFile ? (
-                    <AspectRatio ratio={16/9}>
-                      <video 
-                        src={url} 
-                        className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
-                        data-testid={`video-${entry.id}-${index}`}
-                        muted
-                        playsInline
-                        preload="metadata"
-                        style={{ minHeight: '100px' }}
-                      />
-                    </AspectRatio>
+                    <VideoThumbnail url={url} entryId={entry.id} index={index} />
                   ) : (
                     <img 
                       src={url} 
