@@ -1,14 +1,15 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useParams } from "wouter"
 import { useQuery } from "@tanstack/react-query"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Calendar, FileText, ArrowLeft, Volume2, User } from "lucide-react"
+import { Calendar, FileText, ArrowLeft, Volume2, User, Play } from "lucide-react"
 import { Link } from "wouter"
 import PhotoModal from "@/components/PhotoModal"
 import { isVideo } from '@/lib/media'
+import { AspectRatio } from '@/components/ui/aspect-ratio'
 
 interface PublicJournalEntry {
   id: string
@@ -37,11 +38,48 @@ export default function PublicEntry() {
   const [selectedPhotoUrl, setSelectedPhotoUrl] = useState<string | null>(null)
   const [selectedPhotoAlt, setSelectedPhotoAlt] = useState<string>('')
   const [selectedMediaObject, setSelectedMediaObject] = useState<{url: string; mimeType?: string; originalName?: string} | null>(null)
+  const [detectedVideoUrls, setDetectedVideoUrls] = useState<Set<string>>(new Set())
 
   // Fetch entry
   const entryQuery = useQuery<PublicJournalEntry>({
     queryKey: [`/api/public/entries/${entryId}`]
   })
+
+  // Detect MIME types for legacy entries without mediaObjects
+  useEffect(() => {
+    const entry = entryQuery.data;
+    if (!entry || !entry.mediaUrls || entry.mediaUrls.length === 0) return;
+    
+    const detectLegacyVideoUrls = async () => {
+      const urlsToCheck = entry.mediaUrls.filter((url, index) => {
+        const hasMetadata = entry.mediaObjects && entry.mediaObjects[index] && entry.mediaObjects[index].mimeType;
+        return !hasMetadata && !detectedVideoUrls.has(url);
+      });
+      
+      if (urlsToCheck.length === 0) return;
+      
+      // Check MIME types via HEAD requests for legacy entries
+      const videoUrls = new Set(detectedVideoUrls);
+      for (const url of urlsToCheck) {
+        try {
+          const response = await fetch(url, { method: 'HEAD' });
+          const contentType = response.headers.get('content-type');
+          if (contentType && contentType.startsWith('video/')) {
+            videoUrls.add(url);
+          }
+        } catch (error) {
+          // Silently fail for inaccessible URLs
+          console.debug('Failed to check MIME type for:', url);
+        }
+      }
+      
+      if (videoUrls.size > detectedVideoUrls.size) {
+        setDetectedVideoUrls(videoUrls);
+      }
+    };
+    
+    detectLegacyVideoUrls();
+  }, [entryQuery.data, detectedVideoUrls]);
 
   if (entryQuery.isLoading) {
     return (
@@ -186,11 +224,19 @@ export default function PublicEntry() {
                   {entry.mediaUrls.map((url, index) => {
                     // Use MIME-first detection for reliable video detection
                     const mediaObject = entry.mediaObjects?.[index] || { url };
-                    const isVideoFile = isVideo(mediaObject);
+                    
+                    // Check if this is a video: use mediaObject MIME type first, then runtime detection
+                    let isVideoFile = isVideo(mediaObject);
+                    
+                    // For legacy entries without MIME metadata, use runtime detection
+                    if (!isVideoFile && (!mediaObject.mimeType) && detectedVideoUrls.has(url)) {
+                      isVideoFile = true;
+                    }
+                    
                     return (
                       <div 
                         key={index} 
-                        className="group border rounded-lg overflow-hidden cursor-pointer"
+                        className="group relative border rounded-lg overflow-hidden cursor-pointer"
                         onClick={() => {
                           setSelectedPhotoUrl(url)
                           setSelectedPhotoAlt(`Media ${index + 1} from public entry by ${entry.user.firstName || ''} ${entry.user.lastName || ''}`)
@@ -199,13 +245,15 @@ export default function PublicEntry() {
                         data-testid={`media-${isVideoFile ? 'video' : 'image'}-${index}`}
                       >
                         {isVideoFile ? (
-                          <video 
-                            src={url} 
-                            className="w-full h-auto object-cover transition-transform duration-200 group-hover:scale-[1.02]"
-                            controls
-                            muted
-                            preload="metadata"
-                          />
+                          <AspectRatio ratio={16/9}>
+                            <video 
+                              src={url} 
+                              className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-[1.02]"
+                              controls
+                              muted
+                              preload="metadata"
+                            />
+                          </AspectRatio>
                         ) : (
                           <img 
                             src={url} 
@@ -213,6 +261,15 @@ export default function PublicEntry() {
                             className="w-full h-auto object-cover transition-transform duration-200 group-hover:scale-[1.02]"
                             loading="lazy"
                           />
+                        )}
+                        
+                        {/* Play button overlay for videos (desktop only) */}
+                        {isVideoFile && (
+                          <div className="absolute inset-0 flex items-center justify-center opacity-80 group-hover:opacity-100 transition-opacity duration-200 hidden sm:flex">
+                            <div className="bg-black/50 backdrop-blur-sm rounded-full p-3 border border-white/20">
+                              <Play className="h-6 w-6 text-white fill-white" />
+                            </div>
+                          </div>
                         )}
                       </div>
                     );
