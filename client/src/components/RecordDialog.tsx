@@ -17,6 +17,7 @@ import RecordButton from '@/components/RecordButton'
 import { ObjectUploader } from '@/components/ObjectUploader'
 import UserSelector from '@/components/UserSelector'
 import { cn } from '@/lib/utils'
+import { isVideo } from '@/lib/media'
 import type { Person } from '@shared/schema'
 
 type PrivacyLevel = 'private' | 'shared' | 'public'
@@ -1346,11 +1347,11 @@ export default function RecordDialog({ open, onOpenChange, editEntryId, onSaveSu
                     {mediaUrls.length > 0 && (
                       <div className="grid grid-cols-3 gap-2">
                         {mediaUrls.map((url, index) => {
-                          const isVideo = /\.(mp4|webm|mov|avi)$/i.test(url) || url.includes('video/');
+                          const isVideoFile = isVideo(url);
                           return (
                             <div key={index} className="relative">
                               <div className="aspect-square bg-muted rounded-md flex items-center justify-center relative overflow-hidden">
-                                {isVideo ? (
+                                {isVideoFile ? (
                                   <video 
                                     src={url} 
                                     className="w-full h-full object-cover"

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Calendar, FileText, ArrowLeft, Volume2, User } from "lucide-react"
 import { Link } from "wouter"
 import PhotoModal from "@/components/PhotoModal"
+import { isVideo } from '@/lib/media'
 
 interface PublicJournalEntry {
   id: string
@@ -181,7 +182,7 @@ export default function PublicEntry() {
                 <h4 className="font-semibold mb-3">Media</h4>
                 <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 md:grid-cols-3">
                   {entry.mediaUrls.map((url, index) => {
-                    const isVideo = /\.(mp4|webm|mov|avi)$/i.test(url) || url.includes('video/');
+                    const isVideoFile = isVideo(url);
                     return (
                       <div 
                         key={index} 
@@ -190,9 +191,9 @@ export default function PublicEntry() {
                           setSelectedPhotoUrl(url)
                           setSelectedPhotoAlt(`Media ${index + 1} from public entry by ${entry.user.firstName || ''} ${entry.user.lastName || ''}`)
                         }}
-                        data-testid={`media-${isVideo ? 'video' : 'image'}-${index}`}
+                        data-testid={`media-${isVideoFile ? 'video' : 'image'}-${index}`}
                       >
-                        {isVideo ? (
+                        {isVideoFile ? (
                           <video 
                             src={url} 
                             className="w-full h-auto object-cover transition-transform duration-200 group-hover:scale-[1.02]"

@@ -4,6 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { X, Upload, CheckCircle, Camera, Image } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { isVideo, isSupportedMediaType, matchesMimePattern } from "@/lib/media";
 
 interface ObjectUploaderProps {
   maxNumberOfFiles?: number;
@@ -228,13 +229,26 @@ export function ObjectUploader({
       // Validate file type and size
       const validFiles = files.filter(file => {
         // Check file type if acceptedFileTypes is specified
-        if (acceptedFileTypes.length > 0 && !acceptedFileTypes.includes(file.type)) {
-          toast({
-            title: "Invalid file type",
-            description: `File ${file.name} is not supported. Please select an image file.`,
-            variant: "destructive"
-          });
-          return false;
+        if (acceptedFileTypes.length > 0) {
+          const isAccepted = acceptedFileTypes.some(pattern => matchesMimePattern(file.type, pattern));
+          if (!isAccepted) {
+            toast({
+              title: "Invalid file type",
+              description: `File ${file.name} is not supported. Please select an image or video file.`,
+              variant: "destructive"
+            });
+            return false;
+          }
+        } else {
+          // If no specific types, ensure it's a supported media type
+          if (!isSupportedMediaType(file)) {
+            toast({
+              title: "Invalid file type",
+              description: `File ${file.name} is not supported. Please select an image or video file.`,
+              variant: "destructive"
+            });
+            return false;
+          }
         }
         
         // Check file size
@@ -261,7 +275,17 @@ export function ObjectUploader({
 
   const handleCameraCapture = (file: File) => {
     // Validate file type if acceptedFileTypes is specified
-    if (acceptedFileTypes.length > 0 && !acceptedFileTypes.includes(file.type)) {
+    if (acceptedFileTypes.length > 0) {
+      const isAccepted = acceptedFileTypes.some(pattern => matchesMimePattern(file.type, pattern));
+      if (!isAccepted) {
+        toast({
+          title: "Invalid file type",
+          description: "Captured photo format is not supported.",
+          variant: "destructive"
+        });
+        return;
+      }
+    } else if (!isSupportedMediaType(file)) {
       toast({
         title: "Invalid file type",
         description: "Captured photo format is not supported.",
@@ -407,7 +431,7 @@ export function ObjectUploader({
       <Card className="w-full max-w-md">
         <CardContent className="p-6">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold">Upload Photos</h3>
+            <h3 className="text-lg font-semibold">Upload Photos & Videos</h3>
             <Button 
               variant="ghost" 
               size="icon" 
@@ -423,7 +447,7 @@ export function ObjectUploader({
               <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-6 text-center">
                 <Upload className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
                 <p className="text-sm text-muted-foreground mb-2">
-                  Select up to {maxNumberOfFiles} photo{maxNumberOfFiles > 1 ? 's' : ''}
+                  Select up to {maxNumberOfFiles} photo{maxNumberOfFiles > 1 ? 's' : ''} & video{maxNumberOfFiles > 1 ? 's' : ''}
                 </p>
                 <p className="text-xs text-muted-foreground mb-4">
                   Max {Math.round(maxFileSize / 1024 / 1024)}MB per file
@@ -432,7 +456,7 @@ export function ObjectUploader({
                 {/* Hidden file inputs for different sources */}
                 <input
                   type="file"
-                  accept="image/*"
+                  accept="image/*,video/mp4,video/webm,video/quicktime,video/x-msvideo"
                   multiple={maxNumberOfFiles > 1}
                   onChange={handleFileSelect}
                   className="hidden"
@@ -442,7 +466,7 @@ export function ObjectUploader({
                 />
                 <input
                   type="file"
-                  accept="image/*"
+                  accept="image/*,video/mp4,video/webm,video/quicktime,video/x-msvideo"
                   multiple={maxNumberOfFiles > 1}
                   onChange={handleFileSelect}
                   className="hidden"
@@ -498,11 +522,21 @@ export function ObjectUploader({
                   selectedFiles.map((file, index) => (
                     <div key={index} className="flex items-center justify-between p-2 bg-muted rounded">
                       <div className="flex items-center gap-2">
-                        <img 
-                          src={URL.createObjectURL(file)} 
-                          alt={file.name}
-                          className="w-8 h-8 object-cover rounded"
-                        />
+                        {isVideo(file) ? (
+                          <video 
+                            src={URL.createObjectURL(file)} 
+                            className="w-8 h-8 object-cover rounded"
+                            muted
+                            onLoad={() => URL.revokeObjectURL(URL.createObjectURL(file))}
+                          />
+                        ) : (
+                          <img 
+                            src={URL.createObjectURL(file)} 
+                            alt={file.name}
+                            className="w-8 h-8 object-cover rounded"
+                            onLoad={() => URL.revokeObjectURL(URL.createObjectURL(file))}
+                          />
+                        )}
                         <span className="text-sm truncate">{file.name}</span>
                       </div>
                       <Button 
@@ -529,7 +563,7 @@ export function ObjectUploader({
                       disabled={isUploading}
                       data-testid="button-start-upload"
                     >
-                      Upload {selectedFiles.length} photo{selectedFiles.length > 1 ? 's' : ''}
+                      Upload {selectedFiles.length} file{selectedFiles.length > 1 ? 's' : ''}
                     </Button>
                   </>
                 )}
