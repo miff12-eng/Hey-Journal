@@ -63,11 +63,15 @@ export default function JournalEntryCard({
       await queryClient.cancelQueries({ 
         queryKey: ['/api/journal/entries', entry.id, 'likes'] 
       })
+      // Also cancel queries for any list views that might contain this entry
+      await queryClient.cancelQueries({ 
+        queryKey: ['/api/journal/entries'] 
+      })
 
       // Snapshot the previous value
       const previousLikeData = queryClient.getQueryData(['/api/journal/entries', entry.id, 'likes'])
 
-      // Optimistically update to the new value
+      // Optimistically update the individual entry's like data
       if (previousLikeData) {
         const currentLikeCount = typeof previousLikeData.likeCount === 'string' 
           ? parseInt(previousLikeData.likeCount, 10) 
@@ -79,6 +83,7 @@ export default function JournalEntryCard({
         }
         queryClient.setQueryData(['/api/journal/entries', entry.id, 'likes'], newData)
       } else {
+        // If no previous data, assume this is the first like
         queryClient.setQueryData(['/api/journal/entries', entry.id, 'likes'], {
           entryId: entry.id,
           likeCount: 1,
