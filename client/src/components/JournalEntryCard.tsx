@@ -106,7 +106,11 @@ export default function JournalEntryCard({
       })
 
       // Snapshot the previous value
-      const previousLikeData = queryClient.getQueryData(['/api/journal/entries', entry.id, 'likes'])
+      const previousLikeData = queryClient.getQueryData<{
+        likeCount: number;
+        isLikedByUser: boolean;
+        entryId: string;
+      }>(['/api/journal/entries', entry.id, 'likes'])
 
       // Optimistically update the individual entry's like data
       if (previousLikeData) {
@@ -354,7 +358,7 @@ export default function JournalEntryCard({
               let isVideoFile = isVideo(mediaObject);
               
               // For legacy entries without MIME metadata, use runtime detection
-              if (!isVideoFile && (!mediaObject.mimeType) && detectedVideoUrls.has(url)) {
+              if (!isVideoFile && (!('mimeType' in mediaObject) || !mediaObject.mimeType) && detectedVideoUrls.has(url)) {
                 isVideoFile = true;
               }
               
@@ -377,8 +381,8 @@ export default function JournalEntryCard({
                         data-testid={`video-${entry.id}-${index}`}
                         muted
                         playsInline
-                        loop
                         preload="metadata"
+                        style={{ minHeight: '100px' }}
                       />
                     </AspectRatio>
                   ) : (
