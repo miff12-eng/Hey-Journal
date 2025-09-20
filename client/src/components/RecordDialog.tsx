@@ -1329,39 +1329,56 @@ export default function RecordDialog({ open, onOpenChange, editEntryId, onSaveSu
                   <div className="space-y-3">
                     <ObjectUploader
                       maxNumberOfFiles={5}
-                      maxFileSize={10485760} // 10MB
+                      maxFileSize={52428800} // 50MB for videos
+                      acceptedFileTypes={[
+                        'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+                        'video/mp4', 'video/webm', 'video/quicktime', 'video/x-msvideo'
+                      ]}
                       onComplete={handlePhotoUpload}
                       buttonClassName="w-full"
                     >
                       <Button variant="outline" className="w-full justify-center hover-elevate">
                         <Camera className="h-4 w-4 mr-2" />
-                        Add Photos
+                        Add Photos & Videos
                       </Button>
                     </ObjectUploader>
                     
                     {mediaUrls.length > 0 && (
                       <div className="grid grid-cols-3 gap-2">
-                        {mediaUrls.map((url, index) => (
-                          <div key={index} className="relative">
-                            <div className="aspect-square bg-muted rounded-md flex items-center justify-center relative overflow-hidden">
-                              <img 
-                                src={url} 
-                                alt={`Photo ${index + 1}`}
-                                className="w-full h-full object-cover"
-                                data-testid={`photo-${index}`}
-                              />
-                              <Button
-                                variant="destructive"
-                                size="icon"
-                                className="absolute top-1 right-1 h-6 w-6"
-                                onClick={() => removePhoto(index)}
-                                data-testid={`button-remove-photo-${index}`}
-                              >
-                                <X className="h-3 w-3" />
-                              </Button>
+                        {mediaUrls.map((url, index) => {
+                          const isVideo = /\.(mp4|webm|mov|avi)$/i.test(url) || url.includes('video/');
+                          return (
+                            <div key={index} className="relative">
+                              <div className="aspect-square bg-muted rounded-md flex items-center justify-center relative overflow-hidden">
+                                {isVideo ? (
+                                  <video 
+                                    src={url} 
+                                    className="w-full h-full object-cover"
+                                    controls
+                                    muted
+                                    data-testid={`video-${index}`}
+                                  />
+                                ) : (
+                                  <img 
+                                    src={url} 
+                                    alt={`Photo ${index + 1}`}
+                                    className="w-full h-full object-cover"
+                                    data-testid={`photo-${index}`}
+                                  />
+                                )}
+                                <Button
+                                  variant="destructive"
+                                  size="icon"
+                                  className="absolute top-1 right-1 h-6 w-6"
+                                  onClick={() => removePhoto(index)}
+                                  data-testid={`button-remove-media-${index}`}
+                                >
+                                  <X className="h-3 w-3" />
+                                </Button>
+                              </div>
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                   </div>
