@@ -49,7 +49,7 @@ Preferred communication style: Simple, everyday language.
 - **AI Chat**: Conversational interface for exploring journal entries and patterns
 - **Audio Visualization**: Real-time waveform display during recording
 
-### Camera & Photo Features
+### Camera, Photo & Video Features
 - **Native Camera Access**: Direct device camera integration using Web APIs (getUserMedia)
 - **Live Camera Preview**: Real-time video stream with capture functionality
 - **Apple Photos Integration**: Seamless access to device photo library including Apple Photos
@@ -57,6 +57,9 @@ Preferred communication style: Simple, everyday language.
 - **Smart Camera Selection**: Automatic preference for back camera on mobile devices
 - **High-Quality Capture**: 1280x720 resolution with optimized JPEG compression
 - **Cross-Platform Support**: Works on iOS, Android, and desktop browsers with graceful fallbacks
+- **Video Attachment Support**: Upload and display video files (MP4, WebM, MOV, AVI) alongside photos
+- **Shared Media Utilities**: Consistent video/image detection across all components using shared library functions
+- **HTML5 Video Player**: Proper video controls, autoplay (muted), and responsive display in modal views
 
 ## External Dependencies
 
@@ -80,8 +83,21 @@ Preferred communication style: Simple, everyday language.
 ### Planned Integrations
 - **AI Transcription**: Distil-Whisper or similar for voice-to-text conversion
 - **Authentication**: Session-based authentication (structure in place)
-- **File Storage**: Media attachment handling for photos/videos
 - **Push Notifications**: For journaling reminders and social interactions
+
+### Recent Implementation: Video Support
+- **Status**: Basic video attachment functionality completed (Sept 2025)
+- **Current Capabilities**: Upload video files via ObjectUploader, display videos in MediaModal and entry contexts
+- **Components Updated**: ObjectUploader, Record page, RecordDialog, PublicEntry page, MediaModal (PhotoModal)
+- **File Types Supported**: MP4, WebM, MOV, AVI with 50MB size limit (vs 10MB for images)
+- **Known Limitations**: Video detection relies on file extensions; may not work reliably with opaque object storage URLs
+
+### Recommended Architectural Improvements for Production
+1. **MIME Type Storage**: Extend database schema to store media MIME types alongside URLs for reliable video detection
+2. **Backend Enhancement**: Update upload endpoints to persist and return MIME types with media objects
+3. **Component Migration**: Update all media display components to use stored MIME types instead of URL-based heuristics
+4. **Complete Adoption**: Audit and update remaining components (JournalEntryCard, etc.) to use shared media utilities
+5. **Comprehensive Testing**: Add automated tests for video upload/display with opaque URLs
 
 ### Hosting & Infrastructure
 - **Database**: Neon PostgreSQL for serverless database hosting
