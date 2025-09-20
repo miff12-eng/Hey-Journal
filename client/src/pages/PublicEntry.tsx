@@ -251,7 +251,9 @@ export default function PublicEntry() {
                               className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-[1.02]"
                               controls
                               muted
+                              playsInline
                               preload="metadata"
+                              style={{ minHeight: '100px' }}
                             />
                           </AspectRatio>
                         ) : (
