@@ -52,6 +52,7 @@ export const journalEntries = pgTable(
     audioUrl: varchar("audio_url"),
     audioPlayable: boolean("audio_playable").default(false),
     mediaUrls: text("media_urls").array().default([]),
+    mediaObjects: jsonb("media_objects").$type<MediaObject[]>().default([]),
     tags: text("tags").array().default([]),
     privacy: varchar("privacy", { enum: ["private", "shared", "public"] }).default("private"),
     sharedWith: text("shared_with").array().default([]), // User IDs
@@ -145,6 +146,7 @@ export const comments = pgTable(
     userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
     content: text("content").notNull(),
     mediaUrls: text("media_urls").array().default([]),
+    mediaObjects: jsonb("media_objects").$type<MediaObject[]>().default([]),
     createdAt: timestamp("created_at").defaultNow(),
     updatedAt: timestamp("updated_at").defaultNow(),
   },
@@ -263,6 +265,12 @@ export const updateUserProfileSchema = createInsertSchema(users).omit({
 }).partial();
 
 // Types for TypeScript
+export type MediaObject = {
+  url: string;
+  mimeType: string;
+  originalName?: string;
+};
+
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
 
