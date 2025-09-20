@@ -21,9 +21,20 @@ export default function AudioPlayer({
   const [isMuted, setIsMuted] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [hasInteracted, setHasInteracted] = useState(false)
+  const [isMobile, setIsMobile] = useState(false)
+  const [needsUserInteraction, setNeedsUserInteraction] = useState(false)
   
   const audioRef = useRef<HTMLAudioElement>(null)
   const progressRef = useRef<HTMLDivElement>(null)
+
+  // Detect mobile browsers
+  useEffect(() => {
+    const detectMobile = () => {
+      const userAgent = navigator.userAgent || navigator.vendor || (window as any).opera
+      return /android|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(userAgent)
+    }
+    setIsMobile(detectMobile())
+  }, [])
 
   useEffect(() => {
     const audio = audioRef.current
@@ -117,6 +128,13 @@ export default function AudioPlayer({
     testAudioAccess().then(accessible => {
       if (accessible) {
         audio.src = audioUrl
+        
+        // On mobile, don't try to load until user interaction
+        if (isMobile) {
+          setNeedsUserInteraction(true)
+          setIsLoading(false)
+          console.log('Mobile detected - waiting for user interaction before loading audio')
+        }
       }
     })
 
@@ -146,8 +164,43 @@ export default function AudioPlayer({
       } else {
         // Mark that user has interacted
         setHasInteracted(true)
+        setNeedsUserInteraction(false)
+        
+        // On mobile, ensure audio is ready to play after user interaction
+        if (isMobile && audio.readyState < 2) {
+          console.log('Mobile: Loading audio after user interaction')
+          setIsLoading(true)
+          try {
+            await audio.load()
+            // Wait for the audio to be ready
+            await new Promise((resolve, reject) => {
+              const onCanPlay = () => {
+                audio.removeEventListener('canplay', onCanPlay)
+                audio.removeEventListener('error', onError)
+                resolve(true)
+              }
+              const onError = () => {
+                audio.removeEventListener('canplay', onCanPlay)
+                audio.removeEventListener('error', onError)
+                reject(new Error('Audio failed to load'))
+              }
+              audio.addEventListener('canplay', onCanPlay)
+              audio.addEventListener('error', onError)
+            })
+            setIsLoading(false)
+          } catch (loadError) {
+            setIsLoading(false)
+            throw new Error('Audio failed to load on mobile')
+          }
+        }
+        
         await audio.play()
         setIsPlaying(true)
+        console.log('Audio playback started successfully', { 
+          isMobile, 
+          readyState: audio.readyState,
+          duration: audio.duration 
+        })
       }
     } catch (err: any) {
       console.error('Error playing audio:', {
@@ -156,17 +209,25 @@ export default function AudioPlayer({
         message: err?.message,
         code: err?.code,
         hasInteracted,
+        isMobile,
         readyState: audio.readyState,
         networkState: audio.networkState
       })
       
       // Handle specific mobile browser audio policy errors
       if (err?.name === 'NotAllowedError' || err?.name === 'AbortError') {
-        setError('Audio requires user interaction - tap to play')
+        if (isMobile && !hasInteracted) {
+          setNeedsUserInteraction(true)
+          setError('Tap to enable audio on mobile')
+        } else {
+          setError('Audio blocked - check browser settings')
+        }
       } else if (err?.name === 'NotSupportedError') {
-        setError('Audio format not supported')
+        setError('Audio format not supported on this device')
+      } else if (err?.message?.includes('load')) {
+        setError('Audio failed to load - check connection')
       } else {
-        setError('Failed to play audio')
+        setError(isMobile ? 'Audio unavailable on mobile' : 'Failed to play audio')
       }
     }
   }
@@ -200,6 +261,22 @@ export default function AudioPlayer({
   }
 
   const progressPercentage = duration > 0 ? (currentTime / duration) * 100 : 0
+
+  // Show mobile interaction prompt
+  if (needsUserInteraction && isMobile) {
+    return (
+      <div className={cn(
+        "flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-md cursor-pointer hover:bg-blue-100",
+        className
+      )}
+      onClick={togglePlayPause}
+      data-testid="button-audio-play-pause"
+      >
+        <Play className="h-4 w-4 text-blue-600" />
+        <span className="text-sm text-blue-700">Tap to enable audio</span>
+      </div>
+    )
+  }
 
   if (error) {
     return (
