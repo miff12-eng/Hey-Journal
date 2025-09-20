@@ -277,11 +277,9 @@ export default function JournalEntryCard({
             ))}
           </div>
         )}
-      </CardContent>
 
-      <CardFooter className="pt-0">
-        <Separator className="mb-3" />
-        <div className="flex items-center gap-2 w-full justify-start flex-wrap">
+        {/* Action buttons */}
+        <div className="mt-4 flex items-center gap-2 justify-start">
           <Button 
             variant="ghost" 
             size="sm" 
@@ -315,7 +313,7 @@ export default function JournalEntryCard({
             <span className="text-sm hidden sm:inline">Share</span>
           </Button>
         </div>
-      </CardFooter>
+      </CardContent>
       
       {/* Comments Section */}
       {showComments && (
