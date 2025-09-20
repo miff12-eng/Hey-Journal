@@ -337,7 +337,12 @@ export default function RecordDialog({ open, onOpenChange, editEntryId, onSaveSu
   }
 
   const handleMediaUploadWithMetadata = (mediaObjects: Array<{url: string; mimeType?: string; originalName?: string}>) => {
-    setMediaObjects(prev => [...prev, ...mediaObjects])
+    console.log('🔍 handleMediaUploadWithMetadata called with:', mediaObjects)
+    setMediaObjects(prev => {
+      const newMediaObjects = [...prev, ...mediaObjects]
+      console.log('🔍 Updated mediaObjects state:', newMediaObjects)
+      return newMediaObjects
+    })
     setMediaUrls(prev => [...prev, ...mediaObjects.map(obj => obj.url)]) // Maintain backward compatibility
     toast({
       title: "Media uploaded!",
@@ -426,11 +431,25 @@ export default function RecordDialog({ open, onOpenChange, editEntryId, onSaveSu
       audioPlayable: audioPlayable
     }
     console.log(isEditMode ? 'Updating entry:' : 'Saving entry:', entry)
+    console.log('🔍 Debug: mediaObjects state at save time:', mediaObjects)
+    console.log('🔍 Debug: mediaUrls state at save time:', mediaUrls)
     
     setIsSaving(true)
     try {
       const url = isEditMode ? `/api/journal/entries/${editEntryId}` : '/api/journal/entries'
       const method = isEditMode ? 'PUT' : 'POST'
+      
+      const requestBody = {
+        title: entry.title || undefined,
+        content: entry.content,
+        tags: entry.tags,
+        privacy: entry.privacy,
+        mediaUrls: mediaUrls,
+        mediaObjects: mediaObjects,
+        audioUrl: audioUrl || undefined,
+        audioPlayable: audioPlayable
+      }
+      console.log('🔍 Debug: Request body being sent:', requestBody)
       
       const response = await fetch(url, {
         method,
@@ -438,16 +457,7 @@ export default function RecordDialog({ open, onOpenChange, editEntryId, onSaveSu
           'Content-Type': 'application/json'
         },
         credentials: 'include',
-        body: JSON.stringify({
-          title: entry.title || undefined,
-          content: entry.content,
-          tags: entry.tags,
-          privacy: entry.privacy,
-          mediaUrls: mediaUrls,
-          mediaObjects: mediaObjects,
-          audioUrl: audioUrl || undefined,
-          audioPlayable: audioPlayable
-        })
+        body: JSON.stringify(requestBody)
       })
       
       if (response.ok) {

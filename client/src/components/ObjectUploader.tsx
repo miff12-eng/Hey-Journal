@@ -322,6 +322,7 @@ export function ObjectUploader({
   };
 
   const startUpload = async () => {
+    console.log('🔍 ObjectUploader: Starting upload with files:', selectedFiles)
     if (selectedFiles.length === 0) return;
 
     setIsUploading(true);
@@ -333,6 +334,8 @@ export function ObjectUploader({
     setUploadingFiles(uploads);
 
     const uploadedObjectPaths: string[] = [];
+    const uploadedMediaObjects: Array<{url: string; mimeType?: string; originalName?: string}> = [];
+    console.log('🔍 ObjectUploader: Initial upload state:', uploads)
 
     try {
       // Upload each file
@@ -407,7 +410,14 @@ export function ObjectUploader({
               originalName: responseData.originalName
             });
 
-            // Update uploading file with enhanced metadata
+            // Add to direct media objects array (reliable)
+            uploadedMediaObjects.push({
+              url: responseData.objectPath,
+              mimeType: responseData.mimeType,
+              originalName: responseData.originalName || upload.file.name
+            });
+
+            // Update uploading file with enhanced metadata (for UI)
             setUploadingFiles(prev => prev.map((item, idx) => 
               idx === i ? { 
                 ...item, 
@@ -430,20 +440,19 @@ export function ObjectUploader({
       }
 
       // Call completion callback with successful uploads (permanent object paths)
+      console.log('🔍 ObjectUploader: Upload complete, uploadedObjectPaths:', uploadedObjectPaths)
       if (uploadedObjectPaths.length > 0) {
+        console.log('🔍 ObjectUploader: Calling onComplete with:', uploadedObjectPaths)
         onComplete?.(uploadedObjectPaths);
         
-        // Also provide enhanced media objects with MIME metadata
-        const mediaObjects = uploadingFiles
-          .filter(file => file.status === 'completed' && file.objectPath)
-          .map(file => ({
-            url: file.objectPath!,
-            mimeType: file.mimeType,
-            originalName: file.originalName
-          }));
+        // Use reliable media objects array (not dependent on React state timing)
+        console.log('🔍 ObjectUploader: Using uploadedMediaObjects directly:', uploadedMediaObjects)
         
-        if (mediaObjects.length > 0) {
-          onCompleteWithMetadata?.(mediaObjects);
+        if (uploadedMediaObjects.length > 0) {
+          console.log('🔍 ObjectUploader: Calling onCompleteWithMetadata with:', uploadedMediaObjects)
+          onCompleteWithMetadata?.(uploadedMediaObjects);
+        } else {
+          console.log('🔍 ObjectUploader: Not calling onCompleteWithMetadata - uploadedMediaObjects is empty')
         }
       }
 
