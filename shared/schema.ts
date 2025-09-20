@@ -344,6 +344,7 @@ export type PublicJournalEntry = {
   audioUrl: string | null;
   audioPlayable: boolean;
   mediaUrls: string[];
+  mediaObjects: MediaObject[];
   tags: string[];
   createdAt: Date;
   updatedAt: Date;
