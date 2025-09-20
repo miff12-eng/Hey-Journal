@@ -17,6 +17,7 @@ import { ObjectUploader } from '@/components/ObjectUploader'
 import ThemeToggle from '@/components/ThemeToggle'
 import UserSelector from '@/components/UserSelector'
 import { cn } from '@/lib/utils'
+import { isVideo } from '@/lib/media'
 
 type PrivacyLevel = 'private' | 'shared' | 'public'
 
@@ -640,11 +641,11 @@ export default function Record() {
               {mediaUrls.length > 0 && (
                 <div className="grid grid-cols-3 gap-2">
                   {mediaUrls.map((url, index) => {
-                    const isVideo = /\.(mp4|webm|mov|avi)$/i.test(url) || url.includes('video/');
+                    const isVideoFile = isVideo(url);
                     return (
                       <div key={index} className="relative">
                         <div className="aspect-square bg-muted rounded-md flex items-center justify-center relative overflow-hidden">
-                          {isVideo ? (
+                          {isVideoFile ? (
                             <video 
                               src={url} 
                               className="w-full h-full object-cover"

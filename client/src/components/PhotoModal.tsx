@@ -2,6 +2,7 @@ import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden'
 import { X } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { isVideo } from '@/lib/media'
 
 interface MediaModalProps {
   open: boolean
@@ -12,7 +13,7 @@ interface MediaModalProps {
 }
 
 export default function MediaModal({ open, onOpenChange, src, alt, className }: MediaModalProps) {
-  const isVideo = /\.(mp4|webm|mov|avi)$/i.test(src) || src.includes('video/');
+  const isVideoFile = isVideo(src);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent 
@@ -23,7 +24,7 @@ export default function MediaModal({ open, onOpenChange, src, alt, className }: 
         data-testid="media-modal"
       >
         <VisuallyHidden>
-          <DialogTitle>Expanded {isVideo ? 'Video' : 'Photo'} View</DialogTitle>
+          <DialogTitle>Expanded {isVideoFile ? 'Video' : 'Photo'} View</DialogTitle>
         </VisuallyHidden>
         <div className="relative w-full h-full flex items-center justify-center overflow-hidden">
           {/* Close button */}
@@ -38,7 +39,7 @@ export default function MediaModal({ open, onOpenChange, src, alt, className }: 
           
           {/* Media Container */}
           <div className="w-full h-full flex items-center justify-center p-2">
-            {isVideo ? (
+            {isVideoFile ? (
               <video
                 src={src}
                 className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
