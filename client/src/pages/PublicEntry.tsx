@@ -180,24 +180,37 @@ export default function PublicEntry() {
               <div className="mt-6">
                 <h4 className="font-semibold mb-3">Media</h4>
                 <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 md:grid-cols-3">
-                  {entry.mediaUrls.map((url, index) => (
-                    <div 
-                      key={index} 
-                      className="group border rounded-lg overflow-hidden cursor-pointer"
-                      onClick={() => {
-                        setSelectedPhotoUrl(url)
-                        setSelectedPhotoAlt(`Media ${index + 1} from public entry by ${entry.user.firstName || ''} ${entry.user.lastName || ''}`)
-                      }}
-                      data-testid={`media-image-${index}`}
-                    >
-                      <img 
-                        src={url} 
-                        alt={`Media ${index + 1}`}
-                        className="w-full h-auto object-cover transition-transform duration-200 group-hover:scale-[1.02]"
-                        loading="lazy"
-                      />
-                    </div>
-                  ))}
+                  {entry.mediaUrls.map((url, index) => {
+                    const isVideo = /\.(mp4|webm|mov|avi)$/i.test(url) || url.includes('video/');
+                    return (
+                      <div 
+                        key={index} 
+                        className="group border rounded-lg overflow-hidden cursor-pointer"
+                        onClick={() => {
+                          setSelectedPhotoUrl(url)
+                          setSelectedPhotoAlt(`Media ${index + 1} from public entry by ${entry.user.firstName || ''} ${entry.user.lastName || ''}`)
+                        }}
+                        data-testid={`media-${isVideo ? 'video' : 'image'}-${index}`}
+                      >
+                        {isVideo ? (
+                          <video 
+                            src={url} 
+                            className="w-full h-auto object-cover transition-transform duration-200 group-hover:scale-[1.02]"
+                            controls
+                            muted
+                            preload="metadata"
+                          />
+                        ) : (
+                          <img 
+                            src={url} 
+                            alt={`Media ${index + 1}`}
+                            className="w-full h-auto object-cover transition-transform duration-200 group-hover:scale-[1.02]"
+                            loading="lazy"
+                          />
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
