@@ -155,6 +155,23 @@ export const comments = pgTable(
   ]
 );
 
+// Likes on journal entries
+export const likes = pgTable(
+  "likes",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    entryId: varchar("entry_id").notNull().references(() => journalEntries.id, { onDelete: "cascade" }),
+    userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_likes_entry_id").on(table.entryId),
+    index("idx_likes_user_id").on(table.userId),
+    // Prevent duplicate likes from same user on same entry
+    unique("unique_user_entry_like").on(table.entryId, table.userId),
+  ]
+);
+
 // People that users want to tag in their journal entries
 export const people = pgTable(
   "people",
@@ -221,6 +238,12 @@ export const insertCommentSchema = createInsertSchema(comments).omit({
   updatedAt: true,
 });
 
+export const insertLikeSchema = createInsertSchema(likes).omit({
+  id: true,
+  userId: true,
+  createdAt: true,
+});
+
 export const insertPersonSchema = createInsertSchema(people).omit({
   id: true,
   userId: true,
@@ -255,6 +278,9 @@ export type UserConnection = typeof userConnections.$inferSelect;
 export type InsertComment = z.infer<typeof insertCommentSchema>;
 export type Comment = typeof comments.$inferSelect;
 
+export type InsertLike = z.infer<typeof insertLikeSchema>;
+export type Like = typeof likes.$inferSelect;
+
 export type InsertPerson = z.infer<typeof insertPersonSchema>;
 export type Person = typeof people.$inferSelect;
 
@@ -270,6 +296,8 @@ export type JournalEntryWithUser = JournalEntry & {
   user: User;
   mentions?: (JournalMention & { user: User })[];
   personTags?: (EntryPersonTag & { person: Person })[];
+  likeCount?: number;
+  isLikedByUser?: boolean;
 };
 
 export type PersonWithTagCount = Person & {

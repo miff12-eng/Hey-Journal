@@ -9,6 +9,8 @@ import {
   type InsertComment,
   type CommentWithUser,
   type CommentWithPublicUser,
+  type Like,
+  type InsertLike,
   type UserConnection,
   type UserConnectionWithUser,
   type AiChatSession,
@@ -28,7 +30,7 @@ import { drizzle } from "drizzle-orm/neon-http";
 import { neon } from "@neondatabase/serverless";
 import { eq, desc, and, ilike, or, sql, ne, inArray } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
-import { users, journalEntries, comments, aiChatSessions, userConnections, people, entryPersonTags } from "@shared/schema";
+import { users, journalEntries, comments, likes, aiChatSessions, userConnections, people, entryPersonTags } from "@shared/schema";
 
 // modify the interface with any CRUD methods
 // you might need
@@ -78,6 +80,11 @@ export interface IStorage {
   createComment(comment: InsertComment, userId: string): Promise<Comment>;
   updateComment(id: string, updates: Partial<InsertComment>): Promise<Comment>;
   deleteComment(id: string): Promise<void>;
+  
+  // Like methods
+  getLikesCountByEntryId(entryId: string): Promise<number>;
+  isEntryLikedByUser(entryId: string, userId: string): Promise<boolean>;
+  toggleLike(entryId: string, userId: string): Promise<{ liked: boolean; likeCount: number }>;
   
   // Connection methods
   sendConnectionRequest(requesterId: string, recipientId: string): Promise<UserConnection>;
@@ -853,6 +860,54 @@ class DbStorage implements IStorage {
 
   async deleteComment(id: string): Promise<void> {
     await this.db.delete(comments).where(eq(comments.id, id));
+  }
+
+  // Like management methods
+  async getLikesCountByEntryId(entryId: string): Promise<number> {
+    const result = await this.db
+      .select({ count: sql<number>`count(*)` })
+      .from(likes)
+      .where(eq(likes.entryId, entryId));
+    
+    return result[0]?.count || 0;
+  }
+
+  async isEntryLikedByUser(entryId: string, userId: string): Promise<boolean> {
+    const result = await this.db
+      .select()
+      .from(likes)
+      .where(and(eq(likes.entryId, entryId), eq(likes.userId, userId)));
+    
+    return result.length > 0;
+  }
+
+  async toggleLike(entryId: string, userId: string): Promise<{ liked: boolean; likeCount: number }> {
+    // Check if user already liked the entry
+    const existingLike = await this.db
+      .select()
+      .from(likes)
+      .where(and(eq(likes.entryId, entryId), eq(likes.userId, userId)));
+
+    if (existingLike.length > 0) {
+      // Unlike: remove the like
+      await this.db
+        .delete(likes)
+        .where(and(eq(likes.entryId, entryId), eq(likes.userId, userId)));
+      
+      const likeCount = await this.getLikesCountByEntryId(entryId);
+      return { liked: false, likeCount };
+    } else {
+      // Like: add the like
+      await this.db.insert(likes).values({
+        id: randomUUID(),
+        entryId,
+        userId,
+        createdAt: new Date(),
+      });
+      
+      const likeCount = await this.getLikesCountByEntryId(entryId);
+      return { liked: true, likeCount };
+    }
   }
 
   // Connection management methods
@@ -1683,12 +1738,14 @@ export class MemStorage implements IStorage {
   private users: Map<string, User>;
   private journalEntries: Map<string, JournalEntry>;
   private comments: Map<string, Comment>;
+  private likes: Map<string, Like>;
   private aiChatSessions: Map<string, AiChatSession>;
 
   constructor() {
     this.users = new Map();
     this.journalEntries = new Map();
     this.comments = new Map();
+    this.likes = new Map();
     this.aiChatSessions = new Map();
     
     // Create a mock user for development
@@ -2110,6 +2167,41 @@ export class MemStorage implements IStorage {
 
   async deleteComment(id: string): Promise<void> {
     this.comments.delete(id);
+  }
+
+  // Like management methods
+  async getLikesCountByEntryId(entryId: string): Promise<number> {
+    const allLikes = Array.from(this.likes.values());
+    return allLikes.filter(like => like.entryId === entryId).length;
+  }
+
+  async isEntryLikedByUser(entryId: string, userId: string): Promise<boolean> {
+    const allLikes = Array.from(this.likes.values());
+    return allLikes.some(like => like.entryId === entryId && like.userId === userId);
+  }
+
+  async toggleLike(entryId: string, userId: string): Promise<{ liked: boolean; likeCount: number }> {
+    const allLikes = Array.from(this.likes.values());
+    const existingLike = allLikes.find(like => like.entryId === entryId && like.userId === userId);
+
+    if (existingLike) {
+      // Unlike: remove the like
+      this.likes.delete(existingLike.id);
+      const likeCount = await this.getLikesCountByEntryId(entryId);
+      return { liked: false, likeCount };
+    } else {
+      // Like: add the like
+      const id = randomUUID();
+      const like: Like = {
+        id,
+        entryId,
+        userId,
+        createdAt: new Date(),
+      };
+      this.likes.set(id, like);
+      const likeCount = await this.getLikesCountByEntryId(entryId);
+      return { liked: true, likeCount };
+    }
   }
 
   // Connection management methods (stub implementations for MemStorage)

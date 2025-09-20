@@ -6,9 +6,10 @@ import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { MoreHorizontal, Heart, MessageCircle, Share, Lock, Users, Globe, Play, Edit2 } from 'lucide-react'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation } from '@tanstack/react-query'
 import { cn } from '@/lib/utils'
 import { JournalEntryWithUser, CommentWithPublicUser } from '@shared/schema'
+import { apiRequest, queryClient } from '@/lib/queryClient'
 import CommentsList from './CommentsList'
 import AudioPlayer from './AudioPlayer'
 import PhotoModal from './PhotoModal'
@@ -31,7 +32,6 @@ export default function JournalEntryCard({
   showUserInfo = true
 }: JournalEntryCardProps) {
   const [isExpanded, setIsExpanded] = useState(false)
-  const [isLiked, setIsLiked] = useState(false)
   const [showComments, setShowComments] = useState(false)
   const [selectedPhotoUrl, setSelectedPhotoUrl] = useState<string | null>(null)
   const [selectedPhotoAlt, setSelectedPhotoAlt] = useState<string>('')
@@ -40,6 +40,71 @@ export default function JournalEntryCard({
   const { data: comments = [] } = useQuery<CommentWithPublicUser[]>({
     queryKey: ['/api/journal/entries', entry.id, 'comments'],
     queryFn: () => fetch(`/api/journal/entries/${entry.id}/comments`, { credentials: 'include' }).then(res => res.json()),
+  })
+  
+  // Fetch like data for the entry
+  const { data: likeData, isLoading: likesLoading } = useQuery<{
+    likeCount: number;
+    isLikedByUser: boolean;
+    entryId: string;
+  }>({
+    queryKey: ['/api/journal/entries', entry.id, 'likes'],
+    queryFn: () => fetch(`/api/journal/entries/${entry.id}/likes`, { credentials: 'include' }).then(res => res.json()),
+  })
+  
+  
+  // Mutation for toggling likes
+  const likeMutation = useMutation({
+    mutationFn: () => apiRequest(`/api/journal/entries/${entry.id}/likes`, {
+      method: 'POST',
+    }),
+    onMutate: async () => {
+      // Cancel any outgoing refetches (so they don't overwrite optimistic update)
+      await queryClient.cancelQueries({ 
+        queryKey: ['/api/journal/entries', entry.id, 'likes'] 
+      })
+
+      // Snapshot the previous value
+      const previousLikeData = queryClient.getQueryData(['/api/journal/entries', entry.id, 'likes'])
+
+      // Optimistically update to the new value
+      if (previousLikeData) {
+        const currentLikeCount = typeof previousLikeData.likeCount === 'string' 
+          ? parseInt(previousLikeData.likeCount, 10) 
+          : previousLikeData.likeCount
+        const newData = {
+          ...previousLikeData,
+          isLikedByUser: !previousLikeData.isLikedByUser,
+          likeCount: previousLikeData.isLikedByUser ? currentLikeCount - 1 : currentLikeCount + 1
+        }
+        queryClient.setQueryData(['/api/journal/entries', entry.id, 'likes'], newData)
+      } else {
+        queryClient.setQueryData(['/api/journal/entries', entry.id, 'likes'], {
+          entryId: entry.id,
+          likeCount: 1,
+          isLikedByUser: true
+        })
+      }
+
+      // Return a context object with the snapshotted value
+      return { previousLikeData }
+    },
+    onError: (err, newData, context) => {
+      // If the mutation fails, use the context returned from onMutate to roll back
+      if (context?.previousLikeData) {
+        queryClient.setQueryData(['/api/journal/entries', entry.id, 'likes'], context.previousLikeData)
+      }
+    },
+    onSettled: () => {
+      // Always refetch after error or success to ensure server state
+      queryClient.invalidateQueries({ 
+        queryKey: ['/api/journal/entries', entry.id, 'likes'] 
+      })
+      // Also invalidate the main entries list to ensure consistency
+      queryClient.invalidateQueries({ 
+        queryKey: ['/api/journal/entries'] 
+      })
+    },
   })
   
   const privacyIcon = {
@@ -284,11 +349,14 @@ export default function JournalEntryCard({
             variant="ghost" 
             size="sm" 
             className="gap-2 text-muted-foreground hover:text-foreground"
-            onClick={() => setIsLiked(!isLiked)}
+            onClick={() => likeMutation.mutate()}
+            disabled={likeMutation.isPending || likesLoading}
             data-testid={`button-like-${entry.id}`}
           >
-            <Heart className={cn('h-4 w-4', isLiked && 'fill-red-500 text-red-500')} />
-            <span className="text-sm">24</span>
+            <Heart className={cn('h-4 w-4', likeData?.isLikedByUser && 'fill-red-500 text-red-500')} />
+            <span className="text-sm">
+              {likeData ? (typeof likeData.likeCount === 'string' ? parseInt(likeData.likeCount, 10) : likeData.likeCount) : 0}
+            </span>
           </Button>
           
           <Button 
