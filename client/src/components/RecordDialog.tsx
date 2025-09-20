@@ -41,6 +41,7 @@ export default function RecordDialog({ open, onOpenChange, editEntryId, onSaveSu
   const [isRecording, setIsRecording] = useState(false)
   const [isTranscribing, setIsTranscribing] = useState(false)
   const [mediaUrls, setMediaUrls] = useState<string[]>([])
+  const [mediaObjects, setMediaObjects] = useState<Array<{url: string; mimeType?: string; originalName?: string}>>([])
   const [audioUrl, setAudioUrl] = useState<string>('')
   const [audioPlayable, setAudioPlayable] = useState<boolean>(false)
   const [isSaving, setIsSaving] = useState(false)
@@ -98,6 +99,7 @@ export default function RecordDialog({ open, onOpenChange, editEntryId, onSaveSu
       setTags(editEntry.tags || [])
       setPrivacy(editEntry.privacy || 'private')
       setMediaUrls(editEntry.mediaUrls || [])
+      setMediaObjects(editEntry.mediaObjects || [])
       setAudioUrl(editEntry.audioUrl || '')
       setAudioPlayable(editEntry.audioPlayable || false)
       
@@ -334,8 +336,18 @@ export default function RecordDialog({ open, onOpenChange, editEntryId, onSaveSu
     })
   }
 
+  const handleMediaUploadWithMetadata = (mediaObjects: Array<{url: string; mimeType?: string; originalName?: string}>) => {
+    setMediaObjects(prev => [...prev, ...mediaObjects])
+    setMediaUrls(prev => [...prev, ...mediaObjects.map(obj => obj.url)]) // Maintain backward compatibility
+    toast({
+      title: "Media uploaded!",
+      description: `${mediaObjects.length} file${mediaObjects.length > 1 ? 's' : ''} added to your entry.`,
+    })
+  }
+
   const removePhoto = (index: number) => {
     setMediaUrls(prev => prev.filter((_, i) => i !== index))
+    setMediaObjects(prev => prev.filter((_, i) => i !== index))
   }
 
   const generateTitleTagSuggestions = async () => {
@@ -409,6 +421,7 @@ export default function RecordDialog({ open, onOpenChange, editEntryId, onSaveSu
       tags,
       privacy,
       mediaUrls,
+      mediaObjects,
       audioUrl: audioUrl || undefined,
       audioPlayable: audioPlayable
     }
@@ -431,6 +444,7 @@ export default function RecordDialog({ open, onOpenChange, editEntryId, onSaveSu
           tags: entry.tags,
           privacy: entry.privacy,
           mediaUrls: mediaUrls,
+          mediaObjects: mediaObjects,
           audioUrl: audioUrl || undefined,
           audioPlayable: audioPlayable
         })
@@ -522,6 +536,7 @@ export default function RecordDialog({ open, onOpenChange, editEntryId, onSaveSu
           setTags([])
           setPrivacy('private')
           setMediaUrls([])
+          setMediaObjects([])
           setAudioUrl('')
           setAudioPlayable(false)
           setSelectedUsers([])
@@ -1336,6 +1351,7 @@ export default function RecordDialog({ open, onOpenChange, editEntryId, onSaveSu
                         'video/mp4', 'video/webm', 'video/quicktime', 'video/x-msvideo'
                       ]}
                       onComplete={handlePhotoUpload}
+                      onCompleteWithMetadata={handleMediaUploadWithMetadata}
                       buttonClassName="w-full"
                     >
                       <Button variant="outline" className="w-full justify-center hover-elevate">
@@ -1347,7 +1363,9 @@ export default function RecordDialog({ open, onOpenChange, editEntryId, onSaveSu
                     {mediaUrls.length > 0 && (
                       <div className="grid grid-cols-3 gap-2">
                         {mediaUrls.map((url, index) => {
-                          const isVideoFile = isVideo(url);
+                          // Use MIME-first detection for reliable video detection
+                          const mediaObject = mediaObjects[index] || { url };
+                          const isVideoFile = isVideo(mediaObject);
                           return (
                             <div key={index} className="relative">
                               <div className="aspect-square bg-muted rounded-md flex items-center justify-center relative overflow-hidden">

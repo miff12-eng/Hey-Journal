@@ -11,6 +11,7 @@ interface ObjectUploaderProps {
   maxFileSize?: number;
   acceptedFileTypes?: string[];
   onComplete?: (uploadedUrls: string[]) => void;
+  onCompleteWithMetadata?: (mediaObjects: Array<{url: string; mimeType?: string; originalName?: string}>) => void;
   buttonClassName?: string;
   children: React.ReactNode;
 }
@@ -21,6 +22,8 @@ interface UploadingFile {
   status: 'uploading' | 'completed' | 'error';
   objectPath?: string;
   error?: string;
+  mimeType?: string;
+  originalName?: string;
 }
 
 interface CameraModalProps {
@@ -205,6 +208,7 @@ export function ObjectUploader({
   maxFileSize = 10485760, // 10MB default
   acceptedFileTypes = [],
   onComplete,
+  onCompleteWithMetadata,
   buttonClassName,
   children,
 }: ObjectUploaderProps) {
@@ -382,13 +386,36 @@ export function ObjectUploader({
             xhr.send(upload.file);
           });
 
-          // Set ACL policy for uploaded file
-          await fetch('/api/photos', {
+          // Set ACL policy for uploaded file and send metadata for enhanced video support
+          const finalizeResponse = await fetch('/api/photos', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
-            body: JSON.stringify({ photoURL: uploadURL })
+            body: JSON.stringify({ 
+              photoURL: uploadURL,
+              mimeType: upload.file.type,
+              originalName: upload.file.name
+            })
           });
+
+          // Store enhanced response data for mediaObjects
+          if (finalizeResponse.ok) {
+            const responseData = await finalizeResponse.json();
+            console.log('Upload finalized with metadata:', {
+              objectPath: responseData.objectPath,
+              mimeType: responseData.mimeType,
+              originalName: responseData.originalName
+            });
+
+            // Update uploading file with enhanced metadata
+            setUploadingFiles(prev => prev.map((item, idx) => 
+              idx === i ? { 
+                ...item, 
+                mimeType: responseData.mimeType,
+                originalName: responseData.originalName || upload.file.name
+              } : item
+            ));
+          }
 
         } catch (error) {
           console.error('Upload error:', error);
@@ -405,6 +432,19 @@ export function ObjectUploader({
       // Call completion callback with successful uploads (permanent object paths)
       if (uploadedObjectPaths.length > 0) {
         onComplete?.(uploadedObjectPaths);
+        
+        // Also provide enhanced media objects with MIME metadata
+        const mediaObjects = uploadingFiles
+          .filter(file => file.status === 'completed' && file.objectPath)
+          .map(file => ({
+            url: file.objectPath!,
+            mimeType: file.mimeType,
+            originalName: file.originalName
+          }));
+        
+        if (mediaObjects.length > 0) {
+          onCompleteWithMetadata?.(mediaObjects);
+        }
       }
 
     } finally {

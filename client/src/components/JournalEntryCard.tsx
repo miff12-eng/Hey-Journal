@@ -10,6 +10,7 @@ import { useQuery, useMutation } from '@tanstack/react-query'
 import { cn } from '@/lib/utils'
 import { JournalEntryWithUser, CommentWithPublicUser } from '@shared/schema'
 import { apiRequest, queryClient } from '@/lib/queryClient'
+import { isVideo } from '@/lib/media'
 import CommentsList from './CommentsList'
 import AudioPlayer from './AudioPlayer'
 import PhotoModal from './PhotoModal'
@@ -35,6 +36,7 @@ export default function JournalEntryCard({
   const [showComments, setShowComments] = useState(false)
   const [selectedPhotoUrl, setSelectedPhotoUrl] = useState<string | null>(null)
   const [selectedPhotoAlt, setSelectedPhotoAlt] = useState<string>('')
+  const [selectedMediaObject, setSelectedMediaObject] = useState<{url: string; mimeType?: string; originalName?: string} | null>(null)
   
   // Fetch comment count for the entry
   const { data: comments = [] } = useQuery<CommentWithPublicUser[]>({
@@ -307,31 +309,50 @@ export default function JournalEntryCard({
         {/* Media grid */}
         {hasMedia && (
           <div className="mt-4 grid gap-2 grid-cols-1 sm:grid-cols-2 md:grid-cols-3">
-            {entry.mediaUrls!.slice(0, 6).map((url, index) => (
-              <div 
-                key={index} 
-                className="group relative rounded-md overflow-hidden cursor-pointer"
-                data-testid={`media-${entry.id}-${index}`}
-                onClick={() => {
-                  setSelectedPhotoUrl(url)
-                  setSelectedPhotoAlt(`Media ${index + 1} from entry by ${entry.user.firstName} ${entry.user.lastName || ''}`)
-                }}
-              >
-                <img 
-                  src={url} 
-                  alt={`Media ${index + 1}`}
-                  className="w-full h-auto transition-transform duration-200 group-hover:scale-105"
-                  loading="lazy"
-                />
-                {entry.mediaUrls!.length > 6 && index === 5 && (
-                  <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                    <span className="text-white font-medium text-sm">
-                      +{entry.mediaUrls!.length - 6}
-                    </span>
-                  </div>
-                )}
-              </div>
-            ))}
+            {entry.mediaUrls!.slice(0, 6).map((url, index) => {
+              // Use MIME-first detection for reliable video detection
+              const mediaObject = entry.mediaObjects?.[index] || { url };
+              const isVideoFile = isVideo(mediaObject);
+              return (
+                <div 
+                  key={index} 
+                  className="group relative rounded-md overflow-hidden cursor-pointer"
+                  data-testid={`media-${entry.id}-${index}`}
+                  onClick={() => {
+                    setSelectedPhotoUrl(url)
+                    setSelectedPhotoAlt(`Media ${index + 1} from entry by ${entry.user.firstName} ${entry.user.lastName || ''}`)
+                    setSelectedMediaObject(mediaObject)
+                  }}
+                >
+                  {isVideoFile ? (
+                    <video 
+                      src={url} 
+                      className="w-full h-auto transition-transform duration-200 group-hover:scale-105"
+                      data-testid={`video-${entry.id}-${index}`}
+                      muted
+                      playsInline
+                      loop
+                      preload="metadata"
+                    />
+                  ) : (
+                    <img 
+                      src={url} 
+                      alt={`Media ${index + 1}`}
+                      className="w-full h-auto transition-transform duration-200 group-hover:scale-105"
+                      data-testid={`photo-${entry.id}-${index}`}
+                      loading="lazy"
+                    />
+                  )}
+                  {entry.mediaUrls!.length > 6 && index === 5 && (
+                    <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                      <span className="text-white font-medium text-sm">
+                        +{entry.mediaUrls!.length - 6}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
           </div>
         )}
 
@@ -403,10 +424,12 @@ export default function JournalEntryCard({
           if (!open) {
             setSelectedPhotoUrl(null)
             setSelectedPhotoAlt('')
+            setSelectedMediaObject(null)
           }
         }}
         src={selectedPhotoUrl || ''}
         alt={selectedPhotoAlt}
+        mediaObject={selectedMediaObject || undefined}
       />
     </Card>
   )

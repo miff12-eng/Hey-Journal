@@ -1440,19 +1440,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.json({ suggestions: [] }); // No AI insights available
       }
       
-      // Parse the AI insights to extract mentioned people
-      let mentionedPeople: string[] = [];
-      try {
-        if (typeof aiInsights.insights === 'string') {
-          const parsed = JSON.parse(aiInsights.insights);
-          mentionedPeople = parsed.mentionedPeople || [];
-        } else if (aiInsights.insights && typeof aiInsights.insights === 'object') {
-          mentionedPeople = (aiInsights.insights as any).mentionedPeople || [];
-        }
-      } catch (error) {
-        console.error('Error parsing AI insights:', error);
-        return res.json({ suggestions: [] });
-      }
+      // Extract mentioned people from AI insights
+      const mentionedPeople: string[] = aiInsights.people || [];
       
       if (!mentionedPeople || mentionedPeople.length === 0) {
         return res.json({ suggestions: [] });
@@ -2647,11 +2636,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Set ACL policy after photo upload
+  // Set ACL policy after photo upload and store MIME type metadata
   app.put("/api/photos", async (req, res) => {
     if (!req.body.photoURL) {
       return res.status(400).json({ error: "photoURL is required" });
     }
+
+    // Extract optional MIME type and filename for enhanced metadata support
+    const { mimeType, originalName } = req.body;
 
     try {
       const objectStorageService = new ObjectStorageService();
@@ -2716,9 +2708,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         },
       );
 
-      res.status(200).json({
+      // Return enhanced metadata for new mediaObjects format
+      const responseData: any = {
         objectPath: finalObjectPath,
-      });
+      };
+
+      // Include MIME type and original name if provided for enhanced video/media support
+      if (mimeType) {
+        responseData.mimeType = mimeType;
+      }
+      if (originalName) {
+        responseData.originalName = originalName;
+      }
+
+      res.status(200).json(responseData);
     } catch (error) {
       console.error("Error setting photo ACL:", error);
       if (error instanceof ObjectNotFoundError) {

@@ -10,10 +10,13 @@ interface MediaModalProps {
   src: string
   alt: string
   className?: string
+  mediaObject?: {url: string; mimeType?: string; originalName?: string}
 }
 
-export default function MediaModal({ open, onOpenChange, src, alt, className }: MediaModalProps) {
-  const isVideoFile = isVideo(src);
+export default function MediaModal({ open, onOpenChange, src, alt, className, mediaObject }: MediaModalProps) {
+  // Use MIME-first detection for reliable video detection with opaque URLs
+  const mediaForDetection = mediaObject || { url: src };
+  const isVideoFile = isVideo(mediaForDetection);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent 

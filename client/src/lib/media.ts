@@ -4,11 +4,23 @@
 
 /**
  * Determines if a file or URL represents a video
- * @param source - File object or URL string
+ * @param source - File object, URL string, or media object with MIME type
+ * @param mimeType - Optional MIME type for reliable detection with URLs
  * @returns true if the source is a video
  */
-export function isVideo(source: File | string): boolean {
-  if (typeof source === 'string') {
+export function isVideo(source: File | string | { url: string; mimeType?: string }, mimeType?: string): boolean {
+  if (typeof source === 'object' && 'url' in source) {
+    // Media object with potential MIME type
+    if (source.mimeType) {
+      return source.mimeType.startsWith('video/');
+    }
+    // Fallback to URL-based detection
+    return /\.(mp4|webm|mov|avi)$/i.test(source.url) || source.url.includes('video/');
+  } else if (typeof source === 'string') {
+    // Use MIME type first if provided for reliable detection
+    if (mimeType) {
+      return mimeType.startsWith('video/');
+    }
     // URL-based detection
     return /\.(mp4|webm|mov|avi)$/i.test(source) || source.includes('video/');
   } else {
