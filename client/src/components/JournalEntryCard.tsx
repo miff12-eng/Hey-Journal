@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
@@ -14,6 +14,7 @@ import { isVideo } from '@/lib/media'
 import CommentsList from './CommentsList'
 import AudioPlayer from './AudioPlayer'
 import PhotoModal from './PhotoModal'
+import { AspectRatio } from '@/components/ui/aspect-ratio'
 
 interface JournalEntryCardProps {
   entry: JournalEntryWithUser
@@ -37,6 +38,42 @@ export default function JournalEntryCard({
   const [selectedPhotoUrl, setSelectedPhotoUrl] = useState<string | null>(null)
   const [selectedPhotoAlt, setSelectedPhotoAlt] = useState<string>('')
   const [selectedMediaObject, setSelectedMediaObject] = useState<{url: string; mimeType?: string; originalName?: string} | null>(null)
+  const [detectedVideoUrls, setDetectedVideoUrls] = useState<Set<string>>(new Set())
+  
+  // Detect MIME types for legacy entries without mediaObjects
+  useEffect(() => {
+    const detectLegacyVideoUrls = async () => {
+      if (!entry.mediaUrls || entry.mediaUrls.length === 0) return;
+      
+      const urlsToCheck = entry.mediaUrls.filter((url, index) => {
+        const hasMetadata = entry.mediaObjects && entry.mediaObjects[index] && entry.mediaObjects[index].mimeType;
+        return !hasMetadata && !detectedVideoUrls.has(url);
+      });
+      
+      if (urlsToCheck.length === 0) return;
+      
+      // Check MIME types via HEAD requests for legacy entries
+      const videoUrls = new Set(detectedVideoUrls);
+      for (const url of urlsToCheck) {
+        try {
+          const response = await fetch(url, { method: 'HEAD' });
+          const contentType = response.headers.get('content-type');
+          if (contentType && contentType.startsWith('video/')) {
+            videoUrls.add(url);
+          }
+        } catch (error) {
+          // Silently fail for inaccessible URLs
+          console.debug('Failed to check MIME type for:', url);
+        }
+      }
+      
+      if (videoUrls.size > detectedVideoUrls.size) {
+        setDetectedVideoUrls(videoUrls);
+      }
+    };
+    
+    detectLegacyVideoUrls();
+  }, [entry.mediaUrls, entry.mediaObjects, detectedVideoUrls]);
   
   // Fetch comment count for the entry
   const { data: comments = [] } = useQuery<CommentWithPublicUser[]>({
@@ -312,7 +349,15 @@ export default function JournalEntryCard({
             {entry.mediaUrls!.slice(0, 6).map((url, index) => {
               // Use MIME-first detection for reliable video detection
               const mediaObject = entry.mediaObjects?.[index] || { url };
-              const isVideoFile = isVideo(mediaObject);
+              
+              // Check if this is a video: use mediaObject MIME type first, then runtime detection
+              let isVideoFile = isVideo(mediaObject);
+              
+              // For legacy entries without MIME metadata, use runtime detection
+              if (!isVideoFile && (!mediaObject.mimeType) && detectedVideoUrls.has(url)) {
+                isVideoFile = true;
+              }
+              
               return (
                 <div 
                   key={index} 
@@ -325,15 +370,17 @@ export default function JournalEntryCard({
                   }}
                 >
                   {isVideoFile ? (
-                    <video 
-                      src={url} 
-                      className="w-full h-auto transition-transform duration-200 group-hover:scale-105"
-                      data-testid={`video-${entry.id}-${index}`}
-                      muted
-                      playsInline
-                      loop
-                      preload="metadata"
-                    />
+                    <AspectRatio ratio={16/9}>
+                      <video 
+                        src={url} 
+                        className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
+                        data-testid={`video-${entry.id}-${index}`}
+                        muted
+                        playsInline
+                        loop
+                        preload="metadata"
+                      />
+                    </AspectRatio>
                   ) : (
                     <img 
                       src={url} 
@@ -343,6 +390,16 @@ export default function JournalEntryCard({
                       loading="lazy"
                     />
                   )}
+                  
+                  {/* Play button overlay for videos (desktop only) */}
+                  {isVideoFile && (
+                    <div className="absolute inset-0 flex items-center justify-center opacity-80 group-hover:opacity-100 transition-opacity duration-200 hidden sm:flex">
+                      <div className="bg-black/50 backdrop-blur-sm rounded-full p-3 border border-white/20">
+                        <Play className="h-6 w-6 text-white fill-white" />
+                      </div>
+                    </div>
+                  )}
+                  
                   {entry.mediaUrls!.length > 6 && index === 5 && (
                     <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
                       <span className="text-white font-medium text-sm">
