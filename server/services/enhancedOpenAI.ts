@@ -244,6 +244,12 @@ export async function enhancedAnalyzeMediaContent(mediaUrls: string[]): Promise<
         
         console.log('🔍 Analyzing media URL:', normalizedUrl);
         
+        // Skip video files - OpenAI vision API only supports images
+        if (normalizedUrl.match(/\.(mp4|webm|mov|avi)$/i) || normalizedUrl.includes('video/')) {
+          console.log('⏭️ Skipping video file (not supported by vision API):', normalizedUrl);
+          continue;
+        }
+        
         const analysis = await openai.chat.completions.create({
           model: "gpt-4o", // Using gpt-4o for vision analysis as it supports image processing
           messages: [

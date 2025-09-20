@@ -18,6 +18,7 @@ interface PublicJournalEntry {
   audioUrl: string | null
   audioPlayable: boolean
   mediaUrls: string[]
+  mediaObjects: Array<{url: string; mimeType?: string; originalName?: string}>
   tags: string[]
   createdAt: string
   updatedAt: string
@@ -35,6 +36,7 @@ export default function PublicEntry() {
   const { entryId } = useParams<{ entryId: string }>()
   const [selectedPhotoUrl, setSelectedPhotoUrl] = useState<string | null>(null)
   const [selectedPhotoAlt, setSelectedPhotoAlt] = useState<string>('')
+  const [selectedMediaObject, setSelectedMediaObject] = useState<{url: string; mimeType?: string; originalName?: string} | null>(null)
 
   // Fetch entry
   const entryQuery = useQuery<PublicJournalEntry>({
@@ -182,7 +184,9 @@ export default function PublicEntry() {
                 <h4 className="font-semibold mb-3">Media</h4>
                 <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 md:grid-cols-3">
                   {entry.mediaUrls.map((url, index) => {
-                    const isVideoFile = isVideo(url);
+                    // Use MIME-first detection for reliable video detection
+                    const mediaObject = entry.mediaObjects?.[index] || { url };
+                    const isVideoFile = isVideo(mediaObject);
                     return (
                       <div 
                         key={index} 
@@ -190,6 +194,7 @@ export default function PublicEntry() {
                         onClick={() => {
                           setSelectedPhotoUrl(url)
                           setSelectedPhotoAlt(`Media ${index + 1} from public entry by ${entry.user.firstName || ''} ${entry.user.lastName || ''}`)
+                          setSelectedMediaObject(mediaObject)
                         }}
                         data-testid={`media-${isVideoFile ? 'video' : 'image'}-${index}`}
                       >
@@ -268,10 +273,12 @@ export default function PublicEntry() {
             if (!open) {
               setSelectedPhotoUrl(null)
               setSelectedPhotoAlt('')
+              setSelectedMediaObject(null)
             }
           }}
           src={selectedPhotoUrl || ''}
           alt={selectedPhotoAlt}
+          mediaObject={selectedMediaObject || undefined}
         />
       </div>
     </div>
