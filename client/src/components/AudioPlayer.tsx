@@ -32,6 +32,11 @@ export default function AudioPlayer({
     const handleLoadedMetadata = () => {
       setDuration(audio.duration)
       setIsLoading(false)
+      console.log('Audio loaded successfully:', {
+        audioUrl,
+        duration: audio.duration,
+        readyState: audio.readyState
+      })
     }
 
     const handleTimeUpdate = () => {
@@ -50,7 +55,9 @@ export default function AudioPlayer({
         error: errorEvent?.error,
         message: errorEvent?.message,
         readyState: audio.readyState,
-        networkState: audio.networkState
+        networkState: audio.networkState,
+        audioError: audio.error?.code,
+        audioErrorMessage: audio.error?.message
       })
       
       // Different error messages based on the audio state
@@ -58,6 +65,8 @@ export default function AudioPlayer({
         setError('Audio file not accessible')
       } else if (audio.readyState === 0) { // HAVE_NOTHING
         setError('Audio unavailable - may require login')
+      } else if (audio.error?.code === 4) { // MEDIA_ERR_SRC_NOT_SUPPORTED
+        setError('Audio format not supported')
       } else {
         setError('Audio unavailable')
       }
@@ -67,6 +76,49 @@ export default function AudioPlayer({
     const handleCanPlay = () => {
       setIsLoading(false)
     }
+
+    // Test audio URL accessibility before setting src
+    const testAudioAccess = async () => {
+      try {
+        const response = await fetch(audioUrl, { 
+          method: 'HEAD',
+          credentials: 'include' // Include session cookies for authentication
+        })
+        
+        console.log('Audio URL test:', {
+          audioUrl,
+          status: response.status,
+          headers: Object.fromEntries(response.headers.entries())
+        })
+        
+        if (!response.ok) {
+          if (response.status === 401) {
+            setError('Audio requires login - please refresh the page')
+          } else if (response.status === 403) {
+            setError('Audio access denied')
+          } else if (response.status === 404) {
+            setError('Audio file not found')
+          } else {
+            setError(`Audio unavailable (${response.status})`)
+          }
+          setIsLoading(false)
+          return false
+        }
+        return true
+      } catch (err) {
+        console.error('Audio URL test failed:', err)
+        setError('Network error - check connection')
+        setIsLoading(false)
+        return false
+      }
+    }
+
+    // Test URL access first, then set audio src
+    testAudioAccess().then(accessible => {
+      if (accessible) {
+        audio.src = audioUrl
+      }
+    })
 
     audio.addEventListener('loadedmetadata', handleLoadedMetadata)
     audio.addEventListener('timeupdate', handleTimeUpdate)
