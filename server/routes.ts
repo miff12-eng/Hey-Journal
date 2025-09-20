@@ -5,7 +5,7 @@ import { generateAIResponse, transcribeAudio } from "./ai";
 import { analyzeEntry, semanticRank } from "./services/openai";
 import { enhancedAnalyzeEntry } from "./services/enhancedOpenAI";
 import EmbeddingProcessor from "./services/embeddingProcessor";
-import { insertJournalEntrySchema, insertAiChatSessionSchema, insertCommentSchema, updateUserProfileSchema, insertPersonSchema, insertEntryPersonTagSchema } from "@shared/schema";
+import { insertJournalEntrySchema, insertAiChatSessionSchema, insertCommentSchema, insertLikeSchema, updateUserProfileSchema, insertPersonSchema, insertEntryPersonTagSchema } from "@shared/schema";
 import { z } from "zod";
 import multer from "multer";
 import {
@@ -859,6 +859,69 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Delete Comment Error:', error);
       res.status(500).json({ error: 'Failed to delete comment' });
+    }
+  });
+
+  // Like API routes
+  
+  // Get like count and user like status for a journal entry
+  app.get('/api/journal/entries/:entryId/likes', async (req, res) => {
+    try {
+      const { entryId } = req.params;
+      
+      // Get the entry to check permissions
+      const entry = await storage.getJournalEntry(entryId);
+      if (!entry) {
+        return res.status(404).json({ error: 'Entry not found' });
+      }
+      
+      // Check if user can view the entry based on privacy
+      if (entry.privacy === 'private' && entry.userId !== req.userId) {
+        return res.status(403).json({ error: 'Not authorized to view this entry' });
+      }
+      
+      // Get like count and user like status
+      const likeCount = await storage.getLikesCountByEntryId(entryId);
+      const isLikedByUser = await storage.isEntryLikedByUser(entryId, req.userId);
+      
+      res.json({ 
+        likeCount, 
+        isLikedByUser,
+        entryId 
+      });
+    } catch (error) {
+      console.error('Get Entry Likes Error:', error);
+      res.status(500).json({ error: 'Failed to fetch likes' });
+    }
+  });
+  
+  // Toggle like on a journal entry
+  app.post('/api/journal/entries/:entryId/likes', async (req, res) => {
+    try {
+      const { entryId } = req.params;
+      
+      // Get the entry to check permissions
+      const entry = await storage.getJournalEntry(entryId);
+      if (!entry) {
+        return res.status(404).json({ error: 'Entry not found' });
+      }
+      
+      // Check if user can like the entry (no liking private entries unless you own them)
+      if (entry.privacy === 'private' && entry.userId !== req.userId) {
+        return res.status(403).json({ error: 'Not authorized to like this entry' });
+      }
+      
+      // Toggle like
+      const result = await storage.toggleLike(entryId, req.userId);
+      
+      res.json({
+        liked: result.liked,
+        likeCount: result.likeCount,
+        entryId
+      });
+    } catch (error) {
+      console.error('Toggle Like Error:', error);
+      res.status(500).json({ error: 'Failed to toggle like' });
     }
   });
 
