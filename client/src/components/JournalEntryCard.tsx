@@ -55,9 +55,7 @@ export default function JournalEntryCard({
   
   // Mutation for toggling likes
   const likeMutation = useMutation({
-    mutationFn: () => apiRequest(`/api/journal/entries/${entry.id}/likes`, {
-      method: 'POST',
-    }),
+    mutationFn: () => apiRequest('POST', `/api/journal/entries/${entry.id}/likes`),
     onMutate: async () => {
       // Cancel any outgoing refetches (so they don't overwrite optimistic update)
       await queryClient.cancelQueries({ 
