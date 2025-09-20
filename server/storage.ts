@@ -888,26 +888,43 @@ class DbStorage implements IStorage {
       .from(likes)
       .where(and(eq(likes.entryId, entryId), eq(likes.userId, userId)));
 
+    let liked: boolean;
+    
     if (existingLike.length > 0) {
       // Unlike: remove the like
       await this.db
         .delete(likes)
         .where(and(eq(likes.entryId, entryId), eq(likes.userId, userId)));
-      
-      const likeCount = await this.getLikesCountByEntryId(entryId);
-      return { liked: false, likeCount };
+      liked = false;
     } else {
-      // Like: add the like
-      await this.db.insert(likes).values({
-        id: randomUUID(),
-        entryId,
-        userId,
-        createdAt: new Date(),
-      });
-      
-      const likeCount = await this.getLikesCountByEntryId(entryId);
-      return { liked: true, likeCount };
+      // Like: add the like - handle unique constraint conflict gracefully
+      try {
+        await this.db.insert(likes).values({
+          id: randomUUID(),
+          entryId,
+          userId,
+          createdAt: new Date(),
+        });
+        liked = true;
+      } catch (error: any) {
+        // If unique constraint error, the like already exists (race condition)
+        // Return current state instead of failing
+        if (error?.code === '23505' || error?.constraint?.includes('unique')) {
+          liked = true;
+        } else {
+          throw error;
+        }
+      }
     }
+    
+    // Get final count after the operation
+    const result = await this.db
+      .select({ count: sql<number>`count(*)` })
+      .from(likes)
+      .where(eq(likes.entryId, entryId));
+    
+    const likeCount = result[0]?.count || 0;
+    return { liked, likeCount };
   }
 
   // Connection management methods
