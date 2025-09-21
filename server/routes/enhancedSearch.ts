@@ -17,20 +17,22 @@ router.post('/search/enhanced', async (req, res) => {
       mode: z.enum(['vector', 'conversational', 'hybrid']).default('hybrid'),
       limit: z.number().int().min(1).max(50).default(10),
       threshold: z.number().min(0).max(1).default(0.3),
+      source: z.enum(['feed', 'search']).optional().default('search'), // Distinguish Feed vs Search page
       filters: z.object({
         filterType: z.enum(['tags', 'date']).optional(),
         tags: z.array(z.string()).optional(),
         dateRange: z.object({
           from: z.string().optional(),
           to: z.string().optional()
-        }).optional()
+        }).optional(),
+        type: z.enum(['feed', 'shared']).optional() // Feed filter type
       }).optional()
     });
 
-    const { query, mode, limit, threshold, filters } = searchSchema.parse(req.body);
+    const { query, mode, limit, threshold, source, filters } = searchSchema.parse(req.body);
     const userId = req.userId!;
     
-    console.log('🚀 Enhanced search request:', { query, mode, userId, filters });
+    console.log('🚀 Enhanced search request:', { query, mode, userId, source, filters });
 
     let results;
     const startTime = Date.now();

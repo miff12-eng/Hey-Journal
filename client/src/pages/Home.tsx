@@ -104,6 +104,7 @@ export default function Home() {
         query: params.query,
         mode: 'hybrid', // Use hybrid search for best results
         limit: 20,
+        source: 'feed', // Identify this as Feed page search
         filters: { type: params.filter } // Pass feed filter to API
       });
       const data = await response.json() as EnhancedSearchResponse;
