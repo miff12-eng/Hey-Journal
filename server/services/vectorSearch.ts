@@ -107,8 +107,9 @@ async function getRecentEntries(
   userId: string, 
   limit: number = 5, 
   filters?: {
-    filterType?: 'tags' | 'date';
+    filterType?: 'tags' | 'people' | 'date';
     tags?: string[];
+    people?: string[];
     dateRange?: { from?: string; to?: string };
     type?: 'feed' | 'shared';
   }
@@ -373,8 +374,9 @@ export async function performVectorSearch(
   limit: number = 10,
   similarityThreshold: number = 0.2,
   filters?: {
-    filterType?: 'tags' | 'date';
+    filterType?: 'tags' | 'people' | 'date';
     tags?: string[];
+    people?: string[];
     dateRange?: { from?: string; to?: string };
     type?: 'feed' | 'shared';
   },
@@ -433,6 +435,28 @@ export async function performVectorSearch(
       filters.tags.forEach(tag => {
         whereConditions.push(arrayContains(journalEntries.tags, [tag]));
       });
+    }
+
+    if (filters?.people && filters.people.length > 0) {
+      // Filter entries tagged with specific people by name
+      console.log('👥 People filtering with:', filters.people);
+      const { entryPersonTags, people } = await import('../../shared/schema');
+      const { inArray, exists } = await import('drizzle-orm');
+      
+      // Use EXISTS subquery to find entries tagged with people whose names match the filter
+      const peopleSubquery = db
+        .select({ entryId: entryPersonTags.entryId })
+        .from(entryPersonTags)
+        .innerJoin(people, eq(people.id, entryPersonTags.personId))
+        .where(
+          and(
+            eq(entryPersonTags.entryId, journalEntries.id),
+            eq(people.userId, userId), // Only this user's people
+            inArray(people.firstName, filters.people) // Match by first name for now
+          )
+        );
+      
+      whereConditions.push(exists(peopleSubquery));
     }
 
     if (filters?.dateRange) {
@@ -531,8 +555,9 @@ export async function performConversationalSearch(
   userId: string,
   previousMessages: Array<{role: string, content: string}> = [],
   filters?: {
-    filterType?: 'tags' | 'date';
+    filterType?: 'tags' | 'people' | 'date';
     tags?: string[];
+    people?: string[];
     dateRange?: { from?: string; to?: string };
     type?: 'feed' | 'shared';
   },
@@ -711,8 +736,9 @@ export async function performHybridSearch(
   limit: number = 10,
   mode: 'balanced' | 'semantic' | 'keyword' = 'balanced',
   filters?: {
-    filterType?: 'tags' | 'date';
+    filterType?: 'tags' | 'people' | 'date';
     tags?: string[];
+    people?: string[];
     dateRange?: { from?: string; to?: string };
     type?: 'feed' | 'shared';
   },
@@ -840,8 +866,9 @@ async function performKeywordSearch(
   userId: string, 
   limit: number,
   filters?: {
-    filterType?: 'tags' | 'date';
+    filterType?: 'tags' | 'people' | 'date';
     tags?: string[];
+    people?: string[];
     dateRange?: { from?: string; to?: string };
   }
 ): Promise<VectorSearchResult[]> {
@@ -868,6 +895,28 @@ async function performKeywordSearch(
       filters.tags.forEach(tag => {
         whereConditions.push(arrayContains(journalEntries.tags, [tag]));
       });
+    }
+
+    if (filters?.people && filters.people.length > 0) {
+      // Filter entries tagged with specific people by name
+      console.log('👥 Keyword search people filtering with:', filters.people);
+      const { entryPersonTags, people } = await import('../../shared/schema');
+      const { inArray, exists } = await import('drizzle-orm');
+      
+      // Use EXISTS subquery to find entries tagged with people whose names match the filter
+      const peopleSubquery = db
+        .select({ entryId: entryPersonTags.entryId })
+        .from(entryPersonTags)
+        .innerJoin(people, eq(people.id, entryPersonTags.personId))
+        .where(
+          and(
+            eq(entryPersonTags.entryId, journalEntries.id),
+            eq(people.userId, userId), // Only this user's people
+            inArray(people.firstName, filters.people) // Match by first name for now
+          )
+        );
+      
+      whereConditions.push(exists(peopleSubquery));
     }
 
     if (filters?.dateRange) {
