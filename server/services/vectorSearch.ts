@@ -66,25 +66,28 @@ interface ConversationalSearchResult {
  */
 async function applyFeedRanking(results: VectorSearchResult[], userId: string): Promise<VectorSearchResult[]> {
   try {
+    // Quick fallback for empty results to avoid database errors
+    if (results.length === 0) {
+      return results;
+    }
+
     const { db } = await import('../db');
-    const { journalEntries, journalEntryLikes, journalEntryComments } = await import('../../shared/schema');
-    const { eq, and, count, desc } = await import('drizzle-orm');
+    const { journalEntries, likes, comments } = await import('../../shared/schema');
+    const { eq, and, count, desc, inArray } = await import('drizzle-orm');
 
     // Get entry details with engagement metrics
     const entryIds = results.map(r => r.entryId);
-    
-    const { inArray } = await import('drizzle-orm');
     
     const entriesWithEngagement = await db
       .select({
         id: journalEntries.id,
         createdAt: journalEntries.createdAt,
-        likesCount: count(journalEntryLikes.id),
-        commentsCount: count(journalEntryComments.id)
+        likesCount: count(likes.id),
+        commentsCount: count(comments.id)
       })
       .from(journalEntries)
-      .leftJoin(journalEntryLikes, eq(journalEntries.id, journalEntryLikes.entryId))
-      .leftJoin(journalEntryComments, eq(journalEntries.id, journalEntryComments.entryId))
+      .leftJoin(likes, eq(journalEntries.id, likes.entryId))
+      .leftJoin(comments, eq(journalEntries.id, comments.entryId))
       .where(inArray(journalEntries.id, entryIds))
       .groupBy(journalEntries.id, journalEntries.createdAt);
 
