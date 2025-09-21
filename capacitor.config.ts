@@ -3,7 +3,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
 const config: CapacitorConfig = {
   appId: 'com.voicejournal.app',
   appName: 'Voice Journal',
-  webDir: 'dist', // Vite builds to 'dist' directory
+  webDir: 'dist/public', // Vite builds to 'dist/public' directory
   server: {
     androidScheme: 'https',
     // Enable live reload for development
