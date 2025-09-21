@@ -120,6 +120,11 @@ export default function MyJournal() {
     return filters;
   };
 
+  // Check if any filters are active (beyond the base 'feed' filter)
+  const hasActiveFilters = () => {
+    return selectedPeople.length > 0 || dateRange.from || dateRange.to;
+  };
+
   // Handle search execution
   const handleSearch = (query: string) => {
     if (query.trim()) {
@@ -129,20 +134,20 @@ export default function MyJournal() {
     }
   }
 
-  // Enhanced search mutation for My Journal search
+  // Enhanced search mutation for My Journal search (handles both search and filtering)
   const searchMutation = useMutation({
     mutationFn: async (params: { query: string; filters?: any }) => {
-      console.log('🚀 Performing enhanced My Journal search:', params);
+      console.log('🚀 Performing enhanced My Journal search/filter:', params);
       setIsSearching(true);
       const response = await apiRequest('POST', '/api/search/enhanced', {
-        query: params.query,
+        query: params.query || '*', // Use '*' for filter-only queries
         mode: 'hybrid', // Use hybrid search for best results
         limit: 20,
         source: 'search', // Use valid enum value
         filters: params.filters || { type: 'feed' } // Use provided filters or default
       });
       const data = await response.json() as EnhancedSearchResponse;
-      console.log('🎯 Enhanced My Journal search results:', data);
+      console.log('🎯 Enhanced My Journal search/filter results:', data);
       return data;
     },
     onSuccess: (data) => {
@@ -181,9 +186,9 @@ export default function MyJournal() {
     }
   }, [searchQuery]);
   
-  // Re-run search when filters change (but only if there's an active search)
+  // Re-run search when filters change (either with active search or filter-only)
   useEffect(() => {
-    if (searchQuery.trim()) {
+    if (searchQuery.trim() || hasActiveFilters()) {
       // Debounce filter changes to prevent multiple searches while typing dates
       const timer = setTimeout(() => {
         // Only perform search if date inputs are complete or empty
@@ -199,6 +204,10 @@ export default function MyJournal() {
       }, 500); // 500ms debounce for filter changes
       
       return () => clearTimeout(timer);
+    } else {
+      // Clear results when no search query and no filters
+      setSearchResults([]);
+      setIsSearching(false);
     }
   }, [selectedPeople, dateRange]);
 
@@ -290,12 +299,12 @@ export default function MyJournal() {
   })
 
   // Use entries directly from API - they already contain proper user data
-  const displayEntries: JournalEntryWithUser[] = entries
+  const displayEntries: JournalEntryWithUser[] = entries || []
 
-  // Enhanced search: If search query exists, show hydrated search results instead of all entries
-  const filteredEntries = searchQuery.trim() ? 
-    hydratedSearchEntries :
-    // When not searching, show all entries
+  // Enhanced search: If search query exists OR filters are active, show hydrated search results instead of all entries
+  const filteredEntries = (searchQuery.trim() || hasActiveFilters()) ? 
+    (hydratedSearchEntries || []) :
+    // When not searching and no filters active, show all entries
     displayEntries
 
   const handleEdit = (entryId: string) => {
