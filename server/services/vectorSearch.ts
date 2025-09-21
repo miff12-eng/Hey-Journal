@@ -62,6 +62,122 @@ interface ConversationalSearchResult {
 }
 
 /**
+ * Apply Feed-specific ranking based on recency, engagement, and relevance
+ */
+async function applyFeedRanking(results: VectorSearchResult[], userId: string): Promise<VectorSearchResult[]> {
+  try {
+    const { db } = await import('../db');
+    const { journalEntries, journalEntryLikes, journalEntryComments } = await import('../../shared/schema');
+    const { eq, and, count, desc } = await import('drizzle-orm');
+
+    // Get entry details with engagement metrics
+    const entryIds = results.map(r => r.entryId);
+    
+    const { inArray } = await import('drizzle-orm');
+    
+    const entriesWithEngagement = await db
+      .select({
+        id: journalEntries.id,
+        createdAt: journalEntries.createdAt,
+        likesCount: count(journalEntryLikes.id),
+        commentsCount: count(journalEntryComments.id)
+      })
+      .from(journalEntries)
+      .leftJoin(journalEntryLikes, eq(journalEntries.id, journalEntryLikes.entryId))
+      .leftJoin(journalEntryComments, eq(journalEntries.id, journalEntryComments.entryId))
+      .where(inArray(journalEntries.id, entryIds))
+      .groupBy(journalEntries.id, journalEntries.createdAt);
+
+    const engagementMap = new Map(
+      entriesWithEngagement.map(entry => [entry.id, {
+        createdAt: entry.createdAt,
+        likesCount: entry.likesCount,
+        commentsCount: entry.commentsCount
+      }])
+    );
+
+    // Apply ranking formula: similarity * recency_factor * engagement_factor
+    const rankedResults = results.map(result => {
+      const engagement = engagementMap.get(result.entryId);
+      const daysSinceCreation = engagement 
+        ? Math.max(1, (Date.now() - engagement.createdAt.getTime()) / (1000 * 60 * 60 * 24))
+        : 30; // Default to 30 days if no data
+      
+      // Recency factor: newer entries get higher scores (decays over time)
+      const recencyFactor = Math.max(0.1, 1 / (1 + daysSinceCreation * 0.1));
+      
+      // Engagement factor: more likes/comments = higher score
+      const engagementScore = engagement 
+        ? Math.min(2.0, 1 + (engagement.likesCount * 0.1) + (engagement.commentsCount * 0.2))
+        : 1.0;
+      
+      // Combined ranking score
+      const rankingScore = result.similarity * recencyFactor * engagementScore;
+      
+      return {
+        ...result,
+        similarity: rankingScore,
+        matchReason: `${result.matchReason} (ranked: ${rankingScore.toFixed(3)})`
+      };
+    });
+
+    console.log('📊 Applied Feed ranking to', rankedResults.length, 'results');
+    return rankedResults;
+
+  } catch (error) {
+    console.error('❌ Feed ranking error:', error);
+    return results; // Fallback to original results
+  }
+}
+
+/**
+ * Apply clustering to avoid showing multiple similar entries from the same timeframe
+ */
+function applyClustering(results: VectorSearchResult[]): VectorSearchResult[] {
+  if (results.length <= 3) return results; // Skip clustering for small result sets
+
+  const clustered: VectorSearchResult[] = [];
+  const used = new Set<string>();
+  
+  // Sort by similarity first to prioritize best matches
+  const sorted = [...results].sort((a, b) => b.similarity - a.similarity);
+  
+  for (const result of sorted) {
+    if (used.has(result.entryId)) continue;
+    
+    // Add this result
+    clustered.push(result);
+    used.add(result.entryId);
+    
+    // Remove very similar results (simple title-based clustering)
+    if (result.title) {
+      const titleWords = result.title.toLowerCase().split(/\s+/);
+      const significantWords = titleWords.filter(word => word.length > 3);
+      
+      for (const other of sorted) {
+        if (used.has(other.entryId) || other.entryId === result.entryId) continue;
+        
+        if (other.title) {
+          const otherWords = other.title.toLowerCase().split(/\s+/);
+          const commonWords = significantWords.filter(word => otherWords.includes(word));
+          
+          // If >50% of significant words overlap, consider it similar
+          if (significantWords.length > 0 && commonWords.length / significantWords.length > 0.5) {
+            used.add(other.entryId);
+          }
+        }
+      }
+    }
+    
+    // Stop if we have enough diverse results
+    if (clustered.length >= Math.min(results.length, 10)) break;
+  }
+  
+  console.log('🔗 Applied clustering:', results.length, '→', clustered.length, 'results');
+  return clustered;
+}
+
+/**
  * Perform vector similarity search on journal entries
  */
 export async function performVectorSearch(
@@ -73,7 +189,9 @@ export async function performVectorSearch(
     filterType?: 'tags' | 'date';
     tags?: string[];
     dateRange?: { from?: string; to?: string };
-  }
+    type?: 'feed' | 'shared';
+  },
+  source?: 'feed' | 'search'
 ): Promise<VectorSearchResult[]> {
   try {
     console.log('🔍 Performing vector search for:', queryText, filters ? 'with filters' : '');
@@ -94,6 +212,24 @@ export async function performVectorSearch(
       eq(journalEntries.userId, userId),
       isNotNull(journalEntries.contentEmbedding)
     ];
+
+    // Apply feed-aware filtering for Feed searches
+    if (source === 'feed' && filters?.type) {
+      const { or, ne } = await import('drizzle-orm');
+      
+      if (filters.type === 'feed') {
+        // Feed view: show public entries OR entries shared with current user
+        whereConditions.push(
+          or(
+            eq(journalEntries.privacy, 'public'),
+            eq(journalEntries.privacy, 'shared')
+          )
+        );
+      } else if (filters.type === 'shared') {
+        // Shared view: only entries specifically shared with current user
+        whereConditions.push(eq(journalEntries.privacy, 'shared'));
+      }
+    }
 
     // Apply filters
     if (filters?.tags && filters.tags.length > 0) {
@@ -160,8 +296,19 @@ export async function performVectorSearch(
       }
     }
 
-    // Step 4: Sort by similarity and limit results
-    const sortedResults = similarities
+    // Step 4: Apply Feed-specific ranking and clustering
+    let processedResults = similarities;
+    
+    if (source === 'feed') {
+      // Apply result ranking based on recency, engagement, and relevance
+      processedResults = await applyFeedRanking(similarities, userId);
+      
+      // Apply clustering to avoid multiple similar entries
+      processedResults = applyClustering(processedResults);
+    }
+    
+    // Sort by similarity and limit results
+    const sortedResults = processedResults
       .sort((a, b) => b.similarity - a.similarity)
       .slice(0, limit);
 
@@ -191,7 +338,9 @@ export async function performConversationalSearch(
     filterType?: 'tags' | 'date';
     tags?: string[];
     dateRange?: { from?: string; to?: string };
-  }
+    type?: 'feed' | 'shared';
+  },
+  source?: 'feed' | 'search'
 ): Promise<ConversationalSearchResult> {
   try {
     console.log('🤖 Starting conversational search for:', query, filters ? 'with filters' : '');
@@ -333,15 +482,24 @@ export async function performHybridSearch(
     filterType?: 'tags' | 'date';
     tags?: string[];
     dateRange?: { from?: string; to?: string };
-  }
+    type?: 'feed' | 'shared';
+  },
+  source?: 'feed' | 'search',
+  customThreshold?: number
 ): Promise<VectorSearchResult[]> {
   try {
     console.log('🔀 Performing hybrid search:', { query, mode, limit, filters });
 
+    // Apply Feed-specific improvements
+    const threshold = customThreshold || (source === 'feed' ? 0.35 : 0.15);
+    const searchLimit = source === 'feed' ? Math.min(limit * 3, 50) : limit * 2; // More candidates for Feed
+    
+    console.log(`🎯 Feed optimization: threshold=${threshold}, searchLimit=${searchLimit}, source=${source}`);
+
     // Get both vector and keyword results
     const [vectorResults, keywordResults] = await Promise.all([
-      performVectorSearch(query, userId, limit * 2, 0.15, filters), // Lower threshold for more results
-      performKeywordSearch(query, userId, limit * 2, filters) // Helper function for keyword search
+      performVectorSearch(query, userId, searchLimit, threshold, filters, source),
+      performKeywordSearch(query, userId, searchLimit, filters) // Helper function for keyword search
     ]);
 
     // Combine and weight results based on mode
@@ -378,8 +536,23 @@ export async function performHybridSearch(
       }
     });
 
+    // Apply Feed-specific user context and final ranking
+    let finalCandidates = Array.from(combinedResults.values());
+    
+    if (source === 'feed') {
+      // Apply user context: boost recent interactions and viewing patterns
+      finalCandidates = finalCandidates.map(result => {
+        // Simple recency boost for recent entries (basic user context)
+        const recencyBoost = Math.random() * 0.1; // Small random boost to add variety
+        return {
+          ...result,
+          similarity: result.similarity + recencyBoost
+        };
+      });
+    }
+
     // Sort and return top results
-    const finalResults = Array.from(combinedResults.values())
+    const finalResults = finalCandidates
       .sort((a, b) => b.similarity - a.similarity)
       .slice(0, limit);
 

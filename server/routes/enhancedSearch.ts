@@ -39,12 +39,13 @@ router.post('/search/enhanced', async (req, res) => {
 
     switch (mode) {
       case 'vector':
-        results = await performVectorSearch(query, userId, limit, threshold, filters);
+        const vectorThreshold = source === 'feed' ? 0.35 : threshold;
+        results = await performVectorSearch(query, userId, limit, vectorThreshold, filters, source);
         break;
       
       case 'conversational':
         const previousMessages = req.body.previousMessages || [];
-        const conversationalResult = await performConversationalSearch(query, userId, previousMessages, filters);
+        const conversationalResult = await performConversationalSearch(query, userId, previousMessages, filters, source);
         return res.json({
           query,
           mode,
@@ -57,7 +58,10 @@ router.post('/search/enhanced', async (req, res) => {
       
       case 'hybrid':
       default:
-        results = await performHybridSearch(query, userId, limit, 'balanced', filters);
+        // Apply Feed-specific improvements
+        const feedThreshold = source === 'feed' ? 0.35 : threshold;
+        const searchMode = source === 'feed' ? 'semantic' : 'balanced'; // Prefer semantic for feeds
+        results = await performHybridSearch(query, userId, limit, searchMode, filters, source, feedThreshold);
         break;
     }
 
