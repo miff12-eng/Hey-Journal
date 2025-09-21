@@ -7,7 +7,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { Search as SearchIcon, Filter, Calendar, Hash, User, Clock, Sparkles, Brain, Check, ChevronsUpDown, Plus } from 'lucide-react'
+import { Search as SearchIcon, Filter, Calendar, User, Clock, Sparkles, Brain, Check, ChevronsUpDown, Plus, FileText } from 'lucide-react'
 import JournalEntryCard from '@/components/JournalEntryCard'
 import ThemeToggle from '@/components/ThemeToggle'
 import { JournalEntryWithUser } from '@shared/schema'
@@ -95,7 +95,7 @@ function AnswerCard({ answer, confidence, executionTime, totalResults, relevantE
               {executionTime}ms
             </span>
             <span className="flex items-center gap-1">
-              <Hash className="w-3 h-3" />
+              <FileText className="w-3 h-3" />
               {totalResults} source{totalResults !== 1 ? 's' : ''}
             </span>
           </div>
@@ -107,7 +107,7 @@ function AnswerCard({ answer, confidence, executionTime, totalResults, relevantE
 
 // Search types
 type SearchMode = 'semantic'
-type FilterType = 'all' | 'people' | 'tags' | 'date'
+type FilterType = 'all' | 'people' | 'date'
 
 // Enhanced search result from the backend API
 interface EnhancedSearchResult {
@@ -144,22 +144,13 @@ export default function Search() {
   const [activeFilter, setActiveFilter] = useState<FilterType>('all')
   const [searchResults, setSearchResults] = useState<EnhancedSearchResult[]>([])
   const [conversationalResult, setConversationalResult] = useState<ConversationalSearchResponse | null>(null)
-  const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [selectedPeople, setSelectedPeople] = useState<string[]>([])
   const [dateRange, setDateRange] = useState<{from?: string, to?: string}>({})
   const [expandedEntryId, setExpandedEntryId] = useState<string | null>(null)
   const [expandedEntry, setExpandedEntry] = useState<JournalEntryWithUser | null>(null)
   const [isLoadingEntry, setIsLoadingEntry] = useState(false)
-  const [tagSearchOpen, setTagSearchOpen] = useState(false)
-  const [tagSearchValue, setTagSearchValue] = useState('')
   const [peopleSearchOpen, setPeopleSearchOpen] = useState(false)
   const [peopleSearchValue, setPeopleSearchValue] = useState('')
-
-  // Fetch historical tags for searchable filter
-  const { data: historicalTags = [], isLoading: isLoadingTags } = useQuery<string[]>({
-    queryKey: ['/api/filters/tags'],
-    staleTime: 5 * 60 * 1000 // Cache for 5 minutes
-  })
 
   // Fetch historical people for searchable filter
   const { data: historicalPeople = [], isLoading: isLoadingPeople } = useQuery<Array<{id: string, firstName: string, lastName: string}>>({
@@ -234,9 +225,6 @@ export default function Search() {
       filters.filterType = activeFilter;
     }
     
-    if (selectedTags.length > 0) {
-      filters.tags = selectedTags;
-    }
     
     if (selectedPeople.length > 0) {
       filters.people = selectedPeople;
@@ -291,7 +279,7 @@ export default function Search() {
       
       return () => clearTimeout(timeoutId);
     }
-  }, [activeFilter, selectedTags, selectedPeople, dateRange]);
+  }, [activeFilter, selectedPeople, dateRange]);
 
   // Fetch full journal entry
   const fetchFullEntry = async (entryId: string) => {
@@ -330,7 +318,6 @@ export default function Search() {
   const filters = [
     { key: 'all' as const, label: 'All', icon: SearchIcon },
     { key: 'people' as const, label: 'People', icon: User },
-    { key: 'tags' as const, label: 'Tags', icon: Hash },
     { key: 'date' as const, label: 'Date', icon: Calendar }
   ]
 
@@ -378,112 +365,6 @@ export default function Search() {
         </div>
 
         {/* Filter configuration panels */}
-        {activeFilter === 'tags' && (
-          <div className="mt-4 p-3 bg-muted/50 rounded-lg border border-border">
-            <h3 className="text-sm font-medium text-foreground mb-2 flex items-center gap-2">
-              <Hash className="h-4 w-4" />
-              Tag Filter
-            </h3>
-            <div className="space-y-2">
-              <Popover open={tagSearchOpen} onOpenChange={setTagSearchOpen}>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    role="combobox"
-                    aria-expanded={tagSearchOpen}
-                    className="w-full justify-between"
-                    data-testid="button-tag-filter"
-                  >
-                    {selectedTags.length > 0
-                      ? `${selectedTags.length} tag${selectedTags.length === 1 ? '' : 's'} selected`
-                      : isLoadingTags 
-                        ? "Loading tags..." 
-                        : "Select tags from your history..."}
-                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-[400px] p-0">
-                  <Command>
-                    <CommandInput 
-                      placeholder="Search tags or type new tag..." 
-                      value={tagSearchValue}
-                      onValueChange={setTagSearchValue}
-                      data-testid="input-tag-search"
-                    />
-                    <CommandList>
-                      <CommandEmpty>
-                        {tagSearchValue.trim() && (
-                          <div className="p-2">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="w-full"
-                              onClick={() => {
-                                const newTag = tagSearchValue.trim()
-                                if (newTag && !selectedTags.includes(newTag)) {
-                                  setSelectedTags([...selectedTags, newTag])
-                                  setTagSearchValue('')
-                                  setTagSearchOpen(false)
-                                }
-                              }}
-                              data-testid={`button-create-tag-${tagSearchValue.trim()}`}
-                            >
-                              <Plus className="mr-2 h-4 w-4" />
-                              Create "{tagSearchValue.trim()}"
-                            </Button>
-                          </div>
-                        )}
-                      </CommandEmpty>
-                      <CommandGroup>
-                        {historicalTags
-                          .filter(tag => tag.toLowerCase().includes(tagSearchValue.toLowerCase()))
-                          .map((tag) => (
-                            <CommandItem
-                              key={tag}
-                              value={tag}
-                              onSelect={() => {
-                                if (selectedTags.includes(tag)) {
-                                  setSelectedTags(selectedTags.filter(t => t !== tag))
-                                } else {
-                                  setSelectedTags([...selectedTags, tag])
-                                }
-                                setTagSearchValue('')
-                                setTagSearchOpen(false)
-                              }}
-                              data-testid={`option-tag-${tag}`}
-                            >
-                              <Check
-                                className={`mr-2 h-4 w-4 ${
-                                  selectedTags.includes(tag) ? "opacity-100" : "opacity-0"
-                                }`}
-                              />
-                              {tag}
-                            </CommandItem>
-                          ))}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
-              
-              {selectedTags.length > 0 && (
-                <div className="flex flex-wrap gap-1 mt-2">
-                  {selectedTags.map((tag, index) => (
-                    <Badge 
-                      key={index}
-                      variant="secondary" 
-                      className="cursor-pointer"
-                      onClick={() => setSelectedTags(selectedTags.filter((_, i) => i !== index))}
-                      data-testid={`tag-filter-${tag}`}
-                    >
-                      {tag} ×
-                    </Badge>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
 
         {activeFilter === 'people' && (
           <div className="mt-4 p-3 bg-muted/50 rounded-lg border border-border">
