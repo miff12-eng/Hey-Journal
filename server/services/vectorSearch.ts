@@ -927,14 +927,26 @@ async function performKeywordSearch(
     const queryWords = queryLower.split(/\s+/).filter(word => word.length > 0);
 
     // Build where conditions
-    const whereConditions = [
-      eq(journalEntries.userId, userId),
-      or(
+    const whereConditions = [eq(journalEntries.userId, userId)];
+    
+    // For wildcard queries with filters, skip text matching since user wants all filtered results
+    const isWildcardWithFilters = query.trim() === '*' && (
+      (filters?.people && filters.people.length > 0) ||
+      (filters?.tags && filters.tags.length > 0) ||
+      (filters?.dateRange)
+    );
+    
+    if (!isWildcardWithFilters) {
+      // Only add text search conditions for non-wildcard queries
+      const textSearchCondition = or(
         ilike(journalEntries.title, `%${query}%`),
         ilike(journalEntries.content, `%${query}%`),
         ilike(journalEntries.searchableText, `%${query}%`)
-      )
-    ];
+      );
+      if (textSearchCondition) {
+        whereConditions.push(textSearchCondition);
+      }
+    }
 
     // Apply filters
     if (filters?.tags && filters.tags.length > 0) {
