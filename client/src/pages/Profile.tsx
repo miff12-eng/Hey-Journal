@@ -303,6 +303,9 @@ export default function Profile() {
                   <h2 className="text-2xl font-semibold text-foreground" data-testid="text-user-name">
                     {user.firstName || 'Unknown'} {user.lastName || 'User'}
                   </h2>
+                  {user.username && (
+                    <p className="text-sm text-muted-foreground" data-testid="text-user-username">@{user.username}</p>
+                  )}
                   <p className="text-sm text-muted-foreground" data-testid="text-user-email">{user.email}</p>
                   <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground" data-testid="text-join-date">
                     <Calendar className="h-3 w-3" />
