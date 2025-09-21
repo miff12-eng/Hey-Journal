@@ -6,6 +6,45 @@ const openai = new OpenAI({
 });
 
 /**
+ * Detect if a search query is asking about recent/temporal information
+ */
+function detectTemporalQuery(query: string): boolean {
+  const temporalKeywords = [
+    'recent', 'recently', 'latest', 'newest', 'new', 'last', 'yesterday', 'today',
+    'this week', 'this month', 'past week', 'past month', 'current', 'now',
+    'most recent', 'most latest', 'most new', 'most current', 'fresh', 'just',
+    'what\'s new', 'what is new', 'whats new', 'what have i', 'what did i',
+    'update', 'updates', 'progress', 'lately', 'currently'
+  ];
+  
+  const normalizedQuery = query.toLowerCase().trim();
+  
+  // Check for exact matches or phrases
+  for (const keyword of temporalKeywords) {
+    if (normalizedQuery.includes(keyword)) {
+      return true;
+    }
+  }
+  
+  // Check for patterns like "in the last X days/weeks/months"
+  const timePatterns = [
+    /in the (last|past) \d+ (day|week|month|year)s?/i,
+    /from (last|this) (week|month|year)/i,
+    /since (yesterday|last)/i,
+    /(today|yesterday|this week|this month)/i,
+    /what.*?(happened|wrote|did).*?(today|yesterday|recently|lately)/i
+  ];
+  
+  for (const pattern of timePatterns) {
+    if (pattern.test(normalizedQuery)) {
+      return true;
+    }
+  }
+  
+  return false;
+}
+
+/**
  * Normalize malformed entry citations in AI answers
  * Converts [entry: "Title"] or [entry:"Title"] to [entry:UUID] format
  */
@@ -59,6 +98,78 @@ interface ConversationalSearchResult {
   relevantEntries: VectorSearchResult[];
   confidence: number;
   totalResults: number;
+}
+
+/**
+ * Get recent entries for temporal queries (prioritizes recency over similarity)
+ */
+async function getRecentEntries(
+  userId: string, 
+  limit: number = 5, 
+  filters?: {
+    filterType?: 'tags' | 'date';
+    tags?: string[];
+    dateRange?: { from?: string; to?: string };
+    type?: 'feed' | 'shared';
+  }
+): Promise<VectorSearchResult[]> {
+  try {
+    const { db } = await import('../db');
+    const { journalEntries } = await import('../../shared/schema');
+    const { eq, and, desc, gte, lte, arrayContains } = await import('drizzle-orm');
+
+    // Build where conditions 
+    let whereConditions = [eq(journalEntries.userId, userId)];
+
+    // Apply date filtering if specified
+    if (filters?.dateRange) {
+      if (filters.dateRange.from) {
+        const fromDate = new Date(filters.dateRange.from);
+        whereConditions.push(gte(journalEntries.createdAt, fromDate));
+      }
+      if (filters.dateRange.to) {
+        const toDate = new Date(filters.dateRange.to);
+        toDate.setDate(toDate.getDate() + 1);
+        whereConditions.push(lte(journalEntries.createdAt, toDate));
+      }
+    } else {
+      // Default: last 30 days for temporal queries
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      whereConditions.push(gte(journalEntries.createdAt, thirtyDaysAgo));
+    }
+
+    // Apply tag filtering if specified
+    if (filters?.tags && filters.tags.length > 0) {
+      filters.tags.forEach(tag => {
+        whereConditions.push(arrayContains(journalEntries.tags, [tag]));
+      });
+    }
+
+    const recentEntries = await db
+      .select({
+        id: journalEntries.id,
+        title: journalEntries.title,
+        content: journalEntries.content,
+        createdAt: journalEntries.createdAt
+      })
+      .from(journalEntries)
+      .where(and(...whereConditions))
+      .orderBy(desc(journalEntries.createdAt))
+      .limit(limit);
+
+    // Convert to VectorSearchResult format
+    return recentEntries.map(entry => ({
+      entryId: entry.id,
+      similarity: 0.8, // High similarity for recent entries in temporal queries
+      snippet: `Title: ${entry.title || 'Untitled'}\n\n${entry.content?.substring(0, 200) || ''}${entry.content && entry.content.length > 200 ? '...' : ''}`,
+      title: entry.title || 'Untitled',
+      matchReason: `Recent: Created ${entry.createdAt?.toDateString() || 'recently'}`
+    }));
+
+  } catch (error) {
+    console.error('❌ Error fetching recent entries:', error);
+    return [];
+  }
 }
 
 /**
@@ -430,8 +541,40 @@ export async function performConversationalSearch(
   try {
     console.log('🤖 Starting conversational search for:', query, filters ? 'with filters' : '');
 
-    // Step 1: Perform semantic vector search to get relevant context (semantic-only, no keywords)
-    const relevantEntries = await performVectorSearch(query, userId, 8, 0.15, filters);
+    // Check if this is a temporal query
+    const isTemporalQuery = detectTemporalQuery(query);
+    console.log('⏰ Temporal query detected:', isTemporalQuery);
+
+    let relevantEntries: VectorSearchResult[] = [];
+
+    if (isTemporalQuery) {
+      // Step 1a: For temporal queries, combine recent entries with semantic search
+      console.log('🕐 Using temporal search strategy...');
+      
+      // Get recent entries (last 30 days, sorted by date)
+      const recentEntries = await getRecentEntries(userId, 5, filters);
+      console.log('📅 Found', recentEntries.length, 'recent entries');
+      
+      // Get semantic matches
+      const semanticEntries = await performVectorSearch(query, userId, 5, 0.1, filters);
+      console.log('🔍 Found', semanticEntries.length, 'semantic matches');
+      
+      // Combine and deduplicate entries
+      const combinedEntries = [...recentEntries, ...semanticEntries];
+      const uniqueEntries = new Map<string, VectorSearchResult>();
+      
+      combinedEntries.forEach(entry => {
+        if (!uniqueEntries.has(entry.entryId)) {
+          uniqueEntries.set(entry.entryId, entry);
+        }
+      });
+      
+      relevantEntries = Array.from(uniqueEntries.values()).slice(0, 8);
+      console.log('🔄 Combined to', relevantEntries.length, 'unique entries for temporal query');
+    } else {
+      // Step 1b: Regular semantic vector search for non-temporal queries
+      relevantEntries = await performVectorSearch(query, userId, 8, 0.15, filters);
+    }
     
     if (relevantEntries.length === 0) {
       return {
