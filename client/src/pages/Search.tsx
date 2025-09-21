@@ -243,6 +243,10 @@ export default function Search() {
     return filters;
   };
 
+  // Check if specific filter types have actual values
+  const hasAppliedPeopleFilter = () => selectedPeople.length > 0;
+  const hasAppliedDateFilter = () => dateRange.from || dateRange.to;
+
   // Manual search function - triggers only when user presses Enter
   const performSearch = () => {
     if (searchQuery.trim()) {
@@ -348,10 +352,18 @@ export default function Search() {
         <div className="flex gap-2 mt-3 overflow-x-auto">
           {filters.map((filter) => {
             const Icon = filter.icon
+            // Determine if this filter has applied values
+            const hasAppliedFilters = filter.key === 'people' ? hasAppliedPeopleFilter() :
+                                    filter.key === 'date' ? hasAppliedDateFilter() :
+                                    false
+            // Show as active if it's the current tab OR if it has applied filters
+            const isActive = activeFilter === filter.key
+            const shouldHighlight = isActive || hasAppliedFilters
+            
             return (
               <Button
                 key={filter.key}
-                variant={activeFilter === filter.key ? 'default' : 'outline'}
+                variant={shouldHighlight ? 'default' : 'outline'}
                 size="sm"
                 onClick={() => setActiveFilter(filter.key)}
                 className="flex-shrink-0"
@@ -359,6 +371,9 @@ export default function Search() {
               >
                 <Icon className="h-3 w-3 mr-1" />
                 {filter.label}
+                {hasAppliedFilters && !isActive && (
+                  <div className="w-2 h-2 bg-primary-foreground rounded-full ml-1" />
+                )}
               </Button>
             )
           })}
