@@ -274,6 +274,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Validate request body
       const validatedData = updateUserProfileSchema.parse(req.body);
       
+      // Check username uniqueness if username is being updated
+      if (validatedData.username) {
+        const existingUser = await storage.getUserByUsername(validatedData.username);
+        if (existingUser && existingUser.id !== req.userId) {
+          return res.status(409).json({ error: 'Username already taken' });
+        }
+      }
+      
       // Update user profile
       const updatedUser = await storage.updateUserProfile(req.userId, validatedData);
       res.json(updatedUser);
@@ -284,6 +292,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       if (error instanceof Error && error.message === 'User not found') {
         return res.status(404).json({ error: 'User not found' });
+      }
+      if ((error as any)?.code === '23505') {
+        return res.status(409).json({ error: 'Username already taken' });
       }
       res.status(500).json({ error: 'Failed to update user profile' });
     }

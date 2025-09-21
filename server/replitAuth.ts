@@ -56,15 +56,56 @@ function updateUserSession(
   user.expires_at = user.claims?.exp;
 }
 
+function generateUsernameFromClaims(claims: any): string {
+  // Try to use the first part of the email before @
+  if (claims["email"]) {
+    const emailPrefix = claims["email"].split('@')[0];
+    return emailPrefix.toLowerCase().replace(/[^a-z0-9_]/g, '');
+  }
+  
+  // Fallback: use first name + last name
+  if (claims["first_name"] && claims["last_name"]) {
+    return `${claims["first_name"]}${claims["last_name"]}`.toLowerCase().replace(/[^a-z0-9_]/g, '');
+  }
+  
+  // Fallback: use just first name
+  if (claims["first_name"]) {
+    return claims["first_name"].toLowerCase().replace(/[^a-z0-9_]/g, '');
+  }
+  
+  // Last resort: use part of the sub claim
+  return `user_${claims["sub"].slice(-8)}`;
+}
+
 async function upsertUser(
   claims: any,
 ) {
+  // Check if user already exists
+  const existingUser = await storage.getUser(claims["sub"]);
+  
+  let username: string;
+  if (existingUser && existingUser.username) {
+    // User exists and has username, use it
+    username = existingUser.username;
+  } else {
+    // Generate username and ensure it's unique
+    let baseUsername = generateUsernameFromClaims(claims);
+    username = baseUsername;
+    let counter = 1;
+    
+    while (await storage.getUserByUsername(username)) {
+      username = `${baseUsername}_${counter}`;
+      counter++;
+    }
+  }
+
   await storage.upsertUser({
     id: claims["sub"],
     email: claims["email"],
     firstName: claims["first_name"],
     lastName: claims["last_name"],
     profileImageUrl: claims["profile_image_url"],
+    username: username,
   });
 }
 

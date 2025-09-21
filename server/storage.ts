@@ -40,6 +40,7 @@ export interface IStorage {
   // User methods
   getUser(id: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
+  getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: UpsertUser): Promise<User>;
   upsertUser(user: UpsertUser): Promise<User>; // Required for OAuth authentication
   updateUserProfile(id: string, updates: UpdateUserProfile): Promise<User>;
@@ -128,6 +129,56 @@ class DbStorage implements IStorage {
     this.db = drizzle(sql);
   }
 
+  // Helper function to apply privacy filtering to user data
+  private applyUserPrivacyFilter(user: any, requestingUserId?: string): any {
+    // Always show username - usernames are always visible
+    const filteredUser = {
+      id: user.id || user.userId,
+      username: user.username || user.userUsername,
+      bio: null,
+      profileImageUrl: null,
+      isProfilePublic: user.isProfilePublic || user.userIsProfilePublic,
+      createdAt: user.createdAt || user.userCreatedAt,
+      updatedAt: user.updatedAt || user.userUpdatedAt,
+      firstName: null,
+      lastName: null,
+      email: null,
+      // Privacy flags
+      firstNameVisible: user.firstNameVisible || user.userFirstNameVisible,
+      lastNameVisible: user.lastNameVisible || user.userLastNameVisible, 
+      emailVisible: user.emailVisible || user.userEmailVisible
+    }
+
+    // If requesting own data, show everything
+    if (requestingUserId && filteredUser.id === requestingUserId) {
+      return {
+        ...filteredUser,
+        firstName: user.firstName || user.userFirstName,
+        lastName: user.lastName || user.userLastName,
+        email: user.email || user.userEmail,
+        bio: user.bio || user.userBio,
+        profileImageUrl: user.profileImageUrl || user.userProfileImageUrl
+      }
+    }
+
+    // Apply privacy filtering for connections/public view
+    if (user.firstNameVisible || user.userFirstNameVisible) {
+      filteredUser.firstName = user.firstName || user.userFirstName
+    }
+    if (user.lastNameVisible || user.userLastNameVisible) {
+      filteredUser.lastName = user.lastName || user.userLastName
+    }
+    if (user.emailVisible || user.userEmailVisible) {
+      filteredUser.email = user.email || user.userEmail
+    }
+    if (user.isProfilePublic || user.userIsProfilePublic) {
+      filteredUser.bio = user.bio || user.userBio
+      filteredUser.profileImageUrl = user.profileImageUrl || user.userProfileImageUrl
+    }
+
+    return filteredUser
+  }
+
   async getUser(id: string): Promise<User | undefined> {
     const result = await this.db.select().from(users).where(eq(users.id, id));
     return result[0];
@@ -138,13 +189,15 @@ class DbStorage implements IStorage {
     return result[0];
   }
 
+  async getUserByUsername(username: string): Promise<User | undefined> {
+    const result = await this.db.select().from(users).where(eq(users.username, username));
+    return result[0];
+  }
+
   async createUser(insertUser: UpsertUser): Promise<User> {
     const result = await this.db.insert(users).values({
+      ...insertUser,
       id: insertUser.id || randomUUID(),
-      email: insertUser.email,
-      firstName: insertUser.firstName,
-      lastName: insertUser.lastName,
-      profileImageUrl: insertUser.profileImageUrl,
       createdAt: insertUser.createdAt || new Date(),
       updatedAt: insertUser.updatedAt || new Date(),
     }).returning();

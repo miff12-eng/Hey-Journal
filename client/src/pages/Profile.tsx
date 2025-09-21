@@ -68,7 +68,12 @@ export default function Profile() {
     firstName: '',
     lastName: '',
     email: '',
-    profileImageUrl: ''
+    username: '',
+    profileImageUrl: '',
+    // Privacy controls
+    firstNameVisible: true,
+    lastNameVisible: true,
+    emailVisible: false
   })
 
   // Update profile mutation
@@ -83,8 +88,19 @@ export default function Profile() {
         description: "Your profile has been successfully updated.",
       })
     },
-    onError: (error) => {
+    onError: (error: any) => {
       console.error('Error updating profile:', error)
+      
+      // Handle specific username already taken error
+      if (error?.response?.status === 409) {
+        toast({
+          title: "Username unavailable",
+          description: "This username is already taken. Please choose a different one.",
+          variant: "destructive"
+        })
+        return
+      }
+      
       toast({
         title: "Error",
         description: "Failed to update profile. Please try again.",
@@ -100,7 +116,12 @@ export default function Profile() {
         firstName: user.firstName || '',
         lastName: user.lastName || '',
         email: user.email || '',
-        profileImageUrl: user.profileImageUrl || ''
+        username: user.username || '',
+        profileImageUrl: user.profileImageUrl || '',
+        // Privacy controls
+        firstNameVisible: user.firstNameVisible ?? true,
+        lastNameVisible: user.lastNameVisible ?? true,
+        emailVisible: user.emailVisible ?? false
       })
     }
   }, [user, isEditDialogOpen])
@@ -137,19 +158,29 @@ export default function Profile() {
         firstName: user.firstName || '',
         lastName: user.lastName || '',
         email: user.email || '',
-        profileImageUrl: user.profileImageUrl || ''
+        username: user.username || '',
+        profileImageUrl: user.profileImageUrl || '',
+        // Privacy controls
+        firstNameVisible: user.firstNameVisible ?? true,
+        lastNameVisible: user.lastNameVisible ?? true,
+        emailVisible: user.emailVisible ?? false
       })
     }
     setIsEditDialogOpen(true)
   }
 
   const handleSaveProfile = () => {
-    // Only send the editable fields to prevent accidental privacy changes
+    // Send all editable fields including username and privacy controls
     const updates = {
       firstName: editForm.firstName,
       lastName: editForm.lastName,
       email: editForm.email,
-      profileImageUrl: editForm.profileImageUrl
+      username: editForm.username,
+      profileImageUrl: editForm.profileImageUrl,
+      // Privacy controls
+      firstNameVisible: editForm.firstNameVisible,
+      lastNameVisible: editForm.lastNameVisible,
+      emailVisible: editForm.emailVisible
     }
     updateProfileMutation.mutate(updates)
   }
@@ -161,7 +192,12 @@ export default function Profile() {
         firstName: user.firstName || '',
         lastName: user.lastName || '',
         email: user.email || '',
-        profileImageUrl: user.profileImageUrl || ''
+        username: user.username || '',
+        profileImageUrl: user.profileImageUrl || '',
+        // Privacy controls
+        firstNameVisible: user.firstNameVisible ?? true,
+        lastNameVisible: user.lastNameVisible ?? true,
+        emailVisible: user.emailVisible ?? false
       })
     }
     setIsEditDialogOpen(false)
@@ -548,6 +584,73 @@ export default function Profile() {
                 onChange={(e) => setEditForm(prev => ({ ...prev, email: e.target.value }))}
                 data-testid="input-email"
               />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="username">Username</Label>
+              <Input
+                id="username"
+                value={editForm.username}
+                onChange={(e) => setEditForm(prev => ({ ...prev, username: e.target.value }))}
+                placeholder="Choose a unique username"
+                data-testid="input-username"
+              />
+              <p className="text-xs text-muted-foreground">
+                Your username is always visible to connections and cannot be changed after creation.
+              </p>
+            </div>
+
+            <Separator className="my-4" />
+            
+            {/* Privacy Controls */}
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Profile Information Visibility</Label>
+                <p className="text-xs text-muted-foreground">
+                  Choose what information is visible to your connections.
+                </p>
+              </div>
+              
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="firstNameVisible" className="text-sm">First Name</Label>
+                    <p className="text-xs text-muted-foreground">Show your first name to connections</p>
+                  </div>
+                  <Switch
+                    id="firstNameVisible"
+                    checked={editForm.firstNameVisible}
+                    onCheckedChange={(checked) => setEditForm(prev => ({ ...prev, firstNameVisible: checked }))}
+                    data-testid="switch-first-name-visible"
+                  />
+                </div>
+                
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="lastNameVisible" className="text-sm">Last Name</Label>
+                    <p className="text-xs text-muted-foreground">Show your last name to connections</p>
+                  </div>
+                  <Switch
+                    id="lastNameVisible"
+                    checked={editForm.lastNameVisible}
+                    onCheckedChange={(checked) => setEditForm(prev => ({ ...prev, lastNameVisible: checked }))}
+                    data-testid="switch-last-name-visible"
+                  />
+                </div>
+                
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="emailVisible" className="text-sm">Email Address</Label>
+                    <p className="text-xs text-muted-foreground">Show your email to connections</p>
+                  </div>
+                  <Switch
+                    id="emailVisible"
+                    checked={editForm.emailVisible}
+                    onCheckedChange={(checked) => setEditForm(prev => ({ ...prev, emailVisible: checked }))}
+                    data-testid="switch-email-visible"
+                  />
+                </div>
+              </div>
             </div>
           </div>
           <div className="flex justify-end gap-2">
