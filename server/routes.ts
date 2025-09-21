@@ -1649,6 +1649,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get historical tags used by user (for filter dropdown)
+  app.get('/api/filters/tags', async (req, res) => {
+    try {
+      const userId = req.userId;
+      const tags = await storage.getHistoricalTagsByUserId(userId);
+      res.json(tags);
+    } catch (error) {
+      console.error('Get Historical Tags Error:', error);
+      res.status(500).json({ error: 'Failed to get historical tags' });
+    }
+  });
+
+  // Get historical people tagged by user (for filter dropdown)
+  app.get('/api/filters/people', async (req, res) => {
+    try {
+      const userId = req.userId;
+      const people = await storage.getHistoricalPeopleByUserId(userId);
+      res.json(people);
+    } catch (error) {
+      console.error('Get Historical People Error:', error);
+      res.status(500).json({ error: 'Failed to get historical people' });
+    }
+  });
+
   // Bulk fetch journal entries by IDs
   app.post('/api/journal/entries/bulk', async (req, res) => {
     try {
