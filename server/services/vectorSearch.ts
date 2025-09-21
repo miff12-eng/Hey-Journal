@@ -445,7 +445,7 @@ export async function performVectorSearch(
       // Filter entries tagged with specific people by name
       console.log('👥 People filtering with:', filters.people);
       const { entryPersonTags, people } = await import('../../shared/schema');
-      const { inArray, exists } = await import('drizzle-orm');
+      const { inArray, exists, sql } = await import('drizzle-orm');
       
       // Use EXISTS subquery to find entries tagged with people whose names match the filter
       const peopleSubquery = db
@@ -454,13 +454,23 @@ export async function performVectorSearch(
         .innerJoin(people, eq(people.id, entryPersonTags.personId))
         .where(
           and(
-            eq(entryPersonTags.entryId, journalEntries.id),
             eq(people.userId, userId), // Only this user's people
             inArray(people.firstName, filters.people) // Match by first name for now
           )
         );
       
-      whereConditions.push(exists(peopleSubquery));
+      // Use IN clause instead of EXISTS for better compatibility
+      const validEntryIds = await peopleSubquery;
+      const entryIdArray = validEntryIds.map(row => row.entryId);
+      
+      if (entryIdArray.length > 0) {
+        console.log('👥 Found entries with people tags:', entryIdArray.length);
+        whereConditions.push(inArray(journalEntries.id, entryIdArray));
+      } else {
+        console.log('👥 No entries found with selected people tags, forcing empty result');
+        // Force empty result if no entries have the selected people
+        whereConditions.push(sql`FALSE`);
+      }
     }
 
     if (filters?.dateRange) {
