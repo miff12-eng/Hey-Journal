@@ -6,7 +6,10 @@ import { Input } from '@/components/ui/input'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
-import { Plus, Bell, TrendingUp, Copy, Share2, ExternalLink, Trash2, Users, RefreshCw, Search, Clock } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Plus, Bell, TrendingUp, Copy, Share2, ExternalLink, Trash2, Users, RefreshCw, Search, Clock, Filter, Calendar, User, Check, ChevronsUpDown } from 'lucide-react'
 import JournalEntryCard from '@/components/JournalEntryCard'
 import ThemeToggle from '@/components/ThemeToggle'
 import UserSelector from '@/components/UserSelector'
@@ -54,7 +57,22 @@ export default function MyJournal() {
   const [searchHistory, setSearchHistory] = useState<string[]>([])
   const [hydratedSearchEntries, setHydratedSearchEntries] = useState<JournalEntryWithUser[]>([])
   
+  // Filter functionality state
+  const [filterOpen, setFilterOpen] = useState(false)
+  const [selectedPeople, setSelectedPeople] = useState<string[]>([])
+  const [dateRange, setDateRange] = useState<{from?: string, to?: string}>({})
+  const [peopleFilterOpen, setPeopleFilterOpen] = useState(false)
+  const [peopleSearchOpen, setPeopleSearchOpen] = useState(false)
+  const [peopleSearchValue, setPeopleSearchValue] = useState('')
+  const [dateFilterOpen, setDateFilterOpen] = useState(false)
+  
   const { toast } = useToast()
+  
+  // Fetch historical people for searchable filter
+  const { data: historicalPeople = [], isLoading: isLoadingPeople } = useQuery<Array<{id: string, firstName: string, lastName: string}>>({ 
+    queryKey: ['/api/filters/people'],
+    staleTime: 5 * 60 * 1000 // Cache for 5 minutes
+  })
   
   // Load search history from localStorage on mount
   useEffect(() => {
@@ -81,18 +99,39 @@ export default function MyJournal() {
     localStorage.setItem('myJournalSearchHistory', JSON.stringify(newHistory))
   }
   
+  // Build filters object based on selected values
+  const buildFilters = () => {
+    const filters: any = { type: 'feed' }; // Base filter for My Journal
+    
+    if (selectedPeople.length > 0) {
+      filters.people = selectedPeople;
+    }
+    
+    if (dateRange.from || dateRange.to) {
+      filters.dateRange = {};
+      if (dateRange.from) {
+        filters.dateRange.from = dateRange.from;
+      }
+      if (dateRange.to) {
+        filters.dateRange.to = dateRange.to;
+      }
+    }
+    
+    return filters;
+  };
+
   // Handle search execution
   const handleSearch = (query: string) => {
     if (query.trim()) {
       saveSearchToHistory(query)
-      // Trigger the search mutation
-      searchMutation.mutate({ query: query.trim() })
+      // Trigger the search mutation with filters
+      searchMutation.mutate({ query: query.trim(), filters: buildFilters() })
     }
   }
 
   // Enhanced search mutation for My Journal search
   const searchMutation = useMutation({
-    mutationFn: async (params: { query: string }) => {
+    mutationFn: async (params: { query: string; filters?: any }) => {
       console.log('🚀 Performing enhanced My Journal search:', params);
       setIsSearching(true);
       const response = await apiRequest('POST', '/api/search/enhanced', {
@@ -100,7 +139,7 @@ export default function MyJournal() {
         mode: 'hybrid', // Use hybrid search for best results
         limit: 20,
         source: 'search', // Use valid enum value
-        filters: { type: 'feed' } // Use valid enum value - backend will filter to user's entries automatically
+        filters: params.filters || { type: 'feed' } // Use provided filters or default
       });
       const data = await response.json() as EnhancedSearchResponse;
       console.log('🎯 Enhanced My Journal search results:', data);
@@ -131,7 +170,8 @@ export default function MyJournal() {
     if (searchQuery.trim()) {
       const timer = setTimeout(() => {
         searchMutation.mutate({ 
-          query: searchQuery
+          query: searchQuery,
+          filters: buildFilters()
         });
       }, 300); // Debounce search
       return () => clearTimeout(timer);
@@ -140,6 +180,27 @@ export default function MyJournal() {
       setIsSearching(false);
     }
   }, [searchQuery]);
+  
+  // Re-run search when filters change (but only if there's an active search)
+  useEffect(() => {
+    if (searchQuery.trim()) {
+      // Debounce filter changes to prevent multiple searches while typing dates
+      const timer = setTimeout(() => {
+        // Only perform search if date inputs are complete or empty
+        const isDateRangeValid = (!dateRange.from || dateRange.from.match(/^\d{4}-\d{2}-\d{2}$/)) &&
+                                 (!dateRange.to || dateRange.to.match(/^\d{4}-\d{2}-\d{2}$/));
+        
+        if (isDateRangeValid) {
+          searchMutation.mutate({ 
+            query: searchQuery,
+            filters: buildFilters()
+          });
+        }
+      }, 500); // 500ms debounce for filter changes
+      
+      return () => clearTimeout(timer);
+    }
+  }, [selectedPeople, dateRange]);
 
   // Hide dropdown when search results are rendered
   useEffect(() => {
@@ -492,6 +553,225 @@ export default function MyJournal() {
                 </div>
               )}
             </div>
+            
+            {/* Filter button */}
+            <Popover open={filterOpen} onOpenChange={setFilterOpen}>
+              <PopoverTrigger asChild>
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  data-testid="button-filter"
+                  className={selectedPeople.length > 0 || dateRange.from || dateRange.to ? 'text-primary' : ''}
+                >
+                  <Filter className="h-4 w-4" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-80 p-0" align="end">
+                <div className="p-4 space-y-4">
+                  <h3 className="text-sm font-medium text-foreground mb-3">Filter Results</h3>
+                  
+                  {/* People Filter Section */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-sm font-medium text-foreground flex items-center gap-2">
+                        <User className="h-4 w-4" />
+                        People
+                      </h4>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setPeopleFilterOpen(!peopleFilterOpen)}
+                        data-testid="toggle-people-filter"
+                      >
+                        {peopleFilterOpen ? 'Hide' : 'Show'}
+                      </Button>
+                    </div>
+                    
+                    {peopleFilterOpen && (
+                      <div className="space-y-2">
+                        <Popover open={peopleSearchOpen} onOpenChange={setPeopleSearchOpen}>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              role="combobox"
+                              aria-expanded={peopleSearchOpen}
+                              className="w-full justify-between text-sm"
+                              data-testid="button-select-people"
+                            >
+                              {selectedPeople.length > 0
+                                ? `${selectedPeople.length} person${selectedPeople.length === 1 ? '' : 's'} selected`
+                                : isLoadingPeople 
+                                  ? "Loading people..." 
+                                  : "Select people..."}
+                              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-[300px] p-0">
+                            <Command>
+                              <CommandInput 
+                                placeholder="Search people or type new name..." 
+                                value={peopleSearchValue}
+                                onValueChange={setPeopleSearchValue}
+                                data-testid="input-people-search"
+                              />
+                              <CommandList>
+                                <CommandEmpty>
+                                  {peopleSearchValue.trim() && (
+                                    <div className="p-2">
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="w-full"
+                                        onClick={() => {
+                                          const newPerson = peopleSearchValue.trim()
+                                          if (newPerson && !selectedPeople.includes(newPerson)) {
+                                            setSelectedPeople([...selectedPeople, newPerson])
+                                            setPeopleSearchValue('')
+                                            setPeopleSearchOpen(false)
+                                          }
+                                        }}
+                                        data-testid={`button-create-person-${peopleSearchValue.trim()}`}
+                                      >
+                                        <Plus className="mr-2 h-4 w-4" />
+                                        Create "{peopleSearchValue.trim()}"
+                                      </Button>
+                                    </div>
+                                  )}
+                                </CommandEmpty>
+                                <CommandGroup>
+                                  {historicalPeople
+                                    .filter(person => {
+                                      const fullName = `${person.firstName} ${person.lastName || ''}`.trim()
+                                      return fullName.toLowerCase().includes(peopleSearchValue.toLowerCase()) ||
+                                             person.firstName.toLowerCase().includes(peopleSearchValue.toLowerCase())
+                                    })
+                                    .map((person) => {
+                                      const fullName = `${person.firstName} ${person.lastName || ''}`.trim()
+                                      return (
+                                        <CommandItem
+                                          key={person.id}
+                                          value={fullName}
+                                          onSelect={() => {
+                                            if (selectedPeople.includes(person.firstName)) {
+                                              setSelectedPeople(selectedPeople.filter(p => p !== person.firstName))
+                                            } else {
+                                              setSelectedPeople([...selectedPeople, person.firstName])
+                                            }
+                                            setPeopleSearchValue('')
+                                            setPeopleSearchOpen(false)
+                                          }}
+                                          data-testid={`option-person-${person.firstName}`}
+                                        >
+                                          <Check
+                                            className={`mr-2 h-4 w-4 ${
+                                              selectedPeople.includes(person.firstName) ? "opacity-100" : "opacity-0"
+                                            }`}
+                                          />
+                                          {fullName}
+                                        </CommandItem>
+                                      )
+                                    })}
+                                </CommandGroup>
+                              </CommandList>
+                            </Command>
+                          </PopoverContent>
+                        </Popover>
+                        
+                        {selectedPeople.length > 0 && (
+                          <div className="flex flex-wrap gap-1">
+                            {selectedPeople.map((person, index) => (
+                              <Badge 
+                                key={index}
+                                variant="secondary" 
+                                className="cursor-pointer text-xs"
+                                onClick={() => setSelectedPeople(selectedPeople.filter((_, i) => i !== index))}
+                                data-testid={`people-filter-${person}`}
+                              >
+                                {person} ×
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Date Filter Section */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-sm font-medium text-foreground flex items-center gap-2">
+                        <Calendar className="h-4 w-4" />
+                        Date Range
+                      </h4>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setDateFilterOpen(!dateFilterOpen)}
+                        data-testid="toggle-date-filter"
+                      >
+                        {dateFilterOpen ? 'Hide' : 'Show'}
+                      </Button>
+                    </div>
+                    
+                    {dateFilterOpen && (
+                      <div className="space-y-2">
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="text-xs text-muted-foreground mb-1 block">From</label>
+                            <Input
+                              type="date"
+                              value={dateRange.from || ''}
+                              onChange={(e) => setDateRange(prev => ({ ...prev, from: e.target.value }))}
+                              data-testid="input-date-from"
+                              className="text-sm"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs text-muted-foreground mb-1 block">To</label>
+                            <Input
+                              type="date"
+                              value={dateRange.to || ''}
+                              onChange={(e) => setDateRange(prev => ({ ...prev, to: e.target.value }))}
+                              data-testid="input-date-to"
+                              className="text-sm"
+                            />
+                          </div>
+                        </div>
+                        {(dateRange.from || dateRange.to) && (
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={() => setDateRange({})}
+                            className="w-full"
+                            data-testid="button-clear-date-filter"
+                          >
+                            Clear Date Filter
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Clear All Filters */}
+                  {(selectedPeople.length > 0 || dateRange.from || dateRange.to) && (
+                    <div className="pt-2 border-t border-border">
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => {
+                          setSelectedPeople([])
+                          setDateRange({})
+                        }}
+                        className="w-full"
+                        data-testid="button-clear-all-filters"
+                      >
+                        Clear All Filters
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </PopoverContent>
+            </Popover>
             
             <Button 
               variant="ghost" 
