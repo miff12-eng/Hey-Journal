@@ -5,11 +5,13 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
-import { Search as SearchIcon, Filter, Calendar, Hash, User, Clock, Sparkles, Brain } from 'lucide-react'
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Search as SearchIcon, Filter, Calendar, Hash, User, Clock, Sparkles, Brain, Check, ChevronsUpDown, Plus } from 'lucide-react'
 import JournalEntryCard from '@/components/JournalEntryCard'
 import ThemeToggle from '@/components/ThemeToggle'
 import { JournalEntryWithUser } from '@shared/schema'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { apiRequest } from '@/lib/queryClient'
 import { Link } from 'wouter'
 
@@ -148,6 +150,22 @@ export default function Search() {
   const [expandedEntryId, setExpandedEntryId] = useState<string | null>(null)
   const [expandedEntry, setExpandedEntry] = useState<JournalEntryWithUser | null>(null)
   const [isLoadingEntry, setIsLoadingEntry] = useState(false)
+  const [tagSearchOpen, setTagSearchOpen] = useState(false)
+  const [tagSearchValue, setTagSearchValue] = useState('')
+  const [peopleSearchOpen, setPeopleSearchOpen] = useState(false)
+  const [peopleSearchValue, setPeopleSearchValue] = useState('')
+
+  // Fetch historical tags for searchable filter
+  const { data: historicalTags = [], isLoading: isLoadingTags } = useQuery<string[]>({
+    queryKey: ['/api/filters/tags'],
+    staleTime: 5 * 60 * 1000 // Cache for 5 minutes
+  })
+
+  // Fetch historical people for searchable filter
+  const { data: historicalPeople = [], isLoading: isLoadingPeople } = useQuery<Array<{id: string, firstName: string, lastName: string}>>({
+    queryKey: ['/api/filters/people'],
+    staleTime: 5 * 60 * 1000 // Cache for 5 minutes
+  })
   
   // Enhanced search mutation using AI conversational search
   const searchMutation = useMutation({
@@ -367,15 +385,87 @@ export default function Search() {
               Tag Filter
             </h3>
             <div className="space-y-2">
-              <Input
-                placeholder="Enter tags (e.g., travel, work, gratitude)"
-                value={selectedTags.join(', ')}
-                onChange={(e) => {
-                  const tags = e.target.value.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0);
-                  setSelectedTags(tags);
-                }}
-                data-testid="input-tag-filter"
-              />
+              <Popover open={tagSearchOpen} onOpenChange={setTagSearchOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={tagSearchOpen}
+                    className="w-full justify-between"
+                    data-testid="button-tag-filter"
+                  >
+                    {selectedTags.length > 0
+                      ? `${selectedTags.length} tag${selectedTags.length === 1 ? '' : 's'} selected`
+                      : isLoadingTags 
+                        ? "Loading tags..." 
+                        : "Select tags from your history..."}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[400px] p-0">
+                  <Command>
+                    <CommandInput 
+                      placeholder="Search tags or type new tag..." 
+                      value={tagSearchValue}
+                      onValueChange={setTagSearchValue}
+                      data-testid="input-tag-search"
+                    />
+                    <CommandList>
+                      <CommandEmpty>
+                        {tagSearchValue.trim() && (
+                          <div className="p-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="w-full"
+                              onClick={() => {
+                                const newTag = tagSearchValue.trim()
+                                if (newTag && !selectedTags.includes(newTag)) {
+                                  setSelectedTags([...selectedTags, newTag])
+                                  setTagSearchValue('')
+                                  setTagSearchOpen(false)
+                                }
+                              }}
+                              data-testid={`button-create-tag-${tagSearchValue.trim()}`}
+                            >
+                              <Plus className="mr-2 h-4 w-4" />
+                              Create "{tagSearchValue.trim()}"
+                            </Button>
+                          </div>
+                        )}
+                      </CommandEmpty>
+                      <CommandGroup>
+                        {historicalTags
+                          .filter(tag => tag.toLowerCase().includes(tagSearchValue.toLowerCase()))
+                          .map((tag) => (
+                            <CommandItem
+                              key={tag}
+                              value={tag}
+                              onSelect={() => {
+                                if (selectedTags.includes(tag)) {
+                                  setSelectedTags(selectedTags.filter(t => t !== tag))
+                                } else {
+                                  setSelectedTags([...selectedTags, tag])
+                                }
+                                setTagSearchValue('')
+                                setTagSearchOpen(false)
+                              }}
+                              data-testid={`option-tag-${tag}`}
+                            >
+                              <Check
+                                className={`mr-2 h-4 w-4 ${
+                                  selectedTags.includes(tag) ? "opacity-100" : "opacity-0"
+                                }`}
+                              />
+                              {tag}
+                            </CommandItem>
+                          ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+              
               {selectedTags.length > 0 && (
                 <div className="flex flex-wrap gap-1 mt-2">
                   {selectedTags.map((tag, index) => (
@@ -402,15 +492,94 @@ export default function Search() {
               People Filter
             </h3>
             <div className="space-y-2">
-              <Input
-                placeholder="Enter people names (e.g., Sarah, John, Mom)"
-                value={selectedPeople.join(', ')}
-                onChange={(e) => {
-                  const people = e.target.value.split(',').map(person => person.trim()).filter(person => person.length > 0);
-                  setSelectedPeople(people);
-                }}
-                data-testid="input-people-filter"
-              />
+              <Popover open={peopleSearchOpen} onOpenChange={setPeopleSearchOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={peopleSearchOpen}
+                    className="w-full justify-between"
+                    data-testid="button-people-filter"
+                  >
+                    {selectedPeople.length > 0
+                      ? `${selectedPeople.length} person${selectedPeople.length === 1 ? '' : 's'} selected`
+                      : isLoadingPeople 
+                        ? "Loading people..." 
+                        : "Select people from your history..."}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[400px] p-0">
+                  <Command>
+                    <CommandInput 
+                      placeholder="Search people or type new name..." 
+                      value={peopleSearchValue}
+                      onValueChange={setPeopleSearchValue}
+                      data-testid="input-people-search"
+                    />
+                    <CommandList>
+                      <CommandEmpty>
+                        {peopleSearchValue.trim() && (
+                          <div className="p-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="w-full"
+                              onClick={() => {
+                                const newPerson = peopleSearchValue.trim()
+                                if (newPerson && !selectedPeople.includes(newPerson)) {
+                                  setSelectedPeople([...selectedPeople, newPerson])
+                                  setPeopleSearchValue('')
+                                  setPeopleSearchOpen(false)
+                                }
+                              }}
+                              data-testid={`button-create-person-${peopleSearchValue.trim()}`}
+                            >
+                              <Plus className="mr-2 h-4 w-4" />
+                              Create "{peopleSearchValue.trim()}"
+                            </Button>
+                          </div>
+                        )}
+                      </CommandEmpty>
+                      <CommandGroup>
+                        {historicalPeople
+                          .filter(person => {
+                            const fullName = `${person.firstName} ${person.lastName || ''}`.trim()
+                            return fullName.toLowerCase().includes(peopleSearchValue.toLowerCase()) ||
+                                   person.firstName.toLowerCase().includes(peopleSearchValue.toLowerCase())
+                          })
+                          .map((person) => {
+                            const fullName = `${person.firstName} ${person.lastName || ''}`.trim()
+                            return (
+                              <CommandItem
+                                key={person.id}
+                                value={fullName}
+                                onSelect={() => {
+                                  if (selectedPeople.includes(person.firstName)) {
+                                    setSelectedPeople(selectedPeople.filter(p => p !== person.firstName))
+                                  } else {
+                                    setSelectedPeople([...selectedPeople, person.firstName])
+                                  }
+                                  setPeopleSearchValue('')
+                                  setPeopleSearchOpen(false)
+                                }}
+                                data-testid={`option-person-${person.firstName}`}
+                              >
+                                <Check
+                                  className={`mr-2 h-4 w-4 ${
+                                    selectedPeople.includes(person.firstName) ? "opacity-100" : "opacity-0"
+                                  }`}
+                                />
+                                {fullName}
+                              </CommandItem>
+                            )
+                          })}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+              
               {selectedPeople.length > 0 && (
                 <div className="flex flex-wrap gap-1 mt-2">
                   {selectedPeople.map((person, index) => (
