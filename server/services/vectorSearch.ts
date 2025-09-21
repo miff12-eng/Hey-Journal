@@ -384,6 +384,7 @@ export async function performVectorSearch(
   },
   source?: 'feed' | 'search'
 ): Promise<VectorSearchResult[]> {
+  console.log('🚀 performVectorSearch CALLED with:', { queryText, userId, limit, similarityThreshold, filters, source });
   try {
     console.log('🔍 Performing vector search for:', queryText, filters ? 'with filters' : '');
     
