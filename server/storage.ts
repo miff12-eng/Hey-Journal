@@ -1991,20 +1991,19 @@ class DbStorage implements IStorage {
   }
 
   async getHistoricalPeopleByUserId(userId: string): Promise<Person[]> {
+    // Get all people for this user from the People table (not just those used in entries)
     const result = await this.db
       .select({
         id: people.id,
         firstName: people.firstName,
         lastName: people.lastName,
         userId: people.userId,
+        notes: people.notes,
         createdAt: people.createdAt,
         updatedAt: people.updatedAt
       })
       .from(people)
-      .innerJoin(entryPersonTags, eq(people.id, entryPersonTags.personId))
-      .innerJoin(journalEntries, eq(entryPersonTags.entryId, journalEntries.id))
-      .where(eq(journalEntries.userId, userId))
-      .groupBy(people.id, people.firstName, people.lastName, people.userId, people.createdAt, people.updatedAt)
+      .where(eq(people.userId, userId))
       .orderBy(people.firstName, people.lastName);
     
     return result.map(row => ({
@@ -2012,6 +2011,7 @@ class DbStorage implements IStorage {
       firstName: row.firstName,
       lastName: row.lastName,
       userId: row.userId,
+      notes: row.notes,
       createdAt: row.createdAt!,
       updatedAt: row.updatedAt!
     }));
