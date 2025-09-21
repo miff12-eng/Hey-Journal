@@ -510,7 +510,16 @@ export async function performVectorSearch(
         // Calculate cosine similarity
         const similarity = calculateCosineSimilarity(queryEmbedding, entryEmbedding);
         
-        if (similarity >= similarityThreshold) {
+        // Check if we have active filters (people, tags, dateRange)
+        const hasActiveFilters = (filters?.people && filters.people.length > 0) ||
+                                (filters?.tags && filters.tags.length > 0) ||
+                                (filters?.dateRange);
+        
+        // For wildcard queries with filters, bypass similarity threshold since user wants all filtered results
+        const isWildcardWithFilters = queryText.trim() === '*' && hasActiveFilters;
+        const passesThreshold = isWildcardWithFilters || similarity >= similarityThreshold;
+        
+        if (passesThreshold) {
           // Create snippet from searchable text or content
           const fullText = entry.searchableText || entry.content;
           const snippet = fullText.length > 200 
