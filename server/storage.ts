@@ -118,6 +118,10 @@ export interface IStorage {
   getPublicEntriesByUserId(userId: string, limit?: number, cursor?: string, requestingUserId?: string): Promise<PublicJournalEntry[]>;
   getPublicEntryById(id: string, requestingUserId?: string): Promise<PublicJournalEntry | undefined>;
   searchPublicEntries(query: string, limit?: number, cursor?: string, requestingUserId?: string): Promise<PublicJournalEntry[]>;
+  
+  // Filter data methods - for searchable filters
+  getHistoricalTagsByUserId(userId: string): Promise<string[]>;
+  getHistoricalPeopleByUserId(userId: string): Promise<Person[]>;
 }
 
 // Database storage using PostgreSQL
@@ -1955,6 +1959,63 @@ class DbStorage implements IStorage {
       }
     }));
   }
+
+  // Filter data methods - for searchable filters
+  async getHistoricalTagsByUserId(userId: string): Promise<string[]> {
+    const result = await this.db
+      .select({
+        tags: journalEntries.tags
+      })
+      .from(journalEntries)
+      .where(
+        and(
+          eq(journalEntries.userId, userId),
+          ne(journalEntries.tags, sql`NULL`),
+          ne(journalEntries.tags, sql`'{}'`) // Not empty array
+        )
+      );
+    
+    // Extract all unique tags from all entries
+    const allTags = new Set<string>();
+    result.forEach(row => {
+      if (row.tags && Array.isArray(row.tags)) {
+        row.tags.forEach(tag => {
+          if (tag && tag.trim()) {
+            allTags.add(tag.trim());
+          }
+        });
+      }
+    });
+    
+    return Array.from(allTags).sort();
+  }
+
+  async getHistoricalPeopleByUserId(userId: string): Promise<Person[]> {
+    const result = await this.db
+      .select({
+        id: people.id,
+        firstName: people.firstName,
+        lastName: people.lastName,
+        userId: people.userId,
+        createdAt: people.createdAt,
+        updatedAt: people.updatedAt
+      })
+      .from(people)
+      .innerJoin(entryPersonTags, eq(people.id, entryPersonTags.personId))
+      .innerJoin(journalEntries, eq(entryPersonTags.entryId, journalEntries.id))
+      .where(eq(journalEntries.userId, userId))
+      .groupBy(people.id, people.firstName, people.lastName, people.userId, people.createdAt, people.updatedAt)
+      .orderBy(people.firstName, people.lastName);
+    
+    return result.map(row => ({
+      id: row.id,
+      firstName: row.firstName,
+      lastName: row.lastName,
+      userId: row.userId,
+      createdAt: row.createdAt!,
+      updatedAt: row.updatedAt!
+    }));
+  }
 }
 
 export class MemStorage implements IStorage {
@@ -2523,6 +2584,15 @@ export class MemStorage implements IStorage {
 
   async getEntriesByPersonId(personId: string, userId: string): Promise<JournalEntryWithUser[]> {
     throw new Error('Person tag methods not implemented in MemStorage - use DbStorage');
+  }
+
+  // Filter data methods - for searchable filters
+  async getHistoricalTagsByUserId(userId: string): Promise<string[]> {
+    throw new Error('Filter data methods not implemented in MemStorage - use DbStorage');
+  }
+
+  async getHistoricalPeopleByUserId(userId: string): Promise<Person[]> {
+    throw new Error('Filter data methods not implemented in MemStorage - use DbStorage');
   }
 }
 
