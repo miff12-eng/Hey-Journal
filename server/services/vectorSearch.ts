@@ -491,10 +491,16 @@ export async function performVectorSearch(
     }
 
     // Get all entries with embeddings for this user
+    console.log('🔍 Vector search WHERE conditions count:', whereConditions.length);
+    console.log('🔍 About to query database with filters...');
+    
     const entriesWithEmbeddings = await db
       .select()
       .from(journalEntries)
       .where(and(...whereConditions));
+      
+    console.log('🔍 Query returned', entriesWithEmbeddings.length, 'entries');
+    console.log('🔍 Entries have embeddings:', entriesWithEmbeddings.map(e => ({ id: e.id, title: e.title, hasEmbedding: !!e.contentEmbedding })));
 
     // Step 3: Calculate similarities in memory (for PostgreSQL without pgvector operators)
     const similarities: VectorSearchResult[] = [];
