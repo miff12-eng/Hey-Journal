@@ -1,8 +1,28 @@
 import express, { type Request, Response, NextFunction } from "express";
+import cors from "cors";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 
 const app = express();
+
+// CORS configuration for mobile app support
+const allowedOrigins = [
+  'http://localhost:5173', // Vite dev server
+  'http://localhost:5000',  // Production server
+  'capacitor://localhost',  // iOS Capacitor app
+  'https://localhost',      // Android Capacitor app
+  // Specific Replit domain for this app (more secure than wildcard)
+  'https://20d6502d-bd0d-49a0-81b5-48a789e7beaa-00-190ybovf3mjps.worf.replit.dev',
+  process.env.REPLIT_URL || '', // Current Replit app URL from environment
+].filter(Boolean); // Remove empty strings
+
+app.use(cors({
+  origin: allowedOrigins,
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Cookie'],
+}));
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
