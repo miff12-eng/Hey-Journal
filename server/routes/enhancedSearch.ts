@@ -19,8 +19,9 @@ router.post('/search/enhanced', async (req, res) => {
       threshold: z.number().min(0).max(1).default(0.3),
       source: z.enum(['feed', 'search']).optional().default('search'), // Distinguish Feed vs Search page
       filters: z.object({
-        filterType: z.enum(['tags', 'date']).optional(),
+        filterType: z.enum(['tags', 'people', 'date']).optional(),
         tags: z.array(z.string()).optional(),
+        people: z.array(z.string()).optional(),
         dateRange: z.object({
           from: z.string().optional(),
           to: z.string().optional()

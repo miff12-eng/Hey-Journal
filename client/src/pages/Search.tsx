@@ -105,7 +105,7 @@ function AnswerCard({ answer, confidence, executionTime, totalResults, relevantE
 
 // Search types
 type SearchMode = 'semantic'
-type FilterType = 'all' | 'tags' | 'date'
+type FilterType = 'all' | 'people' | 'tags' | 'date'
 
 // Enhanced search result from the backend API
 interface EnhancedSearchResult {
@@ -143,6 +143,7 @@ export default function Search() {
   const [searchResults, setSearchResults] = useState<EnhancedSearchResult[]>([])
   const [conversationalResult, setConversationalResult] = useState<ConversationalSearchResponse | null>(null)
   const [selectedTags, setSelectedTags] = useState<string[]>([])
+  const [selectedPeople, setSelectedPeople] = useState<string[]>([])
   const [dateRange, setDateRange] = useState<{from?: string, to?: string}>({})
   const [expandedEntryId, setExpandedEntryId] = useState<string | null>(null)
   const [expandedEntry, setExpandedEntry] = useState<JournalEntryWithUser | null>(null)
@@ -219,6 +220,10 @@ export default function Search() {
       filters.tags = selectedTags;
     }
     
+    if (selectedPeople.length > 0) {
+      filters.people = selectedPeople;
+    }
+    
     if (dateRange.from || dateRange.to) {
       filters.dateRange = {};
       if (dateRange.from) {
@@ -268,7 +273,7 @@ export default function Search() {
       
       return () => clearTimeout(timeoutId);
     }
-  }, [activeFilter, selectedTags, dateRange]);
+  }, [activeFilter, selectedTags, selectedPeople, dateRange]);
 
   // Fetch full journal entry
   const fetchFullEntry = async (entryId: string) => {
@@ -306,6 +311,7 @@ export default function Search() {
 
   const filters = [
     { key: 'all' as const, label: 'All', icon: SearchIcon },
+    { key: 'people' as const, label: 'People', icon: User },
     { key: 'tags' as const, label: 'Tags', icon: Hash },
     { key: 'date' as const, label: 'Date', icon: Calendar }
   ]
@@ -381,6 +387,41 @@ export default function Search() {
                       data-testid={`tag-filter-${tag}`}
                     >
                       {tag} ×
+                    </Badge>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {activeFilter === 'people' && (
+          <div className="mt-4 p-3 bg-muted/50 rounded-lg border border-border">
+            <h3 className="text-sm font-medium text-foreground mb-2 flex items-center gap-2">
+              <User className="h-4 w-4" />
+              People Filter
+            </h3>
+            <div className="space-y-2">
+              <Input
+                placeholder="Enter people names (e.g., Sarah, John, Mom)"
+                value={selectedPeople.join(', ')}
+                onChange={(e) => {
+                  const people = e.target.value.split(',').map(person => person.trim()).filter(person => person.length > 0);
+                  setSelectedPeople(people);
+                }}
+                data-testid="input-people-filter"
+              />
+              {selectedPeople.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-2">
+                  {selectedPeople.map((person, index) => (
+                    <Badge 
+                      key={index}
+                      variant="secondary" 
+                      className="cursor-pointer"
+                      onClick={() => setSelectedPeople(selectedPeople.filter((_, i) => i !== index))}
+                      data-testid={`people-filter-${person}`}
+                    >
+                      {person} ×
                     </Badge>
                   ))}
                 </div>
