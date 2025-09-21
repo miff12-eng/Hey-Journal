@@ -583,7 +583,8 @@ export default function Profile() {
                 id="email"
                 type="email"
                 value={editForm.email}
-                onChange={(e) => setEditForm(prev => ({ ...prev, email: e.target.value }))}
+                readOnly
+                className="bg-muted/50 cursor-not-allowed"
                 data-testid="input-email"
               />
             </div>
