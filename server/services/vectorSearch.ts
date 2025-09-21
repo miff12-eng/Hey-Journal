@@ -78,24 +78,76 @@ async function applyFeedRanking(results: VectorSearchResult[], userId: string): 
     // Get entry details with engagement metrics
     const entryIds = results.map(r => r.entryId);
     
-    const entriesWithEngagement = await db
+    // Use separate queries to avoid overcounting due to join multiplication
+    const entriesWithBasicInfo = await db
       .select({
         id: journalEntries.id,
-        createdAt: journalEntries.createdAt,
-        likesCount: count(likes.id),
-        commentsCount: count(comments.id)
+        createdAt: journalEntries.createdAt
       })
       .from(journalEntries)
-      .leftJoin(likes, eq(journalEntries.id, likes.entryId))
-      .leftJoin(comments, eq(journalEntries.id, comments.entryId))
-      .where(inArray(journalEntries.id, entryIds))
-      .groupBy(journalEntries.id, journalEntries.createdAt);
+      .where(inArray(journalEntries.id, entryIds));
+
+    // Get likes count separately
+    const likesCountQuery = await db
+      .select({
+        entryId: likes.entryId,
+        likesCount: count(likes.id)
+      })
+      .from(likes)
+      .where(inArray(likes.entryId, entryIds))
+      .groupBy(likes.entryId);
+
+    // Get comments count separately  
+    const commentsCountQuery = await db
+      .select({
+        entryId: comments.entryId,
+        commentsCount: count(comments.id)
+      })
+      .from(comments)
+      .where(inArray(comments.entryId, entryIds))
+      .groupBy(comments.entryId);
+
+    // Combine the results
+    const likesMap = new Map(likesCountQuery.map(l => [l.entryId, l.likesCount]));
+    const commentsMap = new Map(commentsCountQuery.map(c => [c.entryId, c.commentsCount]));
+    
+    const entriesWithEngagement = entriesWithBasicInfo.map(entry => ({
+      id: entry.id,
+      createdAt: entry.createdAt,
+      likesCount: likesMap.get(entry.id) || 0,
+      commentsCount: commentsMap.get(entry.id) || 0
+    }));
+
+    // Get user's recent interactions for context weighting
+    const recentLikes = await db
+      .select({ entryId: likes.entryId })
+      .from(likes)
+      .where(and(
+        eq(likes.userId, userId),
+        inArray(likes.entryId, entryIds),
+        gte(likes.createdAt, new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)) // Last 7 days
+      ));
+
+    const recentComments = await db
+      .select({ entryId: comments.entryId })
+      .from(comments)
+      .where(and(
+        eq(comments.userId, userId),
+        inArray(comments.entryId, entryIds),
+        gte(comments.createdAt, new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)) // Last 7 days
+      ));
+
+    const userInteractionMap = new Set([
+      ...recentLikes.map(l => l.entryId),
+      ...recentComments.map(c => c.entryId)
+    ]);
 
     const engagementMap = new Map(
       entriesWithEngagement.map(entry => [entry.id, {
         createdAt: entry.createdAt,
         likesCount: entry.likesCount,
-        commentsCount: entry.commentsCount
+        commentsCount: entry.commentsCount,
+        userInteracted: userInteractionMap.has(entry.id)
       }])
     );
 
@@ -114,8 +166,11 @@ async function applyFeedRanking(results: VectorSearchResult[], userId: string): 
         ? Math.min(2.0, 1 + (engagement.likesCount * 0.1) + (engagement.commentsCount * 0.2))
         : 1.0;
       
+      // User context factor: boost entries user has recently interacted with
+      const userContextFactor = engagement?.userInteracted ? 1.3 : 1.0;
+      
       // Combined ranking score
-      const rankingScore = result.similarity * recencyFactor * engagementScore;
+      const rankingScore = result.similarity * recencyFactor * engagementScore * userContextFactor;
       
       return {
         ...result,
@@ -152,22 +207,40 @@ function applyClustering(results: VectorSearchResult[]): VectorSearchResult[] {
     clustered.push(result);
     used.add(result.entryId);
     
-    // Remove very similar results (simple title-based clustering)
-    if (result.title) {
-      const titleWords = result.title.toLowerCase().split(/\s+/);
-      const significantWords = titleWords.filter(word => word.length > 3);
+    // Get creation time for timeframe clustering
+    const resultTime = result.createdAt ? new Date(result.createdAt).getTime() : 0;
+    
+    // Remove entries from same timeframe (within 72 hours) with similar titles or high similarity
+    for (const other of sorted) {
+      if (used.has(other.entryId) || other.entryId === result.entryId) continue;
       
-      for (const other of sorted) {
-        if (used.has(other.entryId) || other.entryId === result.entryId) continue;
+      const otherTime = other.createdAt ? new Date(other.createdAt).getTime() : 0;
+      const timeDifferenceHours = Math.abs(resultTime - otherTime) / (1000 * 60 * 60);
+      
+      // Check if entries are within 72-hour timeframe
+      if (timeDifferenceHours <= 72) {
+        let shouldCluster = false;
         
-        if (other.title) {
+        // Title similarity check (if both have titles)
+        if (result.title && other.title) {
+          const titleWords = result.title.toLowerCase().split(/\s+/);
+          const significantWords = titleWords.filter(word => word.length > 3);
           const otherWords = other.title.toLowerCase().split(/\s+/);
           const commonWords = significantWords.filter(word => otherWords.includes(word));
           
-          // If >50% of significant words overlap, consider it similar
-          if (significantWords.length > 0 && commonWords.length / significantWords.length > 0.5) {
-            used.add(other.entryId);
+          // If >40% of significant words overlap within timeframe, cluster
+          if (significantWords.length > 0 && commonWords.length / significantWords.length > 0.4) {
+            shouldCluster = true;
           }
+        }
+        
+        // High similarity check (even without title overlap)
+        if (other.similarity && result.similarity && other.similarity > result.similarity * 0.85) {
+          shouldCluster = true;
+        }
+        
+        if (shouldCluster) {
+          used.add(other.entryId);
         }
       }
     }
@@ -176,7 +249,7 @@ function applyClustering(results: VectorSearchResult[]): VectorSearchResult[] {
     if (clustered.length >= Math.min(results.length, 10)) break;
   }
   
-  console.log('🔗 Applied clustering:', results.length, '→', clustered.length, 'results');
+  console.log('🔗 Applied timeframe clustering:', results.length, '→', clustered.length, 'results');
   return clustered;
 }
 
@@ -210,28 +283,37 @@ export async function performVectorSearch(
     const { journalEntries } = await import('../../shared/schema');
     const { eq, and, isNotNull, gte, lte, arrayContains } = await import('drizzle-orm');
 
-    // Build where conditions
-    const whereConditions = [
-      eq(journalEntries.userId, userId),
-      isNotNull(journalEntries.contentEmbedding)
-    ];
+    // Build where conditions based on source type
+    let whereConditions = [isNotNull(journalEntries.contentEmbedding)];
 
-    // Apply feed-aware filtering for Feed searches
-    if (source === 'feed' && filters?.type) {
-      const { or, ne } = await import('drizzle-orm');
+    if (source === 'feed') {
+      // Feed searches: show public entries OR entries shared with current user OR own entries
+      const { or } = await import('drizzle-orm');
       
-      if (filters.type === 'feed') {
-        // Feed view: show public entries OR entries shared with current user
+      if (filters?.type === 'shared') {
+        // Shared view: only entries specifically shared with current user
+        whereConditions.push(
+          and(
+            eq(journalEntries.privacy, 'shared'),
+            arrayContains(journalEntries.sharedWith, [userId])
+          )
+        );
+      } else {
+        // Feed view: public entries + entries shared with user + own entries
         whereConditions.push(
           or(
             eq(journalEntries.privacy, 'public'),
-            eq(journalEntries.privacy, 'shared')
+            and(
+              eq(journalEntries.privacy, 'shared'),
+              arrayContains(journalEntries.sharedWith, [userId])
+            ),
+            eq(journalEntries.userId, userId) // Include user's own entries
           )
         );
-      } else if (filters.type === 'shared') {
-        // Shared view: only entries specifically shared with current user
-        whereConditions.push(eq(journalEntries.privacy, 'shared'));
       }
+    } else {
+      // Regular search: only user's own entries
+      whereConditions.push(eq(journalEntries.userId, userId));
     }
 
     // Apply filters
