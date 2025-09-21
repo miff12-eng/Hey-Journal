@@ -52,7 +52,43 @@ export default function Home() {
   const [selectedUsersForSharing, setSelectedUsersForSharing] = useState<{id: string, email: string, username?: string, firstName?: string, lastName?: string, profileImageUrl?: string}[]>([])
   const [isLoadingSharing, setIsLoadingSharing] = useState(false)
   const [overlayEntry, setOverlayEntry] = useState<JournalEntryWithUser | null>(null)
+  const [searchFocused, setSearchFocused] = useState(false)
+  const [searchHistory, setSearchHistory] = useState<string[]>([])
   const { toast } = useToast()
+  
+  // Load search history from localStorage on mount
+  useEffect(() => {
+    const savedHistory = localStorage.getItem('feedSearchHistory')
+    if (savedHistory) {
+      try {
+        const history = JSON.parse(savedHistory)
+        if (Array.isArray(history)) {
+          setSearchHistory(history.slice(0, 8)) // Limit to 8 items
+        }
+      } catch (error) {
+        console.error('Failed to parse search history:', error)
+      }
+    }
+  }, [])
+  
+  // Save search to history
+  const saveSearchToHistory = (query: string) => {
+    if (!query.trim()) return
+    
+    const trimmedQuery = query.trim()
+    const newHistory = [trimmedQuery, ...searchHistory.filter(item => item !== trimmedQuery)].slice(0, 8)
+    setSearchHistory(newHistory)
+    localStorage.setItem('feedSearchHistory', JSON.stringify(newHistory))
+  }
+  
+  // Handle search execution
+  const handleSearch = (query: string) => {
+    if (query.trim()) {
+      saveSearchToHistory(query)
+      // Trigger the search mutation
+      searchMutation.mutate({ query: query.trim(), filter: activeFilter })
+    }
+  }
   
   // Handler to open entry overlay
   const handleEntryClick = (entry: JournalEntryWithUser) => {
@@ -345,10 +381,6 @@ export default function Home() {
     console.log('Play audio:', audioUrl)
   }
 
-  // Recent searches and suggested tags for Feed search
-  const recentSearches = ['morning routine', 'family time', 'travel memories', 'work reflections']
-  const suggestedTags = ['meditation', 'gratitude', 'family', 'travel', 'work', 'goals', 'reflection']
-
   return (
     <div className="flex flex-col h-screen bg-background">
       {/* Header */}
@@ -388,55 +420,46 @@ export default function Home() {
             placeholder="Search feed entries..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
+            onFocus={() => setSearchFocused(true)}
+            onBlur={() => setTimeout(() => setSearchFocused(false), 150)} // Delay to allow clicks
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                handleSearch(searchQuery)
+                // Keep search focused to show updated dropdown
+              }
+            }}
             className="pl-10 pr-4"
             data-testid="input-search-entries"
           />
+          
+          {/* Recent searches dropdown - only show when focused and have history */}
+          {searchFocused && searchHistory.length > 0 && (
+            <div className="absolute top-full left-0 right-0 bg-background border border-border rounded-md shadow-lg mt-1 z-50">
+              <div className="p-2">
+                <h4 className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-2">
+                  <Clock className="h-3 w-3" />
+                  Recent Searches
+                </h4>
+                <div className="space-y-1">
+                  {searchHistory.map((search, index) => (
+                    <button
+                      key={index}
+                      onClick={() => {
+                        setSearchQuery(search)
+                        handleSearch(search)
+                        setSearchFocused(false)
+                      }}
+                      className="w-full text-left p-2 text-sm hover:bg-muted rounded-sm transition-colors"
+                      data-testid={`recent-search-${index}`}
+                    >
+                      {search}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
-
-        {/* Recent searches and suggested tags - shown when not searching */}
-        {!searchQuery && (
-          <div className="mt-4 space-y-4">
-            <div>
-              <h3 className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
-                <Clock className="h-4 w-4" />
-                Recent Searches
-              </h3>
-              <div className="flex flex-wrap gap-2">
-                {recentSearches.map((search) => (
-                  <Badge 
-                    key={search}
-                    variant="outline" 
-                    className="cursor-pointer hover-elevate"
-                    onClick={() => setSearchQuery(search)}
-                    data-testid={`recent-search-${search.replace(/\\s+/g, '-')}`}
-                  >
-                    {search}
-                  </Badge>
-                ))}
-              </div>
-            </div>
-            
-            <div>
-              <h3 className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
-                <Hash className="h-4 w-4" />
-                Popular Tags
-              </h3>
-              <div className="flex flex-wrap gap-2">
-                {suggestedTags.map((tag) => (
-                  <Badge 
-                    key={tag}
-                    variant="secondary" 
-                    className="cursor-pointer hover-elevate"
-                    onClick={() => setSearchQuery(`#${tag}`)}
-                    data-testid={`suggested-tag-${tag}`}
-                  >
-                    #{tag}
-                  </Badge>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
       </header>
 
 
