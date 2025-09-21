@@ -516,7 +516,7 @@ export default function MyJournal() {
           
           <div className="flex items-center gap-2">
             {/* Search bar - inline with title and avatar */}
-            <div className="w-80 relative">
+            <div className="w-full max-w-80 min-w-0 relative md:w-80">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Search your journal entries..."
