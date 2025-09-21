@@ -91,6 +91,7 @@ interface VectorSearchResult {
   snippet: string;
   title?: string;
   matchReason: string;
+  createdAt?: Date | string;
 }
 
 interface ConversationalSearchResult {
@@ -164,7 +165,8 @@ async function getRecentEntries(
       similarity: 0.8, // High similarity for recent entries in temporal queries
       snippet: `Title: ${entry.title || 'Untitled'}\n\n${entry.content?.substring(0, 200) || ''}${entry.content && entry.content.length > 200 ? '...' : ''}`,
       title: entry.title || 'Untitled',
-      matchReason: `Recent: Created ${entry.createdAt?.toDateString() || 'recently'}`
+      matchReason: `Recent: Created ${entry.createdAt?.toDateString() || 'recently'}`,
+      createdAt: entry.createdAt || undefined
     }));
 
   } catch (error) {
@@ -266,8 +268,8 @@ async function applyFeedRanking(results: VectorSearchResult[], userId: string): 
     // Apply ranking formula: similarity * recency_factor * engagement_factor
     const rankedResults = results.map(result => {
       const engagement = engagementMap.get(result.entryId);
-      const daysSinceCreation = engagement 
-        ? Math.max(1, (Date.now() - engagement.createdAt.getTime()) / (1000 * 60 * 60 * 24))
+      const daysSinceCreation = engagement && engagement.createdAt
+        ? Math.max(1, (Date.now() - new Date(engagement.createdAt).getTime()) / (1000 * 60 * 60 * 24))
         : 30; // Default to 30 days if no data
       
       // Recency factor: newer entries get higher scores (decays over time)
@@ -405,24 +407,26 @@ export async function performVectorSearch(
       
       if (filters?.type === 'shared') {
         // Shared view: only entries specifically shared with current user
-        whereConditions.push(
+        const sharedCondition = and(
+          eq(journalEntries.privacy, 'shared'),
+          arrayContains(journalEntries.sharedWith, [userId])
+        );
+        if (sharedCondition) {
+          whereConditions.push(sharedCondition);
+        }
+      } else {
+        // Feed view: public entries + entries shared with user + own entries
+        const feedCondition = or(
+          eq(journalEntries.privacy, 'public'),
           and(
             eq(journalEntries.privacy, 'shared'),
             arrayContains(journalEntries.sharedWith, [userId])
-          )
+          ),
+          eq(journalEntries.userId, userId) // Include user's own entries
         );
-      } else {
-        // Feed view: public entries + entries shared with user + own entries
-        whereConditions.push(
-          or(
-            eq(journalEntries.privacy, 'public'),
-            and(
-              eq(journalEntries.privacy, 'shared'),
-              arrayContains(journalEntries.sharedWith, [userId])
-            ),
-            eq(journalEntries.userId, userId) // Include user's own entries
-          )
-        );
+        if (feedCondition) {
+          whereConditions.push(feedCondition);
+        }
       }
     } else {
       // Regular search: only user's own entries
@@ -507,7 +511,8 @@ export async function performVectorSearch(
             similarity,
             snippet,
             title: entry.title || undefined,
-            matchReason: `Vector similarity: ${(similarity * 100).toFixed(1)}%`
+            matchReason: `Vector similarity: ${(similarity * 100).toFixed(1)}%`,
+            createdAt: entry.createdAt || undefined
           });
         }
       } catch (embeddingError) {
@@ -955,7 +960,8 @@ async function performKeywordSearch(
         similarity: Math.min(score, 1.0),
         snippet,
         title: entry.title || undefined,
-        matchReason: `Keyword matches`
+        matchReason: `Keyword matches`,
+        createdAt: entry.createdAt || undefined
       };
     });
 
