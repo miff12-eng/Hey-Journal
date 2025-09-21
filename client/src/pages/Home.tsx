@@ -11,6 +11,8 @@ import { Search, Plus, Bell, Filter, TrendingUp, Copy, Share2, ExternalLink, Tra
 import JournalEntryCard from '@/components/JournalEntryCard'
 import ThemeToggle from '@/components/ThemeToggle'
 import UserSelector from '@/components/UserSelector'
+import AudioPlayer from '@/components/AudioPlayer'
+import { AspectRatio } from '@/components/ui/aspect-ratio'
 import { JournalEntryWithUser } from '@shared/schema'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { queryClient, apiRequest } from '@/lib/queryClient'
@@ -49,7 +51,13 @@ export default function Home() {
   const [isDeleting, setIsDeleting] = useState(false)
   const [selectedUsersForSharing, setSelectedUsersForSharing] = useState<{id: string, email: string, username?: string, firstName?: string, lastName?: string, profileImageUrl?: string}[]>([])
   const [isLoadingSharing, setIsLoadingSharing] = useState(false)
+  const [overlayEntry, setOverlayEntry] = useState<JournalEntryWithUser | null>(null)
   const { toast } = useToast()
+  
+  // Handler to open entry overlay
+  const handleEntryClick = (entry: JournalEntryWithUser) => {
+    setOverlayEntry(entry)
+  }
   
   // Enhanced search mutation for Feed search
   const searchMutation = useMutation({
@@ -498,6 +506,7 @@ export default function Home() {
               <JournalEntryCard
                 key={entry.id}
                 entry={entry}
+                onClick={handleEntryClick}
                 onEdit={entry.userId === user?.id ? handleEdit : undefined}
                 onShare={entry.userId === user?.id ? handleShare : undefined}
                 onDelete={entry.userId === user?.id ? handleDelete : undefined}
@@ -674,6 +683,104 @@ export default function Home() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      
+      {/* Entry Overlay Dialog */}
+      <Dialog open={!!overlayEntry} onOpenChange={(open) => !open && setOverlayEntry(null)}>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+          {overlayEntry && (
+            <>
+              <DialogHeader>
+                <div className="flex items-center gap-3 mb-2">
+                  <Avatar className="h-10 w-10">
+                    <AvatarImage 
+                      src={overlayEntry.user.profileImageUrl || ''} 
+                      alt={`${overlayEntry.user.firstName || 'User'} ${overlayEntry.user.lastName || ''}`}
+                    />
+                    <AvatarFallback>
+                      {(overlayEntry.user.firstName?.[0] || overlayEntry.user.email?.[0] || 'U').toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-foreground">
+                      @{overlayEntry.user.username || overlayEntry.user.email?.split('@')[0] || 'user'}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {new Date(overlayEntry.createdAt!).toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })}
+                    </p>
+                  </div>
+                </div>
+                {overlayEntry.title && (
+                  <DialogTitle className="text-lg font-semibold text-left">
+                    {overlayEntry.title}
+                  </DialogTitle>
+                )}
+              </DialogHeader>
+              
+              <div className="space-y-4">
+                {/* Content */}
+                <div className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">
+                  {overlayEntry.content}
+                </div>
+                
+                {/* Media */}
+                {overlayEntry.mediaUrls && overlayEntry.mediaUrls.length > 0 && (
+                  <div className="grid grid-cols-2 gap-2">
+                    {overlayEntry.mediaUrls.map((url, index) => {
+                      const mediaObject = overlayEntry.mediaObjects?.[index];
+                      const isVideo = mediaObject?.mimeType?.startsWith('video/');
+                      
+                      return (
+                        <div key={index} className="relative group">
+                          {isVideo ? (
+                            <AspectRatio ratio={16/9}>
+                              <video 
+                                src={url} 
+                                className="w-full h-full object-cover rounded-lg"
+                                controls
+                                preload="metadata"
+                              />
+                            </AspectRatio>
+                          ) : (
+                            <img 
+                              src={url} 
+                              alt={`Media ${index + 1}`}
+                              className="w-full aspect-square object-cover rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
+                              onClick={() => window.open(url, '_blank')}
+                            />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                
+                {/* Audio */}
+                {overlayEntry.audioUrl && (
+                  <div className="bg-muted/30 rounded-lg p-3">
+                    <AudioPlayer audioUrl={overlayEntry.audioUrl} />
+                  </div>
+                )}
+                
+                {/* Tags */}
+                {overlayEntry.tags && overlayEntry.tags.length > 0 && (
+                  <div className="flex flex-wrap gap-1">
+                    {overlayEntry.tags.map((tag, index) => (
+                      <Badge key={index} variant="secondary" className="text-xs">
+                        #{tag}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

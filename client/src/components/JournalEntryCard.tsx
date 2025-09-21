@@ -42,6 +42,7 @@ interface JournalEntryCardProps {
   onEdit?: (entryId: string) => void
   onShare?: (entryId: string) => void
   onDelete?: (entryId: string) => void
+  onClick?: (entry: JournalEntryWithUser) => void
   className?: string
   showUserInfo?: boolean // If false, hides user profile info for My Journal page
 }
@@ -51,6 +52,7 @@ export default function JournalEntryCard({
   onEdit,
   onShare,
   onDelete,
+  onClick,
   className,
   showUserInfo = true
 }: JournalEntryCardProps) {
@@ -205,7 +207,23 @@ export default function JournalEntryCard({
   const shouldShowReadMore = entry.content.length > 150
 
   return (
-    <Card className={cn('hover-elevate transition-all duration-200', className)} data-testid={`card-journal-entry-${entry.id}`}>
+    <Card 
+      className={cn('hover-elevate transition-all duration-200 cursor-pointer', className)} 
+      onClick={(e) => {
+        // Prevent card click if clicking on buttons or interactive elements
+        if (e.target instanceof Element && (
+          e.target.closest('button') ||
+          e.target.closest('[role="button"]') ||
+          e.target.closest('a') ||
+          e.target.closest('.dropdown-menu') ||
+          e.target.closest('[data-radix-dropdown-menu-trigger]')
+        )) {
+          return;
+        }
+        onClick?.(entry);
+      }}
+      data-testid={`card-journal-entry-${entry.id}`}
+    >
       <CardHeader className="pb-3">
         {showUserInfo ? (
           // Feed page layout - with user info
