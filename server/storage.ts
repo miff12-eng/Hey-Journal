@@ -48,11 +48,11 @@ export interface IStorage {
   
   // Journal entry methods
   getJournalEntry(id: string): Promise<JournalEntry | undefined>;
-  getJournalEntryWithUser(id: string): Promise<JournalEntryWithUser | undefined>;
-  getBulkJournalEntriesWithUser(entryIds: string[], userId: string): Promise<JournalEntryWithUser[]>;
-  getJournalEntriesByUserId(userId: string, limit?: number): Promise<JournalEntryWithUser[]>;
-  getFeedJournalEntries(userId: string, limit?: number): Promise<JournalEntryWithUser[]>;
-  getSharedJournalEntries(userId: string, limit?: number): Promise<JournalEntryWithUser[]>;
+  getJournalEntryWithUser(id: string, requestingUserId?: string): Promise<JournalEntryWithUser | undefined>;
+  getBulkJournalEntriesWithUser(entryIds: string[], userId: string, requestingUserId?: string): Promise<JournalEntryWithUser[]>;
+  getJournalEntriesByUserId(userId: string, limit?: number, requestingUserId?: string): Promise<JournalEntryWithUser[]>;
+  getFeedJournalEntries(userId: string, limit?: number, requestingUserId?: string): Promise<JournalEntryWithUser[]>;
+  getSharedJournalEntries(userId: string, limit?: number, requestingUserId?: string): Promise<JournalEntryWithUser[]>;
   createJournalEntry(entry: InsertJournalEntry & { 
     searchableText?: string;
     contentEmbedding?: string;
@@ -77,8 +77,8 @@ export interface IStorage {
   
   // Comment methods
   getComment(id: string): Promise<Comment | undefined>;
-  getCommentsByEntryId(entryId: string): Promise<CommentWithUser[]>;
-  getCommentsByEntryIdPublic(entryId: string): Promise<CommentWithPublicUser[]>;
+  getCommentsByEntryId(entryId: string, requestingUserId?: string): Promise<CommentWithUser[]>;
+  getCommentsByEntryIdPublic(entryId: string, requestingUserId?: string): Promise<CommentWithPublicUser[]>;
   createComment(comment: InsertComment, userId: string): Promise<Comment>;
   updateComment(id: string, updates: Partial<InsertComment>): Promise<Comment>;
   deleteComment(id: string): Promise<void>;
@@ -94,8 +94,8 @@ export interface IStorage {
   rejectConnectionRequest(requestId: string, userId: string): Promise<void>;
   blockUser(requesterId: string, recipientId: string): Promise<UserConnection>;
   unblockUser(requesterId: string, recipientId: string): Promise<void>;
-  getConnectionRequests(userId: string, type: 'received' | 'sent'): Promise<UserConnectionWithUser[]>;
-  getConnections(userId: string): Promise<UserConnectionWithUser[]>;
+  getConnectionRequests(userId: string, type: 'received' | 'sent', requestingUserId?: string): Promise<UserConnectionWithUser[]>;
+  getConnections(userId: string, requestingUserId?: string): Promise<UserConnectionWithUser[]>;
   getConnectionStatus(requesterId: string, recipientId: string): Promise<UserConnection | undefined>;
   
   // Person methods
@@ -110,14 +110,14 @@ export interface IStorage {
   tagPersonInEntry(entryId: string, personId: string): Promise<EntryPersonTag>;
   untagPersonFromEntry(entryId: string, personId: string): Promise<void>;
   getPersonTagsByEntryId(entryId: string, userId?: string): Promise<(EntryPersonTag & { person: Person })[]>;
-  getEntriesByPersonId(personId: string, userId: string): Promise<JournalEntryWithUser[]>;
+  getEntriesByPersonId(personId: string, userId: string, requestingUserId?: string): Promise<JournalEntryWithUser[]>;
   
   // Public-facing methods (no authentication required)
-  getPublicUserByUsername(username: string): Promise<PublicUser | undefined>;
-  searchPublicUsers(query: string, limit?: number): Promise<PublicUser[]>;
-  getPublicEntriesByUserId(userId: string, limit?: number, cursor?: string): Promise<PublicJournalEntry[]>;
-  getPublicEntryById(id: string): Promise<PublicJournalEntry | undefined>;
-  searchPublicEntries(query: string, limit?: number, cursor?: string): Promise<PublicJournalEntry[]>;
+  getPublicUserByUsername(username: string, requestingUserId?: string): Promise<PublicUser | undefined>;
+  searchPublicUsers(query: string, limit?: number, requestingUserId?: string): Promise<PublicUser[]>;
+  getPublicEntriesByUserId(userId: string, limit?: number, cursor?: string, requestingUserId?: string): Promise<PublicJournalEntry[]>;
+  getPublicEntryById(id: string, requestingUserId?: string): Promise<PublicJournalEntry | undefined>;
+  searchPublicEntries(query: string, limit?: number, cursor?: string, requestingUserId?: string): Promise<PublicJournalEntry[]>;
 }
 
 // Database storage using PostgreSQL
@@ -282,7 +282,7 @@ class DbStorage implements IStorage {
     };
   }
 
-  async getJournalEntryWithUser(id: string): Promise<JournalEntryWithUser | undefined> {
+  async getJournalEntryWithUser(id: string, requestingUserId?: string): Promise<JournalEntryWithUser | undefined> {
     const result = await this.db
       .select({
         // Journal entry fields
@@ -314,6 +314,10 @@ class DbStorage implements IStorage {
         userIsProfilePublic: users.isProfilePublic,
         userCreatedAt: users.createdAt,
         userUpdatedAt: users.updatedAt,
+        // Privacy fields
+        userFirstNameVisible: users.firstNameVisible,
+        userLastNameVisible: users.lastNameVisible,
+        userEmailVisible: users.emailVisible,
       })
       .from(journalEntries)
       .leftJoin(users, eq(journalEntries.userId, users.id))
@@ -324,6 +328,10 @@ class DbStorage implements IStorage {
     }
 
     const row = result[0];
+    
+    // Apply privacy filtering to user data
+    const filteredUser = this.applyUserPrivacyFilter(row, requestingUserId);
+    
     return {
       id: row.id,
       userId: row.userId,
@@ -345,21 +353,21 @@ class DbStorage implements IStorage {
       lastEmbeddingUpdate: row.lastEmbeddingUpdate,
       searchableText: row.searchableText,
       user: {
-        id: row.userId,
-        email: row.userEmail!,
-        firstName: row.userFirstName!,
-        lastName: row.userLastName!,
-        username: row.userUsername,
-        bio: row.userBio,
-        profileImageUrl: row.userProfileImageUrl,
-        isProfilePublic: row.userIsProfilePublic,
-        createdAt: row.userCreatedAt!,
-        updatedAt: row.userUpdatedAt!,
+        id: filteredUser.id,
+        email: filteredUser.email,
+        firstName: filteredUser.firstName,
+        lastName: filteredUser.lastName,
+        username: filteredUser.username,
+        bio: filteredUser.bio,
+        profileImageUrl: filteredUser.profileImageUrl,
+        isProfilePublic: filteredUser.isProfilePublic,
+        createdAt: filteredUser.createdAt,
+        updatedAt: filteredUser.updatedAt,
       }
     };
   }
 
-  async getBulkJournalEntriesWithUser(entryIds: string[], userId: string): Promise<JournalEntryWithUser[]> {
+  async getBulkJournalEntriesWithUser(entryIds: string[], userId: string, requestingUserId?: string): Promise<JournalEntryWithUser[]> {
     if (entryIds.length === 0) return [];
     
     const result = await this.db
@@ -393,6 +401,10 @@ class DbStorage implements IStorage {
         userIsProfilePublic: users.isProfilePublic,
         userCreatedAt: users.createdAt,
         userUpdatedAt: users.updatedAt,
+        // Privacy fields
+        userFirstNameVisible: users.firstNameVisible,
+        userLastNameVisible: users.lastNameVisible,
+        userEmailVisible: users.emailVisible,
       })
       .from(journalEntries)
       .leftJoin(users, eq(journalEntries.userId, users.id))
@@ -410,41 +422,46 @@ class DbStorage implements IStorage {
         )
       );
 
-    return result.map(row => ({
-      id: row.id,
-      userId: row.userId,
-      title: row.title,
-      content: row.content,
-      audioUrl: row.audioUrl,
-      audioPlayable: row.audioPlayable,
-      mediaUrls: row.mediaUrls || [],
-      mediaObjects: row.mediaObjects || [],
-      tags: row.tags || [],
-      privacy: row.privacy as "private" | "shared" | "public",
-      sharedWith: row.sharedWith || [],
-      aiInsights: row.aiInsights,
-      createdAt: row.createdAt!,
-      updatedAt: row.updatedAt!,
-      contentEmbedding: row.contentEmbedding,
-      embeddingVersion: row.embeddingVersion,
-      lastEmbeddingUpdate: row.lastEmbeddingUpdate,
-      searchableText: row.searchableText,
-      user: {
-        id: row.userId,
-        email: row.userEmail!,
-        firstName: row.userFirstName!,
-        lastName: row.userLastName!,
-        username: row.userUsername,
-        bio: row.userBio,
-        profileImageUrl: row.userProfileImageUrl,
-        isProfilePublic: row.userIsProfilePublic || false,
-        createdAt: row.userCreatedAt!,
-        updatedAt: row.userUpdatedAt!,
-      }
-    }));
+    return result.map(row => {
+      // Apply privacy filtering to user data for each row
+      const filteredUser = this.applyUserPrivacyFilter(row, requestingUserId);
+      
+      return {
+        id: row.id,
+        userId: row.userId,
+        title: row.title,
+        content: row.content,
+        audioUrl: row.audioUrl,
+        audioPlayable: row.audioPlayable,
+        mediaUrls: row.mediaUrls || [],
+        mediaObjects: row.mediaObjects || [],
+        tags: row.tags || [],
+        privacy: row.privacy as "private" | "shared" | "public",
+        sharedWith: row.sharedWith || [],
+        aiInsights: row.aiInsights,
+        createdAt: row.createdAt!,
+        updatedAt: row.updatedAt!,
+        contentEmbedding: row.contentEmbedding,
+        embeddingVersion: row.embeddingVersion,
+        lastEmbeddingUpdate: row.lastEmbeddingUpdate,
+        searchableText: row.searchableText,
+        user: {
+          id: filteredUser.id,
+          email: filteredUser.email,
+          firstName: filteredUser.firstName,
+          lastName: filteredUser.lastName,
+          username: filteredUser.username,
+          bio: filteredUser.bio,
+          profileImageUrl: filteredUser.profileImageUrl,
+          isProfilePublic: filteredUser.isProfilePublic,
+          createdAt: filteredUser.createdAt,
+          updatedAt: filteredUser.updatedAt,
+        }
+      };
+    });
   }
 
-  async getJournalEntriesByUserId(userId: string, limit = 20): Promise<JournalEntryWithUser[]> {
+  async getJournalEntriesByUserId(userId: string, limit = 20, requestingUserId?: string): Promise<JournalEntryWithUser[]> {
     console.log('🗂️ [DB] Fetching entries for userId:', userId);
     
     const result = await this.db
@@ -478,6 +495,10 @@ class DbStorage implements IStorage {
         userIsProfilePublic: users.isProfilePublic,
         userCreatedAt: users.createdAt,
         userUpdatedAt: users.updatedAt,
+        // Privacy fields
+        userFirstNameVisible: users.firstNameVisible,
+        userLastNameVisible: users.lastNameVisible,
+        userEmailVisible: users.emailVisible,
       })
       .from(journalEntries)
       .leftJoin(users, eq(journalEntries.userId, users.id))
@@ -487,43 +508,48 @@ class DbStorage implements IStorage {
 
     console.log('🗂️ [DB] Found', result.length, 'entries');
     
-    const entriesWithUser: JournalEntryWithUser[] = result.map((row) => ({
-      id: row.id,
-      userId: row.userId,
-      title: row.title,
-      content: row.content,
-      audioUrl: row.audioUrl,
-      audioPlayable: row.audioPlayable,
-      mediaUrls: row.mediaUrls || [],
-      mediaObjects: row.mediaObjects || [],
-      tags: row.tags || [],
-      privacy: row.privacy as "private" | "shared" | "public",
-      sharedWith: row.sharedWith || [],
-      aiInsights: row.aiInsights,
-      createdAt: row.createdAt!,
-      updatedAt: row.updatedAt!,
-      contentEmbedding: row.contentEmbedding,
-      embeddingVersion: row.embeddingVersion,
-      lastEmbeddingUpdate: row.lastEmbeddingUpdate,
-      searchableText: row.searchableText,
-      user: {
-        id: row.userId,
-        email: row.userEmail!,
-        firstName: row.userFirstName!,
-        lastName: row.userLastName!,
-        username: row.userUsername,
-        bio: row.userBio,
-        profileImageUrl: row.userProfileImageUrl,
-        isProfilePublic: row.userIsProfilePublic,
-        createdAt: row.userCreatedAt!,
-        updatedAt: row.userUpdatedAt!,
-      }
-    }));
+    const entriesWithUser: JournalEntryWithUser[] = result.map((row) => {
+      // Apply privacy filtering to user data for each row
+      const filteredUser = this.applyUserPrivacyFilter(row, requestingUserId);
+      
+      return {
+        id: row.id,
+        userId: row.userId,
+        title: row.title,
+        content: row.content,
+        audioUrl: row.audioUrl,
+        audioPlayable: row.audioPlayable,
+        mediaUrls: row.mediaUrls || [],
+        mediaObjects: row.mediaObjects || [],
+        tags: row.tags || [],
+        privacy: row.privacy as "private" | "shared" | "public",
+        sharedWith: row.sharedWith || [],
+        aiInsights: row.aiInsights,
+        createdAt: row.createdAt!,
+        updatedAt: row.updatedAt!,
+        contentEmbedding: row.contentEmbedding,
+        embeddingVersion: row.embeddingVersion,
+        lastEmbeddingUpdate: row.lastEmbeddingUpdate,
+        searchableText: row.searchableText,
+        user: {
+          id: filteredUser.id,
+          email: filteredUser.email,
+          firstName: filteredUser.firstName,
+          lastName: filteredUser.lastName,
+          username: filteredUser.username,
+          bio: filteredUser.bio,
+          profileImageUrl: filteredUser.profileImageUrl,
+          isProfilePublic: filteredUser.isProfilePublic,
+          createdAt: filteredUser.createdAt,
+          updatedAt: filteredUser.updatedAt,
+        }
+      };
+    });
 
     return entriesWithUser;
   }
 
-  async getFeedJournalEntries(userId: string, limit = 20): Promise<JournalEntryWithUser[]> {
+  async getFeedJournalEntries(userId: string, limit = 20, requestingUserId?: string): Promise<JournalEntryWithUser[]> {
     console.log('🗂️ [DB] Fetching feed entries for userId:', userId);
     
     const result = await this.db
@@ -557,6 +583,10 @@ class DbStorage implements IStorage {
         userIsProfilePublic: users.isProfilePublic,
         userCreatedAt: users.createdAt,
         userUpdatedAt: users.updatedAt,
+        // Privacy fields
+        userFirstNameVisible: users.firstNameVisible,
+        userLastNameVisible: users.lastNameVisible,
+        userEmailVisible: users.emailVisible,
       })
       .from(journalEntries)
       .leftJoin(users, eq(journalEntries.userId, users.id))
@@ -574,43 +604,48 @@ class DbStorage implements IStorage {
 
     console.log('🗂️ [DB] Found', result.length, 'feed entries');
     
-    const entriesWithUser: JournalEntryWithUser[] = result.map((row) => ({
-      id: row.id,
-      userId: row.userId,
-      title: row.title,
-      content: row.content,
-      audioUrl: row.audioUrl,
-      audioPlayable: row.audioPlayable,
-      mediaUrls: row.mediaUrls || [],
-      mediaObjects: row.mediaObjects || [],
-      tags: row.tags || [],
-      privacy: row.privacy as "private" | "shared" | "public",
-      sharedWith: row.sharedWith || [],
-      aiInsights: row.aiInsights,
-      createdAt: row.createdAt!,
-      updatedAt: row.updatedAt!,
-      contentEmbedding: row.contentEmbedding,
-      embeddingVersion: row.embeddingVersion,
-      lastEmbeddingUpdate: row.lastEmbeddingUpdate,
-      searchableText: row.searchableText,
-      user: {
-        id: row.userId,
-        email: row.userEmail!,
-        firstName: row.userFirstName!,
-        lastName: row.userLastName!,
-        username: row.userUsername,
-        bio: row.userBio,
-        profileImageUrl: row.userProfileImageUrl,
-        isProfilePublic: row.userIsProfilePublic,
-        createdAt: row.userCreatedAt!,
-        updatedAt: row.userUpdatedAt!,
-      }
-    }));
+    const entriesWithUser: JournalEntryWithUser[] = result.map((row) => {
+      // Apply privacy filtering to user data for each row
+      const filteredUser = this.applyUserPrivacyFilter(row, requestingUserId);
+      
+      return {
+        id: row.id,
+        userId: row.userId,
+        title: row.title,
+        content: row.content,
+        audioUrl: row.audioUrl,
+        audioPlayable: row.audioPlayable,
+        mediaUrls: row.mediaUrls || [],
+        mediaObjects: row.mediaObjects || [],
+        tags: row.tags || [],
+        privacy: row.privacy as "private" | "shared" | "public",
+        sharedWith: row.sharedWith || [],
+        aiInsights: row.aiInsights,
+        createdAt: row.createdAt!,
+        updatedAt: row.updatedAt!,
+        contentEmbedding: row.contentEmbedding,
+        embeddingVersion: row.embeddingVersion,
+        lastEmbeddingUpdate: row.lastEmbeddingUpdate,
+        searchableText: row.searchableText,
+        user: {
+          id: filteredUser.id,
+          email: filteredUser.email,
+          firstName: filteredUser.firstName,
+          lastName: filteredUser.lastName,
+          username: filteredUser.username,
+          bio: filteredUser.bio,
+          profileImageUrl: filteredUser.profileImageUrl,
+          isProfilePublic: filteredUser.isProfilePublic,
+          createdAt: filteredUser.createdAt,
+          updatedAt: filteredUser.updatedAt,
+        }
+      };
+    });
 
     return entriesWithUser;
   }
 
-  async getSharedJournalEntries(userId: string, limit = 20): Promise<JournalEntryWithUser[]> {
+  async getSharedJournalEntries(userId: string, limit = 20, requestingUserId?: string): Promise<JournalEntryWithUser[]> {
     console.log('🗂️ [DB] Fetching shared entries for userId:', userId);
     
     const result = await this.db
@@ -644,6 +679,10 @@ class DbStorage implements IStorage {
         userIsProfilePublic: users.isProfilePublic,
         userCreatedAt: users.createdAt,
         userUpdatedAt: users.updatedAt,
+        // Privacy fields
+        userFirstNameVisible: users.firstNameVisible,
+        userLastNameVisible: users.lastNameVisible,
+        userEmailVisible: users.emailVisible,
       })
       .from(journalEntries)
       .leftJoin(users, eq(journalEntries.userId, users.id))
@@ -658,38 +697,43 @@ class DbStorage implements IStorage {
 
     console.log('🗂️ [DB] Found', result.length, 'shared entries');
     
-    const entriesWithUser: JournalEntryWithUser[] = result.map((row) => ({
-      id: row.id,
-      userId: row.userId,
-      title: row.title,
-      content: row.content,
-      audioUrl: row.audioUrl,
-      audioPlayable: row.audioPlayable,
-      mediaUrls: row.mediaUrls || [],
-      mediaObjects: row.mediaObjects || [],
-      tags: row.tags || [],
-      privacy: row.privacy as "private" | "shared" | "public",
-      sharedWith: row.sharedWith || [],
-      aiInsights: row.aiInsights,
-      createdAt: row.createdAt!,
-      updatedAt: row.updatedAt!,
-      contentEmbedding: row.contentEmbedding,
-      embeddingVersion: row.embeddingVersion,
-      lastEmbeddingUpdate: row.lastEmbeddingUpdate,
-      searchableText: row.searchableText,
-      user: {
-        id: row.userId,
-        email: row.userEmail!,
-        firstName: row.userFirstName!,
-        lastName: row.userLastName!,
-        username: row.userUsername,
-        bio: row.userBio,
-        profileImageUrl: row.userProfileImageUrl,
-        isProfilePublic: row.userIsProfilePublic,
-        createdAt: row.userCreatedAt!,
-        updatedAt: row.userUpdatedAt!,
-      }
-    }));
+    const entriesWithUser: JournalEntryWithUser[] = result.map((row) => {
+      // Apply privacy filtering to user data for each row
+      const filteredUser = this.applyUserPrivacyFilter(row, requestingUserId);
+      
+      return {
+        id: row.id,
+        userId: row.userId,
+        title: row.title,
+        content: row.content,
+        audioUrl: row.audioUrl,
+        audioPlayable: row.audioPlayable,
+        mediaUrls: row.mediaUrls || [],
+        mediaObjects: row.mediaObjects || [],
+        tags: row.tags || [],
+        privacy: row.privacy as "private" | "shared" | "public",
+        sharedWith: row.sharedWith || [],
+        aiInsights: row.aiInsights,
+        createdAt: row.createdAt!,
+        updatedAt: row.updatedAt!,
+        contentEmbedding: row.contentEmbedding,
+        embeddingVersion: row.embeddingVersion,
+        lastEmbeddingUpdate: row.lastEmbeddingUpdate,
+        searchableText: row.searchableText,
+        user: {
+          id: filteredUser.id,
+          email: filteredUser.email,
+          firstName: filteredUser.firstName,
+          lastName: filteredUser.lastName,
+          username: filteredUser.username,
+          bio: filteredUser.bio,
+          profileImageUrl: filteredUser.profileImageUrl,
+          isProfilePublic: filteredUser.isProfilePublic,
+          createdAt: filteredUser.createdAt,
+          updatedAt: filteredUser.updatedAt,
+        }
+      };
+    });
 
     return entriesWithUser;
   }
@@ -876,6 +920,10 @@ class DbStorage implements IStorage {
         userIsProfilePublic: users.isProfilePublic,
         userCreatedAt: users.createdAt,
         userUpdatedAt: users.updatedAt,
+        // Privacy fields
+        userFirstNameVisible: users.firstNameVisible,
+        userLastNameVisible: users.lastNameVisible,
+        userEmailVisible: users.emailVisible,
       })
       .from(comments)
       .leftJoin(users, eq(comments.userId, users.id))
@@ -1858,6 +1906,10 @@ class DbStorage implements IStorage {
         userIsProfilePublic: users.isProfilePublic,
         userCreatedAt: users.createdAt,
         userUpdatedAt: users.updatedAt,
+        // Privacy fields
+        userFirstNameVisible: users.firstNameVisible,
+        userLastNameVisible: users.lastNameVisible,
+        userEmailVisible: users.emailVisible,
       })
       .from(journalEntries)
       .leftJoin(users, eq(journalEntries.userId, users.id))
@@ -2028,7 +2080,7 @@ export class MemStorage implements IStorage {
     return { ...entry, user };
   }
 
-  async getBulkJournalEntriesWithUser(entryIds: string[], userId: string): Promise<JournalEntryWithUser[]> {
+  async getBulkJournalEntriesWithUser(entryIds: string[], userId: string, requestingUserId?: string): Promise<JournalEntryWithUser[]> {
     const entriesWithUser: JournalEntryWithUser[] = [];
     
     for (const entryId of entryIds) {
@@ -2051,7 +2103,7 @@ export class MemStorage implements IStorage {
     return entriesWithUser;
   }
 
-  async getJournalEntriesByUserId(userId: string, limit = 20): Promise<JournalEntryWithUser[]> {
+  async getJournalEntriesByUserId(userId: string, limit = 20, requestingUserId?: string): Promise<JournalEntryWithUser[]> {
     const allEntries = Array.from(this.journalEntries.values());
     console.log('🗂️ Total entries in storage:', allEntries.length);
     console.log('🗂️ Looking for userId:', userId);
@@ -2080,7 +2132,7 @@ export class MemStorage implements IStorage {
     return entriesWithUser;
   }
 
-  async getFeedJournalEntries(userId: string, limit = 20): Promise<JournalEntryWithUser[]> {
+  async getFeedJournalEntries(userId: string, limit = 20, requestingUserId?: string): Promise<JournalEntryWithUser[]> {
     const allEntries = Array.from(this.journalEntries.values());
     console.log('🗂️ Fetching feed entries for userId:', userId);
     
@@ -2106,7 +2158,7 @@ export class MemStorage implements IStorage {
     return entriesWithUser;
   }
 
-  async getSharedJournalEntries(userId: string, limit = 20): Promise<JournalEntryWithUser[]> {
+  async getSharedJournalEntries(userId: string, limit = 20, requestingUserId?: string): Promise<JournalEntryWithUser[]> {
     const allEntries = Array.from(this.journalEntries.values());
     console.log('🗂️ Fetching shared entries for userId:', userId);
     
