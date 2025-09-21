@@ -7,16 +7,18 @@ const config: CapacitorConfig = {
   server: {
     androidScheme: 'https',
     // Enable live reload for development
-    hostname: 'localhost',
-    iosScheme: 'ionic'
+    hostname: 'localhost'
   },
   plugins: {
     SplashScreen: {
       launchShowDuration: 2000,
-      backgroundColor: "#ffffffff",
+      launchAutoHide: true,
+      backgroundColor: "#ffffff",
       androidSplashResourceName: "splash",
       androidScaleType: "CENTER_CROP",
-      showSpinner: false
+      showSpinner: false,
+      iosSpinnerStyle: "small",
+      spinnerColor: "#999999"
     }
   }
 };

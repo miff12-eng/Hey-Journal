@@ -1,5 +1,25 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
+// API base URL configuration for mobile vs web
+const getApiBaseUrl = () => {
+  // For mobile app builds, use the production API URL
+  if (import.meta.env.VITE_API_BASE_URL) {
+    return import.meta.env.VITE_API_BASE_URL;
+  }
+  // For web builds, use relative URLs (current behavior)
+  return '';
+};
+
+const API_BASE_URL = getApiBaseUrl();
+
+// Helper function to build complete URLs
+const buildApiUrl = (url: string): string => {
+  if (url.startsWith('http') || !API_BASE_URL) {
+    return url; // Already absolute or no base URL configured
+  }
+  return `${API_BASE_URL}${url}`;
+};
+
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     const text = (await res.text()) || res.statusText;
@@ -12,7 +32,8 @@ export async function apiRequest(
   url: string,
   data?: unknown | undefined,
 ): Promise<Response> {
-  const res = await fetch(url, {
+  const fullUrl = buildApiUrl(url);
+  const res = await fetch(fullUrl, {
     method,
     headers: data ? { "Content-Type": "application/json" } : {},
     body: data ? JSON.stringify(data) : undefined,
@@ -31,7 +52,8 @@ export const getQueryFn: <T>(options: {
   async ({ queryKey }) => {
     // Use only the first element as the URL, rest are for cache scoping
     const url = typeof queryKey[0] === 'string' ? queryKey[0] : String(queryKey[0]);
-    const res = await fetch(url, {
+    const fullUrl = buildApiUrl(url);
+    const res = await fetch(fullUrl, {
       credentials: "include",
     });
 
