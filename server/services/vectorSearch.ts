@@ -444,6 +444,7 @@ export async function performVectorSearch(
     if (filters?.people && filters.people.length > 0) {
       // Filter entries tagged with specific people by name
       console.log('👥 People filtering with:', filters.people);
+      console.log('👥 Starting new People filter logic...');
       const { entryPersonTags, people } = await import('../../shared/schema');
       const { inArray, exists, sql } = await import('drizzle-orm');
       
