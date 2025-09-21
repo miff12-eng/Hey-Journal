@@ -224,12 +224,8 @@ export default function JournalEntryCard({
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <p className="text-sm font-medium text-foreground truncate">
-                      {entry.user.firstName || entry.user.email} {entry.user.lastName}
+                      @{entry.user.username || entry.user.email?.split('@')[0] || 'user'}
                     </p>
-                    <Badge variant="secondary" className={cn('h-5 px-1.5 gap-1', privacyColor)}>
-                      {privacyIcon}
-                      <span className="text-xs capitalize">{entry.privacy}</span>
-                    </Badge>
                   </div>
                   <p className="text-xs text-muted-foreground">
                     {formatDate(entry.createdAt!)}
