@@ -1,11 +1,12 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { Input } from '@/components/ui/input'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
-import { Plus, Bell, TrendingUp, Copy, Share2, ExternalLink, Trash2, Users, RefreshCw } from 'lucide-react'
+import { Plus, Bell, TrendingUp, Copy, Share2, ExternalLink, Trash2, Users, RefreshCw, Search, Clock } from 'lucide-react'
 import JournalEntryCard from '@/components/JournalEntryCard'
 import ThemeToggle from '@/components/ThemeToggle'
 import UserSelector from '@/components/UserSelector'
@@ -14,6 +15,23 @@ import { useQuery, useMutation } from '@tanstack/react-query'
 import { queryClient, apiRequest } from '@/lib/queryClient'
 import { useToast } from '@/hooks/use-toast'
 import RecordDialog from '@/components/RecordDialog'
+
+// Enhanced search types for My Journal search
+interface EnhancedSearchResult {
+  entryId: string
+  similarity: number
+  snippet: string
+  title?: string
+  matchReason: string
+}
+
+interface EnhancedSearchResponse {
+  query: string
+  mode: string
+  results: EnhancedSearchResult[]
+  totalResults: number
+  executionTime: number
+}
 
 
 export default function MyJournal() {
@@ -27,8 +45,130 @@ export default function MyJournal() {
   const [recordDialogOpen, setRecordDialogOpen] = useState(false)
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null)
   const [isReprocessing, setIsReprocessing] = useState(false)
+  
+  // Search functionality state
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchResults, setSearchResults] = useState<EnhancedSearchResult[]>([])
+  const [isSearching, setIsSearching] = useState(false)
+  const [searchFocused, setSearchFocused] = useState(false)
+  const [searchHistory, setSearchHistory] = useState<string[]>([])
+  const [hydratedSearchEntries, setHydratedSearchEntries] = useState<JournalEntryWithUser[]>([])
+  
   const { toast } = useToast()
   
+  // Load search history from localStorage on mount
+  useEffect(() => {
+    const savedHistory = localStorage.getItem('myJournalSearchHistory')
+    if (savedHistory) {
+      try {
+        const history = JSON.parse(savedHistory)
+        if (Array.isArray(history)) {
+          setSearchHistory(history.slice(0, 8)) // Limit to 8 items
+        }
+      } catch (error) {
+        console.error('Failed to parse search history:', error)
+      }
+    }
+  }, [])
+  
+  // Save search to history
+  const saveSearchToHistory = (query: string) => {
+    if (!query.trim()) return
+    
+    const trimmedQuery = query.trim()
+    const newHistory = [trimmedQuery, ...searchHistory.filter(item => item !== trimmedQuery)].slice(0, 8)
+    setSearchHistory(newHistory)
+    localStorage.setItem('myJournalSearchHistory', JSON.stringify(newHistory))
+  }
+  
+  // Handle search execution
+  const handleSearch = (query: string) => {
+    if (query.trim()) {
+      saveSearchToHistory(query)
+      // Trigger the search mutation
+      searchMutation.mutate({ query: query.trim() })
+    }
+  }
+
+  // Enhanced search mutation for My Journal search
+  const searchMutation = useMutation({
+    mutationFn: async (params: { query: string }) => {
+      console.log('🚀 Performing enhanced My Journal search:', params);
+      setIsSearching(true);
+      const response = await apiRequest('POST', '/api/search/enhanced', {
+        query: params.query,
+        mode: 'hybrid', // Use hybrid search for best results
+        limit: 20,
+        source: 'search', // Use valid enum value
+        filters: { type: 'feed' } // Use valid enum value - backend will filter to user's entries automatically
+      });
+      const data = await response.json() as EnhancedSearchResponse;
+      console.log('🎯 Enhanced My Journal search results:', data);
+      return data;
+    },
+    onSuccess: (data) => {
+      setSearchResults(data.results);
+      setIsSearching(false);
+    },
+    onError: (error) => {
+      console.error('My Journal search error:', error);
+      setSearchResults([]);
+      setIsSearching(false);
+    }
+  });
+
+  // Bulk fetch search result entries with proper data
+  const bulkFetchMutation = useMutation({
+    mutationFn: async (entryIds: string[]) => {
+      if (entryIds.length === 0) return [];
+      const response = await apiRequest('POST', '/api/journal/entries/bulk', { entryIds });
+      return await response.json() as JournalEntryWithUser[];
+    }
+  });
+
+  // Debounced search - trigger enhanced search when query changes
+  useEffect(() => {
+    if (searchQuery.trim()) {
+      const timer = setTimeout(() => {
+        searchMutation.mutate({ 
+          query: searchQuery
+        });
+      }, 300); // Debounce search
+      return () => clearTimeout(timer);
+    } else {
+      setSearchResults([]);
+      setIsSearching(false);
+    }
+  }, [searchQuery]);
+
+  // Hide dropdown when search results are rendered
+  useEffect(() => {
+    if (!isSearching && searchResults.length > 0) {
+      setSearchFocused(false);
+    }
+  }, [isSearching, searchResults]);
+
+  // When search results change, fetch full entry data and preserve order
+  useEffect(() => {
+    if (searchResults.length > 0) {
+      const entryIds = searchResults.map(result => result.entryId);
+      bulkFetchMutation.mutate(entryIds, {
+        onSuccess: (fullEntries) => {
+          // Preserve the order from search results by sorting fullEntries
+          const orderedEntries = entryIds.map(id => 
+            fullEntries.find(entry => entry.id === id)
+          ).filter(Boolean) as JournalEntryWithUser[];
+          setHydratedSearchEntries(orderedEntries);
+        },
+        onError: (error) => {
+          console.error('Failed to fetch search result entries:', error);
+          setHydratedSearchEntries([]);
+        }
+      });
+    } else {
+      setHydratedSearchEntries([]);
+    }
+  }, [searchResults]);
 
   // Re-process photos mutation
   const reprocessPhotosMutation = useMutation({
@@ -83,28 +223,19 @@ export default function MyJournal() {
   })
 
   // Fetch usage statistics
-  const { data: stats = {} } = useQuery<{entriesThisWeek: number, dayStreak: number, daysSinceLastEntry: number}>({
+  const { data: stats = { entriesThisWeek: 0, dayStreak: 0, daysSinceLastEntry: 0 } } = useQuery<{entriesThisWeek: number, dayStreak: number, daysSinceLastEntry: number}>({
     queryKey: ['/api/journal/stats'],
     refetchInterval: 60000, // Refresh every minute
   })
 
-  // Transform API entries to include user data for display
-  const displayEntries: JournalEntryWithUser[] = entries.map(entry => ({
-    ...entry,
-    user: user || {
-      id: 'loading',
-      firstName: 'Loading...',
-      lastName: '',
-      email: '',
-      profileImageUrl: '',
-      createdAt: new Date(),
-      updatedAt: new Date()
-    } // Use real user data or loading placeholder
-    // Note: Keep audioUrl from server response, don't override it
-  }))
+  // Use entries directly from API - they already contain proper user data
+  const displayEntries: JournalEntryWithUser[] = entries
 
-  // Show all entries without filtering
-  const filteredEntries = displayEntries
+  // Enhanced search: If search query exists, show hydrated search results instead of all entries
+  const filteredEntries = searchQuery.trim() ? 
+    hydratedSearchEntries :
+    // When not searching, show all entries
+    displayEntries
 
   const handleEdit = (entryId: string) => {
     setEditingEntryId(entryId)
@@ -293,7 +424,7 @@ export default function MyJournal() {
     <div className="flex flex-col h-screen bg-background">
       {/* Header */}
       <header className="sticky top-0 z-40 bg-background border-b border-border px-4 py-3">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <Avatar className="h-8 w-8">
               <AvatarImage 
@@ -314,6 +445,54 @@ export default function MyJournal() {
           </div>
           
           <div className="flex items-center gap-2">
+            {/* Search bar - inline with title and avatar */}
+            <div className="w-80 relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search your journal entries..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onFocus={() => setSearchFocused(true)}
+                onBlur={() => setTimeout(() => setSearchFocused(false), 150)} // Delay to allow clicks
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleSearch(searchQuery)
+                    setSearchFocused(false) // Hide dropdown after search
+                  }
+                }}
+                className="pl-10 pr-4"
+                data-testid="input-search-my-journal"
+              />
+              
+              {/* Recent searches dropdown - only show when focused and have history */}
+              {searchFocused && searchHistory.length > 0 && (
+                <div className="absolute top-full left-0 right-0 bg-background border border-border rounded-md shadow-lg mt-1 z-50">
+                  <div className="p-2">
+                    <h4 className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-2">
+                      <Clock className="h-3 w-3" />
+                      Recent Searches
+                    </h4>
+                    <div className="space-y-1">
+                      {searchHistory.map((search, index) => (
+                        <button
+                          key={index}
+                          onClick={() => {
+                            setSearchQuery(search)
+                            handleSearch(search)
+                            setSearchFocused(false)
+                          }}
+                          className="w-full text-left p-2 text-sm hover:bg-muted rounded-sm transition-colors"
+                          data-testid={`recent-search-${index}`}
+                        >
+                          {search}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+            
             <Button 
               variant="ghost" 
               size="icon" 
@@ -370,8 +549,29 @@ export default function MyJournal() {
       <main className="flex-1">
         <ScrollArea className="h-full">
           <div className="p-4 space-y-4 pb-20"> {/* Extra bottom padding for navigation */}
-            {/* Create Entry CTA - only show when there are entries */}
-            {!isLoading && !error && displayEntries.length > 0 && (
+            {/* Search Status Bar - Show when searching */}
+            {searchQuery.trim() && (
+              <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg border">
+                <div className="flex items-center gap-2">
+                  <Search className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm font-medium">Search: "{searchQuery}"</span>
+                  {isSearching && (
+                    <div className="animate-spin h-4 w-4 border-2 border-primary border-t-transparent rounded-full" />
+                  )}
+                </div>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => setSearchQuery('')}
+                  data-testid="button-clear-search"
+                >
+                  Clear
+                </Button>
+              </div>
+            )}
+            
+            {/* Create Entry CTA - only show when there are entries and not searching */}
+            {!isLoading && !error && !searchQuery.trim() && displayEntries.length > 0 && (
               <div className="mb-6">
                 <Button 
                   size="default"
@@ -384,8 +584,17 @@ export default function MyJournal() {
                 </Button>
               </div>
             )}
-            {/* Loading state */}
-            {isLoading && (
+            
+            {/* Search Loading state */}
+            {isSearching && searchQuery.trim() && (
+              <div className="text-center py-12">
+                <div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full mx-auto mb-4" />
+                <p className="text-sm text-muted-foreground">Searching your journal entries...</p>
+              </div>
+            )}
+            
+            {/* Regular Loading state */}
+            {isLoading && !searchQuery.trim() && (
               <div className="text-center py-12">
                 <div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full mx-auto mb-4" />
                 <p className="text-sm text-muted-foreground">Loading your journal entries...</p>
@@ -408,8 +617,47 @@ export default function MyJournal() {
               </div>
             )}
             
-            {/* Real entries */}
-            {!isLoading && !error && filteredEntries.map((entry) => (
+            {/* Search Results */}
+            {!isSearching && searchQuery.trim() && filteredEntries.length > 0 && (
+              <div className="space-y-4">
+                <div className="text-sm text-muted-foreground mb-4">
+                  Found {filteredEntries.length} result{filteredEntries.length !== 1 ? 's' : ''}
+                </div>
+                {filteredEntries.map((entry) => (
+                  <JournalEntryCard
+                    key={entry.id}
+                    entry={entry}
+                    onEdit={handleEdit}
+                    onShare={handleShare}
+                    onDelete={handleDelete}
+                    showUserInfo={false}
+                  />
+                ))}
+              </div>
+            )}
+            
+            {/* No Search Results */}
+            {!isSearching && searchQuery.trim() && filteredEntries.length === 0 && (
+              <div className="text-center py-12" data-testid="no-search-results">
+                <div className="h-16 w-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Search className="h-8 w-8 text-muted-foreground" />
+                </div>
+                <h3 className="text-lg font-medium text-foreground mb-2">No results found</h3>
+                <p className="text-sm text-muted-foreground mb-4 max-w-sm mx-auto">
+                  No journal entries match "{searchQuery}". Try different keywords or check your spelling.
+                </p>
+                <Button 
+                  variant="outline"
+                  onClick={() => setSearchQuery('')}
+                  data-testid="button-clear-search-no-results"
+                >
+                  Clear Search
+                </Button>
+              </div>
+            )}
+            
+            {/* Regular entries - only show when not searching */}
+            {!isLoading && !error && !searchQuery.trim() && filteredEntries.map((entry) => (
               <JournalEntryCard
                 key={entry.id}
                 entry={entry}
@@ -420,8 +668,8 @@ export default function MyJournal() {
               />
             ))}
             
-            {/* Empty state */}
-            {!isLoading && !error && displayEntries.length === 0 && (
+            {/* Empty state - only show when not searching */}
+            {!isLoading && !error && !searchQuery.trim() && displayEntries.length === 0 && (
               <div className="text-center py-12">
                 <div className="h-16 w-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
                   <Plus className="h-8 w-8 text-muted-foreground" />
