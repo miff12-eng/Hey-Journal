@@ -30,10 +30,14 @@ export const users = pgTable("users", {
   email: varchar("email").unique(),
   firstName: varchar("first_name"),
   lastName: varchar("last_name"),
-  username: varchar("username"),
+  username: varchar("username").notNull().unique(),
   bio: varchar("bio"),
   profileImageUrl: varchar("profile_image_url"),
   isProfilePublic: boolean("is_profile_public").default(true),
+  // Privacy controls for profile information visibility to connections
+  firstNameVisible: boolean("first_name_visible").default(true),
+  lastNameVisible: boolean("last_name_visible").default(true),
+  emailVisible: boolean("email_visible").default(false),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => [
@@ -334,6 +338,7 @@ export type PublicUser = {
   bio: string | null;
   profileImageUrl: string | null;
   publicEntriesCount?: number;
+  // Note: Privacy controls are handled server-side before creating PublicUser objects
 };
 
 export type PublicJournalEntry = {
