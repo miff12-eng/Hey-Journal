@@ -567,10 +567,9 @@ export default function MyJournal() {
             <Popover open={filterOpen} onOpenChange={setFilterOpen}>
               <PopoverTrigger asChild>
                 <Button 
-                  variant="ghost" 
+                  variant={hasActiveFilters() ? 'default' : 'ghost'} 
                   size="icon" 
                   data-testid="button-filter"
-                  className={selectedPeople.length > 0 || dateRange.from || dateRange.to ? 'text-primary' : ''}
                 >
                   <Filter className="h-4 w-4" />
                 </Button>
