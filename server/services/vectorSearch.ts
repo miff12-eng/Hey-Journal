@@ -541,22 +541,23 @@ export async function performConversationalSearch(
   try {
     console.log('🤖 Starting conversational search for:', query, filters ? 'with filters' : '');
 
-    // Check if this is a temporal query
-    const isTemporalQuery = detectTemporalQuery(query);
-    console.log('⏰ Temporal query detected:', isTemporalQuery);
+    // Only apply temporal query detection for Feed page, not Search page
+    // Search page should be purely semantic to find relevant historical content
+    const isTemporalQuery = source === 'feed' && detectTemporalQuery(query);
+    console.log('⏰ Temporal query detected for Feed:', isTemporalQuery);
 
     let relevantEntries: VectorSearchResult[] = [];
 
     if (isTemporalQuery) {
-      // Step 1a: For temporal queries, combine recent entries with semantic search
-      console.log('🕐 Using temporal search strategy...');
+      // Step 1a: For temporal queries on Feed page, combine recent entries with semantic search
+      console.log('🕐 Using temporal search strategy for Feed...');
       
       // Get recent entries (last 30 days, sorted by date)
       const recentEntries = await getRecentEntries(userId, 5, filters);
       console.log('📅 Found', recentEntries.length, 'recent entries');
       
-      // Get semantic matches
-      const semanticEntries = await performVectorSearch(query, userId, 5, 0.1, filters);
+      // Get semantic matches with lower threshold for temporal queries
+      const semanticEntries = await performVectorSearch(query, userId, 5, 0.15, filters);
       console.log('🔍 Found', semanticEntries.length, 'semantic matches');
       
       // Combine and deduplicate entries
@@ -572,8 +573,11 @@ export async function performConversationalSearch(
       relevantEntries = Array.from(uniqueEntries.values()).slice(0, 8);
       console.log('🔄 Combined to', relevantEntries.length, 'unique entries for temporal query');
     } else {
-      // Step 1b: Regular semantic vector search for non-temporal queries
-      relevantEntries = await performVectorSearch(query, userId, 8, 0.15, filters);
+      // Step 1b: Regular semantic vector search - prioritize relevance over recency
+      // Use higher threshold for better quality results, especially for Search page
+      const threshold = source === 'search' ? 0.25 : 0.15;
+      relevantEntries = await performVectorSearch(query, userId, 8, threshold, filters, source);
+      console.log(`🔍 Using semantic search with threshold ${threshold} for ${source || 'general'} search`);
     }
     
     if (relevantEntries.length === 0) {
@@ -724,11 +728,40 @@ export async function performHybridSearch(
     
     console.log(`🎯 Feed optimization: threshold=${threshold}, searchLimit=${searchLimit}, source=${source}`);
 
-    // Get both vector and keyword results
-    const [vectorResults, keywordResults] = await Promise.all([
-      performVectorSearch(query, userId, searchLimit, threshold, filters, source),
-      performKeywordSearch(query, userId, searchLimit, filters) // Helper function for keyword search
-    ]);
+    // Check for temporal queries on Feed page
+    const isTemporalQuery = source === 'feed' && detectTemporalQuery(query);
+    console.log('⏰ Temporal query detected for Feed:', isTemporalQuery);
+
+    let vectorResults: VectorSearchResult[] = [];
+    let keywordResults: VectorSearchResult[] = [];
+
+    if (isTemporalQuery) {
+      // For temporal queries on Feed page, combine recent entries with hybrid search
+      console.log('🕐 Using temporal search strategy for Feed...');
+      
+      // Get recent entries (last 30 days, sorted by date)
+      const recentEntries = await getRecentEntries(userId, Math.floor(searchLimit / 2), filters);
+      console.log('📅 Found', recentEntries.length, 'recent entries');
+      
+      // Get regular hybrid search results with remaining limit
+      const remainingLimit = searchLimit - recentEntries.length;
+      const [temporalVectorResults, temporalKeywordResults] = await Promise.all([
+        performVectorSearch(query, userId, remainingLimit, threshold, filters, source),
+        performKeywordSearch(query, userId, remainingLimit, filters)
+      ]);
+      
+      // Combine recent entries with hybrid results, prioritizing recency for temporal queries
+      vectorResults = [...recentEntries, ...temporalVectorResults];
+      keywordResults = temporalKeywordResults;
+      
+      console.log('🔄 Combined temporal search: recent(' + recentEntries.length + ') + vector(' + temporalVectorResults.length + ') + keyword(' + temporalKeywordResults.length + ')');
+    } else {
+      // Regular hybrid search
+      [vectorResults, keywordResults] = await Promise.all([
+        performVectorSearch(query, userId, searchLimit, threshold, filters, source),
+        performKeywordSearch(query, userId, searchLimit, filters) // Helper function for keyword search
+      ]);
+    }
 
     // Combine and weight results based on mode
     const combinedResults = new Map<string, VectorSearchResult>();
