@@ -137,6 +137,13 @@ export default function Home() {
       setIsSearching(false);
     }
   }, [searchQuery, activeFilter]);
+
+  // Hide dropdown when search results are rendered
+  useEffect(() => {
+    if (!isSearching && searchResults.length > 0) {
+      setSearchFocused(false);
+    }
+  }, [isSearching, searchResults]);
   
   // Fetch real user data
   const { data: user, isLoading: isLoadingUser } = useQuery<{
@@ -426,7 +433,7 @@ export default function Home() {
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
                 handleSearch(searchQuery)
-                // Keep search focused to show updated dropdown
+                setSearchFocused(false) // Hide dropdown after search
               }
             }}
             className="pl-10 pr-4"
