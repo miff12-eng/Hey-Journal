@@ -73,7 +73,7 @@ async function applyFeedRanking(results: VectorSearchResult[], userId: string): 
 
     const { db } = await import('../db');
     const { journalEntries, likes, comments } = await import('../../shared/schema');
-    const { eq, and, count, desc, inArray } = await import('drizzle-orm');
+    const { eq, and, count, desc, inArray, gte } = await import('drizzle-orm');
 
     // Get entry details with engagement metrics
     const entryIds = results.map(r => r.entryId);
