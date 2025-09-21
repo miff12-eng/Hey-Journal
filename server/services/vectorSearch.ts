@@ -499,7 +499,11 @@ export async function performVectorSearch(
     // Step 3: Calculate similarities in memory (for PostgreSQL without pgvector operators)
     const similarities: VectorSearchResult[] = [];
 
+    console.log('🎯 Starting similarity calculation for', entriesWithEmbeddings.length, 'entries');
+    console.log('🎯 Query text:', queryText.trim(), 'Filters:', filters);
+
     for (const entry of entriesWithEmbeddings) {
+      console.log('🔍 Processing entry:', entry.id, 'title:', entry.title, 'hasEmbedding:', !!entry.contentEmbedding);
       try {
         if (!entry.contentEmbedding) continue;
 
@@ -518,6 +522,17 @@ export async function performVectorSearch(
         // For wildcard queries with filters, bypass similarity threshold since user wants all filtered results
         const isWildcardWithFilters = queryText.trim() === '*' && hasActiveFilters;
         const passesThreshold = isWildcardWithFilters || similarity >= similarityThreshold;
+        
+        console.log('🔍 Entry similarity check:', {
+          entryId: entry.id,
+          entryTitle: entry.title,
+          similarity: similarity.toFixed(4),
+          threshold: similarityThreshold,
+          hasActiveFilters,
+          isWildcardWithFilters,
+          passesThreshold,
+          queryText: queryText.trim()
+        });
         
         if (passesThreshold) {
           // Create snippet from searchable text or content
