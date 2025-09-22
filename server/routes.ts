@@ -65,6 +65,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // Authentication middleware for protected routes
   app.use('/api', async (req, res, next) => {
+    // Debug ALL requests to understand mobile authentication issues
+    console.log('🔧 API Request Debug:', {
+      path: req.path,
+      method: req.method,
+      userAgent: req.headers['user-agent']?.slice(0, 100),
+      origin: req.headers.origin,
+      referer: req.headers.referer,
+      hasSession: !!req.session,
+      sessionId: (req.session as any)?.id?.slice(-8)
+    });
     // Skip authentication for OAuth endpoints and health check
     if (req.originalUrl.startsWith('/api/login') ||
         req.originalUrl.startsWith('/api/callback') ||
