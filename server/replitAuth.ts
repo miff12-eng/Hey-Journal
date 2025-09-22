@@ -174,7 +174,9 @@ export async function setupAuth(app: Express) {
 export const isAuthenticated: RequestHandler = async (req, res, next) => {
   const user = req.user as any;
 
-  if (!req.isAuthenticated() || !user.expires_at) {
+  // Mobile-friendly authentication check - don't rely on req.isAuthenticated() 
+  // which doesn't work properly in Capacitor WebViews
+  if (!user?.expires_at) {
     return res.status(401).json({ message: "Unauthorized" });
   }
 
