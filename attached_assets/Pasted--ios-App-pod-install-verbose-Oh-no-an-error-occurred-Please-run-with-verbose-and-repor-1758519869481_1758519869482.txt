@@ -1,0 +1,19 @@
+~/.../ios/App$ pod install --verbose
+Oh no, an error occurred. Please run with `--verbose' and report on https://github.com/alloy/cocoapods/issues.
+
+wrong number of arguments (given 2, expected 0..1)
+/nix/store/q07va2yc4ngab9r0rpjsx9hnh5sv6lkk-ruby3.3-cocoapods-0.2.0/lib/ruby/gems/3.3.0/gems/cocoapods-0.2.0/lib/cocoapods/podfile.rb:21:in `platform'
+/home/runner/workspace/ios/App/Podfile:3:in `block in from_file'
+/nix/store/q07va2yc4ngab9r0rpjsx9hnh5sv6lkk-ruby3.3-cocoapods-0.2.0/lib/ruby/gems/3.3.0/gems/cocoapods-0.2.0/lib/cocoapods/podfile.rb:5:in `eval'
+/nix/store/q07va2yc4ngab9r0rpjsx9hnh5sv6lkk-ruby3.3-cocoapods-0.2.0/lib/ruby/gems/3.3.0/gems/cocoapods-0.2.0/lib/cocoapods/podfile.rb:5:in `block in from_file'
+/nix/store/q07va2yc4ngab9r0rpjsx9hnh5sv6lkk-ruby3.3-cocoapods-0.2.0/lib/ruby/gems/3.3.0/gems/cocoapods-0.2.0/lib/cocoapods/podfile.rb:14:in `instance_eval'
+/nix/store/q07va2yc4ngab9r0rpjsx9hnh5sv6lkk-ruby3.3-cocoapods-0.2.0/lib/ruby/gems/3.3.0/gems/cocoapods-0.2.0/lib/cocoapods/podfile.rb:14:in `initialize'
+/nix/store/q07va2yc4ngab9r0rpjsx9hnh5sv6lkk-ruby3.3-cocoapods-0.2.0/lib/ruby/gems/3.3.0/gems/cocoapods-0.2.0/lib/cocoapods/podfile.rb:4:in `new'
+/nix/store/q07va2yc4ngab9r0rpjsx9hnh5sv6lkk-ruby3.3-cocoapods-0.2.0/lib/ruby/gems/3.3.0/gems/cocoapods-0.2.0/lib/cocoapods/podfile.rb:4:in `from_file'
+/nix/store/q07va2yc4ngab9r0rpjsx9hnh5sv6lkk-ruby3.3-cocoapods-0.2.0/lib/ruby/gems/3.3.0/gems/cocoapods-0.2.0/lib/cocoapods/config.rb:48:in `rootspec'
+/nix/store/q07va2yc4ngab9r0rpjsx9hnh5sv6lkk-ruby3.3-cocoapods-0.2.0/lib/ruby/gems/3.3.0/gems/cocoapods-0.2.0/lib/cocoapods/command/install.rb:40:in `run'
+/nix/store/q07va2yc4ngab9r0rpjsx9hnh5sv6lkk-ruby3.3-cocoapods-0.2.0/lib/ruby/gems/3.3.0/gems/cocoapods-0.2.0/lib/cocoapods/command.rb:51:in `run'
+/nix/store/q07va2yc4ngab9r0rpjsx9hnh5sv6lkk-ruby3.3-cocoapods-0.2.0/lib/ruby/gems/3.3.0/gems/cocoapods-0.2.0/bin/pod:9:in `<top (required)>'
+/nix/store/q07va2yc4ngab9r0rpjsx9hnh5sv6lkk-ruby3.3-cocoapods-0.2.0/bin/pod:18:in `load'
+/nix/store/q07va2yc4ngab9r0rpjsx9hnh5sv6lkk-ruby3.3-cocoapods-0.2.0/bin/pod:18:in `<main>'
+~/.../ios/App$ 
