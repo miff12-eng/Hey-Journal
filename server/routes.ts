@@ -236,13 +236,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Get authenticated user from OAuth
   app.get('/api/auth/user', async (req, res) => {
-    const user = req.user as any;
-    if (!req.isAuthenticated() || !user?.claims?.sub) {
+    // Use the same authentication pattern as other working endpoints
+    if (!req.userId) {
       return res.status(401).json({ message: 'Not authenticated' });
     }
     
-    // Get user from storage using OAuth claims
-    const dbUser = await storage.getUser(user.claims.sub);
+    // Get user from storage using userId (set by authentication middleware)
+    const dbUser = await storage.getUser(req.userId);
     if (!dbUser) {
       return res.status(404).json({ message: 'User not found' });
     }
