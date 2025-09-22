@@ -328,6 +328,19 @@ export default function MyJournal() {
     // When not searching and no filters active, show all entries
     displayEntries
 
+  // 📱 Mobile UI Debug: Track what's being rendered
+  console.log('📱 Mobile UI Debug:', {
+    isLoading,
+    error: error?.message,
+    entriesLength: entries?.length,
+    displayEntriesLength: displayEntries.length,
+    filteredEntriesLength: filteredEntries.length,
+    searchQuery: searchQuery.trim(),
+    hasActiveFilters: hasActiveFilters(),
+    isSearching,
+    showingSearchResults: !!(searchQuery.trim() || hasActiveFilters())
+  })
+
   const handleEdit = (entryId: string) => {
     setEditingEntryId(entryId)
     setRecordDialogOpen(true)
