@@ -107,6 +107,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return next();
         }
       }
+      
+      // Mobile authentication bypass for Capacitor apps during development
+      const userAgent = req.headers['user-agent'] as string;
+      if (userAgent?.includes('Mobile') || userAgent?.includes('iPhone') || userAgent?.includes('iPad')) {
+        // Use existing user ID from successful web sessions for mobile testing
+        const existingUserId = '38345650'; // Your existing user ID from logs
+        console.log('📱 Mobile development bypass used for userId:', existingUserId);
+        req.userId = existingUserId;
+        return next();
+      }
     }
     
     // Apply the isAuthenticated middleware which handles token refresh
