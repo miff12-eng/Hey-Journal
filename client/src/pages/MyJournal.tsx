@@ -287,7 +287,7 @@ export default function MyJournal() {
 
   // Fetch user's own journal entries
   const { data: entries = [], isLoading, error, refetch } = useQuery<JournalEntryWithUser[]>({
-    queryKey: ['/api/journal/entries', 'own'],
+    queryKey: ['/api/journal/entries?type=own'],
     refetchInterval: 30000, // Refresh every 30 seconds
   })
 
