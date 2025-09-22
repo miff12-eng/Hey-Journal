@@ -236,17 +236,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Get authenticated user from OAuth
   app.get('/api/auth/user', async (req, res) => {
+    // Debug logging for mobile authentication issues
+    console.log('🔍 /api/auth/user Debug:', {
+      userId: req.userId,
+      hasSession: !!req.session,
+      isAuthenticated: req.isAuthenticated?.(),
+      userAgent: req.headers['user-agent'],
+      hasUser: !!(req.user as any),
+      userClaimsSub: (req.user as any)?.claims?.sub,
+      cookies: Object.keys(req.cookies || {}),
+      sessionId: (req.session as any)?.id?.slice(-8) // Last 8 chars for privacy
+    });
+    
     // Use the same authentication pattern as other working endpoints
     if (!req.userId) {
+      console.log('❌ /api/auth/user failed: no req.userId');
       return res.status(401).json({ message: 'Not authenticated' });
     }
     
     // Get user from storage using userId (set by authentication middleware)
     const dbUser = await storage.getUser(req.userId);
     if (!dbUser) {
+      console.log('❌ /api/auth/user failed: user not found in DB for userId:', req.userId);
       return res.status(404).json({ message: 'User not found' });
     }
     
+    console.log('✅ /api/auth/user success for userId:', req.userId);
     res.json(dbUser);
   });
 
