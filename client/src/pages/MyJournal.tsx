@@ -288,7 +288,28 @@ export default function MyJournal() {
   // Fetch user's own journal entries
   const { data: entries = [], isLoading, error, refetch } = useQuery<JournalEntryWithUser[]>({
     queryKey: ['/api/journal/entries', 'own'],
-    queryFn: () => fetch('/api/journal/entries?type=own', { credentials: 'include' }).then(res => res.json()),
+    queryFn: async () => {
+      console.log('🔍 Mobile Debug: Fetching journal entries for mobile app');
+      const url = '/api/journal/entries?type=own';
+      console.log('🔍 Mobile Debug: Request URL:', url);
+      
+      try {
+        const response = await fetch(url, { credentials: 'include' });
+        console.log('🔍 Mobile Debug: Response status:', response.status);
+        console.log('🔍 Mobile Debug: Response headers:', Object.fromEntries(response.headers.entries()));
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        console.log('🔍 Mobile Debug: Received entries:', data?.length || 0);
+        return data;
+      } catch (error) {
+        console.error('🔍 Mobile Debug: Fetch error:', error);
+        throw error;
+      }
+    },
     refetchInterval: 30000, // Refresh every 30 seconds
   })
 
