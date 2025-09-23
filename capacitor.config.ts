@@ -6,8 +6,9 @@ const config: CapacitorConfig = {
   webDir: 'dist/public', // Vite builds to 'dist/public' directory
   server: {
     androidScheme: 'https',
-    // Enable live reload for development
-    hostname: 'localhost'
+    // Enable live reload for development - connect directly to dev server
+    url: 'https://20d6502d-bd0d-49a0-81b5-48a789e7beaa-00-190ybovf3mjps.worf.replit.dev',
+    cleartext: true
   },
   plugins: {
     SplashScreen: {
