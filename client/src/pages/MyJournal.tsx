@@ -38,6 +38,9 @@ interface EnhancedSearchResponse {
 
 
 export default function MyJournal() {
+  // Force debug logging on mobile
+  console.log('🎯 MyJournal component MOUNTED - Mobile debugging')
+  
   const [shareModalOpen, setShareModalOpen] = useState(false)
   const [sharingEntryId, setSharingEntryId] = useState<string | null>(null)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
