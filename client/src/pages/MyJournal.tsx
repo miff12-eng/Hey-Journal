@@ -525,6 +525,11 @@ export default function MyJournal() {
 
   return (
     <div className="flex flex-col h-screen bg-background">
+      {/* MOBILE CACHE TEST - This should appear on fresh code */}
+      <div className="bg-red-500 text-white text-center py-2 font-bold text-sm">
+        🚨 MOBILE CACHE TEST v2.0 - FRESH CODE LOADED 🚨
+      </div>
+      
       {/* Header */}
       <header className="sticky top-0 z-40 bg-background border-b border-border px-4 py-3">
         <div className="flex items-center justify-between gap-4">
