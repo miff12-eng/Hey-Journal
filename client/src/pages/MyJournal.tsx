@@ -285,10 +285,25 @@ export default function MyJournal() {
     refetchInterval: 60000, // Refresh every minute
   })
 
-  // Fetch user's own journal entries
+  // Fetch user's own journal entries - aggressive mobile debugging
   const { data: entries = [], isLoading, error, refetch } = useQuery<JournalEntryWithUser[]>({
-    queryKey: ['/api/journal/entries?type=own'],
-    refetchInterval: 30000, // Refresh every 30 seconds
+    queryKey: ['/api/journal/entries?type=own', 'v3'], // Force completely new cache key
+    enabled: true, // Force enabled
+    retry: 5, // More retries
+    refetchInterval: 15000, // More frequent refresh
+    staleTime: 0, // Always consider stale
+    gcTime: 0, // Don't cache 
+    refetchOnMount: true, // Force refetch on mount
+    refetchOnWindowFocus: true, // Force refetch on focus
+    refetchOnReconnect: true, // Force refetch on reconnect
+  })
+  
+  // Debug logging for mobile
+  console.log('🔍 MyJournal Query Debug:', {
+    isLoading,
+    error: error?.message,
+    entriesCount: entries?.length,
+    userAgent: navigator.userAgent.includes('Mobile'),
   })
 
   // Fetch usage statistics
