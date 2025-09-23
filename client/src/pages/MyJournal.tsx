@@ -302,6 +302,26 @@ export default function MyJournal() {
     isMobile: navigator.userAgent.includes('Mobile'),
     timestamp: new Date().toISOString()
   })
+
+  // Force manual fetch test on mobile
+  useEffect(() => {
+    if (navigator.userAgent.includes('Mobile')) {
+      console.log('🧪 MOBILE TEST: Starting manual fetch of journal entries...')
+      fetch('/api/journal/entries?type=own', {
+        credentials: 'include'
+      })
+      .then(response => {
+        console.log('🧪 MOBILE TEST: Response status:', response.status)
+        return response.json()
+      })
+      .then(data => {
+        console.log('🧪 MOBILE TEST: Entries data:', data?.length, 'entries')
+      })
+      .catch(error => {
+        console.log('🧪 MOBILE TEST: Fetch error:', error.message)
+      })
+    }
+  }, [])
   
 
   // Fetch usage statistics
