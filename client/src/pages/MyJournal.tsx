@@ -43,6 +43,15 @@ export default function MyJournal() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [deletingEntryId, setDeletingEntryId] = useState<string | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
+  
+  // FORCE CACHE CLEAR FOR MOBILE - AGGRESSIVE FIX
+  useEffect(() => {
+    console.log('🚨🚨🚨 MYJOURNAL COMPONENT MOUNTED - MOBILE DEBUG')
+    console.log('🔥 FORCING COMPLETE CACHE INVALIDATION')
+    queryClient.clear() // Clear entire React Query cache
+    queryClient.invalidateQueries() // Invalidate all queries
+    console.log('🎯 Cache cleared, queries invalidated')
+  }, [])
   const [selectedUsersForSharing, setSelectedUsersForSharing] = useState<{id: string, email: string, username?: string, firstName?: string, lastName?: string, profileImageUrl?: string}[]>([])
   const [isLoadingSharing, setIsLoadingSharing] = useState(false)
   const [recordDialogOpen, setRecordDialogOpen] = useState(false)
