@@ -38,9 +38,6 @@ interface EnhancedSearchResponse {
 
 
 export default function MyJournal() {
-  // Force debug logging on mobile
-  console.log('🎯 MyJournal component MOUNTED - Mobile debugging')
-  
   const [shareModalOpen, setShareModalOpen] = useState(false)
   const [sharingEntryId, setSharingEntryId] = useState<string | null>(null)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
@@ -289,39 +286,13 @@ export default function MyJournal() {
     refetchInterval: 60000, // Refresh every minute
   })
 
-  // Fetch user's own journal entries
+  // Fetch user's own journal entries with mobile cache busting
   const { data: entries = [], isLoading, error, refetch } = useQuery<JournalEntryWithUser[]>({
-    queryKey: ['/api/journal/entries?type=own'],
+    queryKey: ['/api/journal/entries?type=own', Date.now()], // Force cache bust with timestamp
+    staleTime: 0, // Disable caching
+    gcTime: 0, // Don't cache results
   })
 
-  // Debug logging for mobile
-  console.log('🔍 MyJournal mounted, entries query status:', {
-    isLoading,
-    entriesCount: entries?.length,
-    error: error?.message,
-    isMobile: navigator.userAgent.includes('Mobile'),
-    timestamp: new Date().toISOString()
-  })
-
-  // Force manual fetch test on mobile
-  useEffect(() => {
-    if (navigator.userAgent.includes('Mobile')) {
-      console.log('🧪 MOBILE TEST: Starting manual fetch of journal entries...')
-      fetch('/api/journal/entries?type=own', {
-        credentials: 'include'
-      })
-      .then(response => {
-        console.log('🧪 MOBILE TEST: Response status:', response.status)
-        return response.json()
-      })
-      .then(data => {
-        console.log('🧪 MOBILE TEST: Entries data:', data?.length, 'entries')
-      })
-      .catch(error => {
-        console.log('🧪 MOBILE TEST: Fetch error:', error.message)
-      })
-    }
-  }, [])
   
 
   // Fetch usage statistics
@@ -525,11 +496,6 @@ export default function MyJournal() {
 
   return (
     <div className="flex flex-col h-screen bg-background">
-      {/* MOBILE CACHE TEST - This should appear on fresh code */}
-      <div className="bg-red-500 text-white text-center py-2 font-bold text-sm">
-        🚨 MOBILE CACHE TEST v2.0 - FRESH CODE LOADED 🚨
-      </div>
-      
       {/* Header */}
       <header className="sticky top-0 z-40 bg-background border-b border-border px-4 py-3">
         <div className="flex items-center justify-between gap-4">
