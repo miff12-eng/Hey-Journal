@@ -290,6 +290,15 @@ export default function MyJournal() {
   const { data: entries = [], isLoading, error, refetch } = useQuery<JournalEntryWithUser[]>({
     queryKey: ['/api/journal/entries?type=own'],
   })
+
+  // Debug logging for mobile
+  console.log('🔍 MyJournal mounted, entries query status:', {
+    isLoading,
+    entriesCount: entries?.length,
+    error: error?.message,
+    isMobile: navigator.userAgent.includes('Mobile'),
+    timestamp: new Date().toISOString()
+  })
   
 
   // Fetch usage statistics
