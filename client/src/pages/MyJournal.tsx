@@ -44,14 +44,6 @@ export default function MyJournal() {
   const [deletingEntryId, setDeletingEntryId] = useState<string | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
   
-  // FORCE CACHE CLEAR FOR MOBILE - AGGRESSIVE FIX
-  useEffect(() => {
-    console.log('🚨🚨🚨 MYJOURNAL COMPONENT MOUNTED - MOBILE DEBUG')
-    console.log('🔥 FORCING COMPLETE CACHE INVALIDATION')
-    queryClient.clear() // Clear entire React Query cache
-    queryClient.invalidateQueries() // Invalidate all queries
-    console.log('🎯 Cache cleared, queries invalidated')
-  }, [])
   const [selectedUsersForSharing, setSelectedUsersForSharing] = useState<{id: string, email: string, username?: string, firstName?: string, lastName?: string, profileImageUrl?: string}[]>([])
   const [isLoadingSharing, setIsLoadingSharing] = useState(false)
   const [recordDialogOpen, setRecordDialogOpen] = useState(false)
@@ -294,26 +286,11 @@ export default function MyJournal() {
     refetchInterval: 60000, // Refresh every minute
   })
 
-  // Fetch user's own journal entries - aggressive mobile debugging
+  // Fetch user's own journal entries
   const { data: entries = [], isLoading, error, refetch } = useQuery<JournalEntryWithUser[]>({
-    queryKey: ['/api/journal/entries?type=own', 'v3'], // Force completely new cache key
-    enabled: true, // Force enabled
-    retry: 5, // More retries
-    refetchInterval: 15000, // More frequent refresh
-    staleTime: 0, // Always consider stale
-    gcTime: 0, // Don't cache 
-    refetchOnMount: true, // Force refetch on mount
-    refetchOnWindowFocus: true, // Force refetch on focus
-    refetchOnReconnect: true, // Force refetch on reconnect
+    queryKey: ['/api/journal/entries?type=own'],
   })
   
-  // Debug logging for mobile
-  console.log('🔍 MyJournal Query Debug:', {
-    isLoading,
-    error: error?.message,
-    entriesCount: entries?.length,
-    userAgent: navigator.userAgent.includes('Mobile'),
-  })
 
   // Fetch usage statistics
   const { data: stats = { entriesThisWeek: 0, dayStreak: 0, daysSinceLastEntry: 0 } } = useQuery<{entriesThisWeek: number, dayStreak: number, daysSinceLastEntry: number}>({
