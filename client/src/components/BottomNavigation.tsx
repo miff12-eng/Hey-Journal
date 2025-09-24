@@ -74,16 +74,17 @@ export default function BottomNavigation() {
         })()}
         
         {/* Prominent New Entry Button */}
-        <Link href="/my-journal?create=true">
-          <Button
-            size="sm"
-            className="flex flex-col items-center gap-1 h-auto py-2 px-3 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 shadow-lg border-2 border-primary"
-            data-testid="nav-new-entry"
-          >
-            <Plus className="h-6 w-6" />
-            <span className="text-xs font-bold">New Entry</span>
-          </Button>
-        </Link>
+        <Button
+          size="sm"
+          className="flex flex-col items-center gap-1 h-auto py-2 px-3 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 shadow-lg border-2 border-primary"
+          data-testid="nav-new-entry"
+          onClick={() => {
+            window.location.href = '/my-journal?create=true'
+          }}
+        >
+          <Plus className="h-6 w-6" />
+          <span className="text-xs font-bold">New Entry</span>
+        </Button>
         
         {/* Search */}
         {(() => {
