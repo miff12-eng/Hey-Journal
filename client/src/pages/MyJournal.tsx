@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useLocation } from 'wouter'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -38,6 +39,7 @@ interface EnhancedSearchResponse {
 
 
 export default function MyJournal() {
+  const [location] = useLocation()
   const [shareModalOpen, setShareModalOpen] = useState(false)
   const [sharingEntryId, setSharingEntryId] = useState<string | null>(null)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
@@ -88,7 +90,7 @@ export default function MyJournal() {
         }
       }, 100)
     }
-  }, [])
+  }, [location])
   
   // Fetch historical people for searchable filter
   const { data: historicalPeople = [], isLoading: isLoadingPeople } = useQuery<Array<{id: string, firstName: string, lastName: string}>>({ 
