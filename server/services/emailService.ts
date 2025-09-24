@@ -13,6 +13,7 @@ interface EmailParams {
   subject: string;
   text?: string;
   html?: string;
+  replyTo?: string;
 }
 
 export async function sendEmail(params: EmailParams): Promise<boolean> {
@@ -28,6 +29,9 @@ export async function sendEmail(params: EmailParams): Promise<boolean> {
     }
     if (params.html) {
       emailData.html = params.html;
+    }
+    if (params.replyTo) {
+      emailData.replyTo = params.replyTo;
     }
     
     await mailService.send(emailData);
@@ -52,6 +56,9 @@ export async function sendJournalEntryEmail(
   data: JournalEntryEmailData
 ): Promise<boolean> {
   const subject = `${data.senderName} shared a journal entry with you${data.entryTitle ? `: ${data.entryTitle}` : ''}`;
+  
+  // Use a verified sender address for proper deliverability
+  const verifiedSender = 'noreply@journalapp.repl.co'; // Replace with your verified domain
   
   const html = `
     <!DOCTYPE html>
@@ -173,9 +180,10 @@ This email was sent because ${data.senderName} (${data.senderEmail}) shared a jo
 
   return await sendEmail({
     to: recipientEmail,
-    from: senderEmail,
+    from: verifiedSender,
     subject,
     html,
-    text
+    text,
+    replyTo: senderEmail // Allow recipients to reply to the actual sender
   });
 }
