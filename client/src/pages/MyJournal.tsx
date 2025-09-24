@@ -286,11 +286,9 @@ export default function MyJournal() {
     refetchInterval: 60000, // Refresh every minute
   })
 
-  // Fetch user's own journal entries with mobile cache busting
+  // Fetch user's own journal entries
   const { data: entries = [], isLoading, error, refetch } = useQuery<JournalEntryWithUser[]>({
-    queryKey: ['/api/journal/entries?type=own', Date.now()], // Force cache bust with timestamp
-    staleTime: 0, // Disable caching
-    gcTime: 0, // Don't cache results
+    queryKey: ['/api/journal/entries?type=own'],
   })
 
   
@@ -1074,7 +1072,7 @@ export default function MyJournal() {
                   <ExternalLink className="h-4 w-4 mr-2" />
                   LinkedIn
                 </Button>
-                {navigator.share && (
+                {typeof navigator !== 'undefined' && 'share' in navigator && (
                   <Button 
                     onClick={() => sharingEntryId && handleNativeShare(sharingEntryId)}
                     variant="outline"

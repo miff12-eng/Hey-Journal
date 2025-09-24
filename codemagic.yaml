@@ -1,0 +1,18 @@
+workflows:
+ios-capacitor:
+  name: iOS Capacitor Build
+  max_build_duration: 60
+  environment:
+    node: 20
+    cocoapods: default
+    xcode: latest
+  scripts:
+    - name: Install dependencies
+      script: npm ci
+    - name: Build web app
+      script: npm run build
+    - name: Sync Capacitor iOS
+      script: npx cap sync ios
+  publishing:
+    testflight:
+      enabled: true
