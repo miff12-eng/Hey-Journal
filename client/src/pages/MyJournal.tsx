@@ -69,6 +69,27 @@ export default function MyJournal() {
   
   const { toast } = useToast()
   
+  // Handle URL parameters for auto-opening create modal
+  useEffect(() => {
+    const search = typeof window !== 'undefined' ? window.location.search : ''
+    const urlParams = new URLSearchParams(search)
+    const shouldCreate = urlParams.get('create') === 'true'
+    
+    if (shouldCreate) {
+      // Auto-open create modal and clean up URL
+      setRecordDialogOpen(true)
+      setEditingEntryId(null)
+      
+      // Clean up URL to remove the create parameter after a brief delay
+      setTimeout(() => {
+        if (typeof window !== 'undefined') {
+          const newUrl = window.location.pathname
+          window.history.replaceState({}, '', newUrl)
+        }
+      }, 100)
+    }
+  }, [])
+  
   // Fetch historical people for searchable filter
   const { data: historicalPeople = [], isLoading: isLoadingPeople } = useQuery<Array<{id: string, firstName: string, lastName: string}>>({ 
     queryKey: ['/api/filters/people'],
