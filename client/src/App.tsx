@@ -22,6 +22,7 @@ function Router() {
     <Switch>
       {/* Public routes - accessible without authentication */}
       <Route path="/public" component={PublicSearch} />
+      <Route path="/public/entry/:entryId" component={PublicEntry} />
       <Route path="/u/:username" component={PublicProfile} />
       <Route path="/e/:entryId" component={PublicEntry} />
       
