@@ -48,6 +48,8 @@ export default function MyJournal() {
   
   const [selectedUsersForSharing, setSelectedUsersForSharing] = useState<{id: string, email: string, username?: string, firstName?: string, lastName?: string, profileImageUrl?: string}[]>([])
   const [isLoadingSharing, setIsLoadingSharing] = useState(false)
+  const [emailForSharing, setEmailForSharing] = useState('')
+  const [isSendingEmail, setIsSendingEmail] = useState(false)
   const [recordDialogOpen, setRecordDialogOpen] = useState(false)
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null)
   const [isReprocessing, setIsReprocessing] = useState(false)
@@ -534,6 +536,61 @@ export default function MyJournal() {
         description: 'Unable to connect to server. Please check your connection.',
         variant: "destructive"
       })
+    }
+  }
+
+  // Handle email sharing
+  const handleEmailShare = async () => {
+    if (!sharingEntryId || !emailForSharing.trim()) return
+    
+    // Basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(emailForSharing.trim())) {
+      toast({
+        title: "Invalid email",
+        description: "Please enter a valid email address.",
+        variant: "destructive"
+      })
+      return
+    }
+    
+    setIsSendingEmail(true)
+    try {
+      const response = await fetch(`/api/journal/entries/${sharingEntryId}/share-email`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include',
+        body: JSON.stringify({ email: emailForSharing.trim() })
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        toast({
+          title: "Email sent!",
+          description: `Journal entry shared with ${emailForSharing.trim()} successfully.`,
+        })
+        
+        setEmailForSharing('')
+        setShareModalOpen(false)
+      } else {
+        const errorData = await response.json().catch(() => ({}))
+        toast({
+          title: "Email failed",
+          description: errorData.error || 'Unable to send email. Please try again.',
+          variant: "destructive"
+        })
+      }
+    } catch (error) {
+      toast({
+        title: "Connection error",
+        description: 'Unable to connect to server. Please check your connection.',
+        variant: "destructive"
+      })
+      console.error('Error sending email:', error)
+    } finally {
+      setIsSendingEmail(false)
     }
   }
 
@@ -1085,6 +1142,51 @@ export default function MyJournal() {
                   )}
                 </div>
               )}
+            </div>
+            
+            {/* Email Sharing */}
+            <div>
+              <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+                Share via Email
+              </h4>
+              <div className="space-y-3">
+                <div className="flex gap-2">
+                  <Input
+                    type="email"
+                    placeholder="Enter email address..."
+                    value={emailForSharing}
+                    onChange={(e) => setEmailForSharing(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !isSendingEmail) {
+                        handleEmailShare()
+                      }
+                    }}
+                    disabled={isSendingEmail}
+                    data-testid="input-share-email"
+                    className="flex-1"
+                  />
+                  <Button 
+                    onClick={handleEmailShare}
+                    disabled={!emailForSharing.trim() || isSendingEmail}
+                    data-testid="button-send-email"
+                  >
+                    {isSendingEmail ? (
+                      <>
+                        <div className="animate-spin h-4 w-4 mr-2 border-2 border-current border-t-transparent rounded-full" />
+                        Sending...
+                      </>
+                    ) : (
+                      'Send'
+                    )}
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  The recipient will receive an email with a link to view your journal entry publicly.
+                </p>
+              </div>
             </div>
             
             {/* Social Media Sharing */}
