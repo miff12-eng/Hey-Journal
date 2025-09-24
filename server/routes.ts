@@ -3234,6 +3234,77 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Email sharing endpoint
+  app.post('/api/journal/entries/:id/share-email', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { email } = req.body;
+      
+      if (!email || typeof email !== 'string') {
+        return res.status(400).json({ error: 'Valid email address is required' });
+      }
+      
+      // Verify entry exists and belongs to the user
+      const entry = await storage.getJournalEntry(id);
+      if (!entry) {
+        return res.status(404).json({ error: 'Entry not found' });
+      }
+      
+      if (entry.userId !== req.userId) {
+        return res.status(403).json({ error: 'Not authorized to share this entry' });
+      }
+      
+      // Get user information for email
+      const user = await storage.getUser(req.userId);
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+      
+      // Ensure entry is public or shared for email sharing
+      if (entry.privacy === 'private') {
+        return res.status(400).json({ 
+          error: 'Entry must be public or shared to send via email. Please update the privacy setting first.' 
+        });
+      }
+      
+      // Create preview text (first 200 characters of content)
+      const preview = entry.content.length > 200 
+        ? entry.content.substring(0, 200) + '...'
+        : entry.content;
+      
+      // Generate public URL for the entry
+      const baseUrl = process.env.REPLIT_DEV_DOMAIN 
+        ? `https://${process.env.REPLIT_DEV_DOMAIN}`
+        : req.headers.origin || 'http://localhost:5000';
+      const entryUrl = `${baseUrl}/public/entry/${id}`;
+      
+      // Send email using the email service
+      const { sendJournalEntryEmail } = await import('./services/emailService');
+      const success = await sendJournalEntryEmail(email, user.email || 'noreply@journal.app', {
+        entryTitle: entry.title || 'Untitled Entry',
+        entryPreview: preview,
+        entryUrl,
+        senderName: user.firstName && user.lastName 
+          ? `${user.firstName} ${user.lastName}` 
+          : user.username,
+        senderEmail: user.email || 'noreply@journal.app'
+      });
+      
+      if (!success) {
+        return res.status(500).json({ error: 'Failed to send email' });
+      }
+      
+      res.json({ 
+        success: true, 
+        message: 'Journal entry shared successfully via email',
+        entryUrl 
+      });
+    } catch (error) {
+      console.error('Email Sharing Error:', error);
+      res.status(500).json({ error: 'Failed to share journal entry via email' });
+    }
+  });
+
   // Import and mount enhanced search routes here, after authentication middleware
   const enhancedSearchRoutes = await import('./routes/enhancedSearch');
   app.use('/api', enhancedSearchRoutes.default);
