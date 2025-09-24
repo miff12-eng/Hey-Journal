@@ -5,7 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Calendar, FileText, ArrowLeft, Volume2, User, Play } from "lucide-react"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
+import { Calendar, FileText, ArrowLeft, Volume2, User, Play, Heart, MessageCircle, UserPlus } from "lucide-react"
 import { Link } from "wouter"
 import PhotoModal from "@/components/PhotoModal"
 import { isVideo } from '@/lib/media'
@@ -61,6 +62,7 @@ export default function PublicEntry() {
   const [selectedPhotoAlt, setSelectedPhotoAlt] = useState<string>('')
   const [selectedMediaObject, setSelectedMediaObject] = useState<{url: string; mimeType?: string; originalName?: string} | null>(null)
   const [detectedVideoUrls, setDetectedVideoUrls] = useState<Set<string>>(new Set())
+  const [signupDialogOpen, setSignupDialogOpen] = useState(false)
 
   // Fetch entry
   const entryQuery = useQuery<PublicJournalEntry>({
@@ -305,6 +307,46 @@ export default function PublicEntry() {
                 </div>
               </div>
             )}
+            
+            {/* Interaction Buttons */}
+            <div className="mt-6 pt-6 border-t border-border">
+              <div className="flex items-center gap-4">
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => setSignupDialogOpen(true)}
+                  data-testid="button-like-entry"
+                  className="flex items-center gap-2"
+                >
+                  <Heart className="w-4 h-4" />
+                  Like
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => setSignupDialogOpen(true)}
+                  data-testid="button-comment-entry"
+                  className="flex items-center gap-2"
+                >
+                  <MessageCircle className="w-4 h-4" />
+                  Comment
+                </Button>
+                <div className="flex-1" />
+                <Button 
+                  variant="default" 
+                  size="sm"
+                  onClick={() => setSignupDialogOpen(true)}
+                  data-testid="button-create-account"
+                  className="flex items-center gap-2"
+                >
+                  <UserPlus className="w-4 h-4" />
+                  Create Account to Interact
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                Sign up to like, comment, and share your own journal entries
+              </p>
+            </div>
           </CardContent>
         </Card>
 
@@ -351,6 +393,51 @@ export default function PublicEntry() {
           alt={selectedPhotoAlt}
           mediaObject={selectedMediaObject || undefined}
         />
+        
+        {/* Account Creation Dialog */}
+        <Dialog open={signupDialogOpen} onOpenChange={setSignupDialogOpen}>
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <UserPlus className="h-5 w-5" />
+                Create Your Account
+              </DialogTitle>
+              <DialogDescription>
+                Sign up to interact with journal entries, share your own thoughts, and connect with others.
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="space-y-4 py-4">
+              <div className="text-center space-y-4">
+                <div className="space-y-2">
+                  <h4 className="font-medium">With an account, you can:</h4>
+                  <ul className="text-sm text-muted-foreground space-y-1">
+                    <li>• Like and comment on journal entries</li>
+                    <li>• Share your own journal entries</li>
+                    <li>• Connect with other writers</li>
+                    <li>• Record voice notes and add photos</li>
+                  </ul>
+                </div>
+                
+                <div className="space-y-2">
+                  <Button asChild className="w-full">
+                    <Link href="/">
+                      <UserPlus className="h-4 w-4 mr-2" />
+                      Sign Up / Log In
+                    </Link>
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    onClick={() => setSignupDialogOpen(false)}
+                    className="w-full"
+                  >
+                    Continue Browsing
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   )
