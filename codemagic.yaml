@@ -24,8 +24,7 @@ workflows:
   
       - name: Generate ExportOptions.plist
         script: |
-          cd ios/App
-          cat > ExportOptions.plist << EOF
+          cat > $CM_BUILD_DIR/ExportOptions.plist << EOF
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" 
           "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -46,17 +45,37 @@ workflows:
       - name: Build iOS app
         script: |
           cd ios/App
+  
+          echo "📂 Current working directory:"
+          pwd
+          echo "📂 Listing ios/App contents:"
+          ls -la
+  
+          echo "📂 Listing build directory contents:"
+          ls -la $CM_BUILD_DIR
+  
+          echo "📂 Listing available schemes:"
+          ls -la *.xcodeproj/xcshareddata/xcschemes || true
+  
+          echo "🚀 Archiving app..."
           xcodebuild -workspace App.xcworkspace \
                      -scheme App \
                      -configuration Release \
                      -sdk iphoneos \
                      -archivePath $CM_BUILD_DIR/App.xcarchive archive
+  
+          echo "📂 Listing build directory contents after archive:"
+          ls -la $CM_BUILD_DIR
+  
+          echo "📦 Exporting IPA..."
           xcodebuild -exportArchive \
                      -archivePath $CM_BUILD_DIR/App.xcarchive \
-                     -exportOptionsPlist ExportOptions.plist \
+                     -exportOptionsPlist $CM_BUILD_DIR/ExportOptions.plist \
                      -exportPath $CM_BUILD_DIR
+  
     artifacts:
       - $CM_BUILD_DIR/*.ipa
+  
     publishing:
       app_store_connect:
         api_key: $APP_STORE_CONNECT_KEY
