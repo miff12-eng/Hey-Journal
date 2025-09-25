@@ -1,13 +1,14 @@
 workflows:
 ios-capacitor:
   name: iOS Capacitor Build
+  instance_type: mac_mini_m2
   environment:
     node: latest
     xcode: latest
     cocoapods: default
   scripts:
     - name: Install Node.js dependencies
-      script: npm install
+      script: npm ci
     - name: Build web app
       script: npm run build
     - name: Sync with Capacitor
@@ -15,14 +16,12 @@ ios-capacitor:
     - name: Install CocoaPods
       script: |
         cd ios/App
-        pod install
+        pod install --repo-update
   artifacts:
-    - ios/App/build/ios/ipa/*.ipa
+    - build/ios/ipa/*.ipa
   publishing:
     app_store_connect:
-      api_key: MIGTAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBHkwdwIBAQQgySCZUmdwt3Xt1J68
-      p3wRB+rN9XkxQvWmmSZI7nzpUrygCgYIKoZIzj0DAQehRANCAAQoIpDjLpGUmada
-      8thliTrhppVZlLhzkU0u9S6AcYDRM9p7SZQug6uRDh06yc8sdztL6xC5DzggzXDN
-      GO75iSzZ
-      key_id: 54LTG5H29U
-      issuer_id: 101e8066-934a-41c8-b153-d95b45a98ccf
+      api_key: $APP_STORE_CONNECT_PRIVATE_KEY
+      key_id: $APP_STORE_CONNECT_KEY_ID
+      issuer_id: $APP_STORE_CONNECT_ISSUER_ID
+      submit_to_testflight: true
