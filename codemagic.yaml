@@ -5,6 +5,8 @@ ios-capacitor:
     node: latest
     xcode: latest
     cocoapods: default
+    groups:
+      - AppStoreConnect
   scripts:
     - name: Install Node.js dependencies
       script: npm install
@@ -16,8 +18,20 @@ ios-capacitor:
       script: |
         cd ios/App
         pod install
+    - name: Build iOS app
+      script: |
+        cd ios/App
+        xcodebuild -workspace App.xcworkspace \
+                   -scheme App \
+                   -configuration Release \
+                   -sdk iphoneos \
+                   -archivePath $CM_BUILD_DIR/App.xcarchive archive
+        xcodebuild -exportArchive \
+                   -archivePath $CM_BUILD_DIR/App.xcarchive \
+                   -exportOptionsPlist ExportOptions.plist \
+                   -exportPath $CM_BUILD_DIR
   artifacts:
-    - ios/App/build/ios/ipa/*.ipa
+    - $CM_BUILD_DIR/*.ipa
   publishing:
     app_store_connect:
       api_key: $APP_STORE_CONNECT_KEY
