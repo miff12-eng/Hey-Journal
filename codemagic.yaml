@@ -24,6 +24,7 @@ workflows:
   
       - name: Generate ExportOptions.plist
         script: |
+          cd ios/App
           cat > ExportOptions.plist << EOF
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" 
