@@ -1,39 +1,39 @@
 workflows:
-  ios-capacitor:
-    name: iOS Capacitor Build
-    environment:
-      node: latest
-      xcode: latest
-      cocoapods: default
-      groups:
-        - AppStoreConnect
-    scripts:
-      - name: Install Node.js dependencies
-        script: npm install
-      - name: Build web app
-        script: npm run build
-      - name: Sync with Capacitor
-        script: npx cap sync ios
-      - name: Install CocoaPods
-        script: |
-          cd ios/App
-          pod install
-      - name: Build iOS app
-        script: |
-          cd ios/App
-          xcodebuild -workspace App.xcworkspace \
-                     -scheme App \
-                     -configuration Release \
-                     -sdk iphoneos \
-                     -archivePath $CM_BUILD_DIR/App.xcarchive archive
-          xcodebuild -exportArchive \
-                     -archivePath $CM_BUILD_DIR/App.xcarchive \
-                     -exportOptionsPlist ExportOptions.plist \
-                     -exportPath $CM_BUILD_DIR
-    artifacts:
-      - $CM_BUILD_DIR/*.ipa
-    publishing:
-      app_store_connect:
-        api_key: $APP_STORE_CONNECT_KEY
-        key_id: $APP_STORE_CONNECT_KEY_ID
-        issuer_id: $APP_STORE_CONNECT_ISSUER_ID
+ios-capacitor:
+  name: iOS Capacitor Build
+  environment:
+    node: latest
+    xcode: latest
+    cocoapods: default
+    groups:
+      - AppStoreConnect
+  scripts:
+    - name: Install Node.js dependencies
+      script: npm install
+    - name: Build web app
+      script: npm run build
+    - name: Sync with Capacitor
+      script: npx cap sync ios
+    - name: Install CocoaPods
+      script: |
+        cd ios/App
+        pod install
+    - name: Build iOS app
+      script: |
+        cd ios/App
+        xcodebuild -workspace App.xcworkspace \
+                   -scheme App \
+                   -configuration Release \
+                   -sdk iphoneos \
+                   -archivePath $CM_BUILD_DIR/App.xcarchive archive
+        xcodebuild -exportArchive \
+                   -archivePath $CM_BUILD_DIR/App.xcarchive \
+                   -exportOptionsPlist ExportOptions.plist \
+                   -exportPath $CM_BUILD_DIR
+  artifacts:
+    - $CM_BUILD_DIR/*.ipa
+  publishing:
+    app_store_connect:
+      api_key: $APP_STORE_CONNECT_KEY
+      key_id: $APP_STORE_CONNECT_KEY_ID
+      issuer_id: $APP_STORE_CONNECT_ISSUER_ID
