@@ -7,6 +7,7 @@ workflows:
       cocoapods: default
       groups:
         - AppStoreConnect
+        - CertificateCredentials   # 🔑 Add a group that stores your signing certs
     scripts:
       - name: Install Node.js dependencies
         script: npm install
@@ -33,7 +34,7 @@ workflows:
               <key>method</key>
               <string>app-store</string>
               <key>teamID</key>
-              <string>$APPLE_TEAM_ID</string>
+              <string>526K7MWR7Y</string>
               <key>uploadBitcode</key>
               <true/>
               <key>uploadSymbols</key>
@@ -45,29 +46,13 @@ workflows:
       - name: Build iOS app
         script: |
           cd ios/App
-  
-          echo "📂 Current working directory:"
-          pwd
-          echo "📂 Listing ios/App contents:"
-          ls -la
-  
-          echo "📂 Listing build directory contents:"
-          ls -la $CM_BUILD_DIR
-  
-          echo "📂 Listing available schemes:"
-          ls -la *.xcodeproj/xcshareddata/xcschemes || true
-  
-          echo "🚀 Archiving app..."
           xcodebuild -workspace App.xcworkspace \
                      -scheme App \
                      -configuration Release \
                      -sdk iphoneos \
-                     -archivePath $CM_BUILD_DIR/App.xcarchive archive
-  
-          echo "📂 Listing build directory contents after archive:"
-          ls -la $CM_BUILD_DIR
-  
-          echo "📦 Exporting IPA..."
+                     -archivePath $CM_BUILD_DIR/App.xcarchive \
+                     DEVELOPMENT_TEAM=526K7MWR7Y \
+                     archive
           xcodebuild -exportArchive \
                      -archivePath $CM_BUILD_DIR/App.xcarchive \
                      -exportOptionsPlist $CM_BUILD_DIR/ExportOptions.plist \
