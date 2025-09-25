@@ -20,6 +20,9 @@ ios-capacitor:
     - ios/App/build/ios/ipa/*.ipa
   publishing:
     app_store_connect:
-      api_key: $APP_STORE_CONNECT_KEY
-      key_id: $APP_STORE_CONNECT_KEY_ID
-      issuer_id: $APP_STORE_CONNECT_ISSUER_ID
+      api_key: MIGTAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBHkwdwIBAQQgySCZUmdwt3Xt1J68
+      p3wRB+rN9XkxQvWmmSZI7nzpUrygCgYIKoZIzj0DAQehRANCAAQoIpDjLpGUmada
+      8thliTrhppVZlLhzkU0u9S6AcYDRM9p7SZQug6uRDh06yc8sdztL6xC5DzggzXDN
+      GO75iSzZ
+      key_id: 54LTG5H29U
+      issuer_id: 101e8066-934a-41c8-b153-d95b45a98ccf
