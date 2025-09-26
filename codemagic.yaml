@@ -36,9 +36,11 @@ workflows:
           security unlock-keychain -p "" ~/Library/Keychains/build.keychain
           security set-key-partition-list -S apple-tool:,apple: -s -k "" ~/Library/Keychains/build.keychain
   
-          # Move provisioning profile into place
+          # Move provisioning profile into place (UUID filename is required by Xcode)
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
-          cp profile.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/
+          PROFILE_UUID=$(grep -A1 UUID -a profile.mobileprovision | grep -io "[-A-F0-9]\{36\}")
+          cp profile.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/$PROFILE_UUID.mobileprovision
+          echo "Installed provisioning profile with UUID: $PROFILE_UUID"
   
       - name: Generate ExportOptions.plist
         script: |
@@ -57,7 +59,7 @@ workflows:
               <key>provisioningProfiles</key>
               <dict>
                   <key>com.hey-journal.app</key> 
-                  <string>YourProvisioningProfileName</string>
+                  <string>HeyJournalProfile</string> <!-- 👈 Must match profile name in Apple Developer -->
               </dict>
               <key>uploadBitcode</key>
               <false/>
@@ -90,4 +92,3 @@ workflows:
         api_key: $APP_STORE_CONNECT_KEY
         key_id: $APP_STORE_CONNECT_KEY_ID
         issuer_id: $APP_STORE_CONNECT_ISSUER_ID
-  
