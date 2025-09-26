@@ -6,8 +6,7 @@ workflows:
       xcode: latest
       cocoapods: default
       groups:
-        - AppStoreConnect
-        - CertificateCredentials   # 🔑 Add a group that stores your signing certs
+        - app_store_credentials   # 🔑 group where certs & provisioning live
     scripts:
       - name: Install Node.js dependencies
         script: npm install
@@ -23,6 +22,24 @@ workflows:
           cd ios/App
           pod install
   
+      - name: Set up code signing
+        script: |
+          # Decode the certificate and provisioning profile from environment variables
+          echo $CM_CERTIFICATE | base64 --decode > certificate.p12
+          echo $CM_PROVISIONING_PROFILE | base64 --decode > profile.mobileprovision
+  
+          # Import the certificate into a temporary keychain
+          security create-keychain -p "" build.keychain
+          security import certificate.p12 -k ~/Library/Keychains/build.keychain -P "$CM_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security list-keychains -s ~/Library/Keychains/build.keychain
+          security default-keychain -s ~/Library/Keychains/build.keychain
+          security unlock-keychain -p "" ~/Library/Keychains/build.keychain
+          security set-key-partition-list -S apple-tool:,apple: -s -k "" ~/Library/Keychains/build.keychain
+  
+          # Move provisioning profile into place
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          cp profile.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/
+  
       - name: Generate ExportOptions.plist
         script: |
           cat > $CM_BUILD_DIR/ExportOptions.plist << EOF
@@ -34,9 +51,16 @@ workflows:
               <key>method</key>
               <string>app-store</string>
               <key>teamID</key>
-              <string>526K7MWR7Y</string>
+              <string>526K7MWR7Y</string>  
+              <key>signingStyle</key>
+              <string>manual</string>
+              <key>provisioningProfiles</key>
+              <dict>
+                  <key>com.hey-journal.app</key> 
+                  <string>YourProvisioningProfileName</string>
+              </dict>
               <key>uploadBitcode</key>
-              <true/>
+              <false/>
               <key>uploadSymbols</key>
               <true/>
           </dict>
@@ -66,3 +90,4 @@ workflows:
         api_key: $APP_STORE_CONNECT_KEY
         key_id: $APP_STORE_CONNECT_KEY_ID
         issuer_id: $APP_STORE_CONNECT_ISSUER_ID
+  
