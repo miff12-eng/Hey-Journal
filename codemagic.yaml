@@ -24,11 +24,11 @@ workflows:
   
       - name: Set up code signing
         script: |
-          # Decode the certificate and provisioning profile from environment variables
+          # Decode certificate & provisioning profile
           echo $CM_CERTIFICATE | base64 --decode > certificate.p12
           echo $CM_PROVISIONING_PROFILE | base64 --decode > profile.mobileprovision
   
-          # Import the certificate into a temporary keychain
+          # Create temporary keychain
           security create-keychain -p "" build.keychain
           security import certificate.p12 -k ~/Library/Keychains/build.keychain -P "$CM_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
           security list-keychains -s ~/Library/Keychains/build.keychain
@@ -40,9 +40,15 @@ workflows:
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
           cp profile.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/
   
+          # Extract provisioning profile name
+          PROFILE_NAME=$(security cms -D -i profile.mobileprovision | plutil -extract Name xml1 -o - - | xmllint --xpath "string(//string)" -)
+          echo "Provisioning profile name: $PROFILE_NAME"
+          export PROFILE_NAME
+  
       - name: Build iOS app
         script: |
           cd ios/App
+          # Archive the app
           xcodebuild -workspace App.xcworkspace \
                      -scheme App \
                      -configuration Release \
@@ -50,9 +56,11 @@ workflows:
                      -archivePath $CM_BUILD_DIR/App.xcarchive \
                      DEVELOPMENT_TEAM=526K7MWR7Y \
                      archive
+  
+          # Export using the correct ExportOptions.plist path
           xcodebuild -exportArchive \
                      -archivePath $CM_BUILD_DIR/App.xcarchive \
-                     -exportOptionsPlist ios/App/App/ExportOptions.plist \
+                     -exportOptionsPlist App/ExportOptions.plist \
                      -exportPath $CM_BUILD_DIR
   
     artifacts:
