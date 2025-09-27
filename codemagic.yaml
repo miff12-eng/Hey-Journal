@@ -24,14 +24,19 @@ workflows:
   
       - name: Set up code signing
         script: |
+          # Decode the certificate and provisioning profile from environment variables
           echo $CM_CERTIFICATE | base64 --decode > certificate.p12
           echo $CM_PROVISIONING_PROFILE | base64 --decode > profile.mobileprovision
+  
+          # Import the certificate into a temporary keychain
           security create-keychain -p "" build.keychain
           security import certificate.p12 -k ~/Library/Keychains/build.keychain -P "$CM_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
           security list-keychains -s ~/Library/Keychains/build.keychain
           security default-keychain -s ~/Library/Keychains/build.keychain
           security unlock-keychain -p "" ~/Library/Keychains/build.keychain
           security set-key-partition-list -S apple-tool:,apple: -s -k "" ~/Library/Keychains/build.keychain
+  
+          # Install provisioning profile
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
           cp profile.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/
   
@@ -47,7 +52,7 @@ workflows:
                      archive
           xcodebuild -exportArchive \
                      -archivePath $CM_BUILD_DIR/App.xcarchive \
-                     -exportOptionsPlist ios/App/ExportOptions.plist \
+                     -exportOptionsPlist ios/App/App/ExportOptions.plist \
                      -exportPath $CM_BUILD_DIR
   
     artifacts:
