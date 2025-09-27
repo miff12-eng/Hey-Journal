@@ -60,7 +60,7 @@ workflows:
           # Export using the correct ExportOptions.plist path
           xcodebuild -exportArchive \
                      -archivePath $CM_BUILD_DIR/App.xcarchive \
-                     -exportOptionsPlist App/ExportOptions.plist \
+                     -exportOptionsPlist ./App/ExportOptions.plist \
                      -exportPath $CM_BUILD_DIR
   
     artifacts:
