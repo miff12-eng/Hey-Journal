@@ -24,53 +24,16 @@ workflows:
   
       - name: Set up code signing
         script: |
-          # Decode the certificate and provisioning profile from environment variables
           echo $CM_CERTIFICATE | base64 --decode > certificate.p12
           echo $CM_PROVISIONING_PROFILE | base64 --decode > profile.mobileprovision
-  
-          # Import the certificate into a temporary keychain
           security create-keychain -p "" build.keychain
           security import certificate.p12 -k ~/Library/Keychains/build.keychain -P "$CM_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
           security list-keychains -s ~/Library/Keychains/build.keychain
           security default-keychain -s ~/Library/Keychains/build.keychain
           security unlock-keychain -p "" ~/Library/Keychains/build.keychain
           security set-key-partition-list -S apple-tool:,apple: -s -k "" ~/Library/Keychains/build.keychain
-  
-          # Install provisioning profile
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
           cp profile.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/
-  
-          # Extract provisioning profile name automatically
-          PROFILE_NAME=$(security cms -D -i profile.mobileprovision | plutil -extract Name xml1 -o - - | xmllint --xpath "string(//string)" -)
-          echo "Provisioning profile name: $PROFILE_NAME"
-          export PROFILE_NAME
-  
-      - name: Generate ExportOptions.plist
-        script: |
-          cat > $CM_BUILD_DIR/ExportOptions.plist << EOF
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" 
-          "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-              <key>method</key>
-              <string>app-store</string>
-              <key>teamID</key>
-              <string>526K7MWR7Y</string>  
-              <key>signingStyle</key>
-              <string>manual</string>
-              <key>provisioningProfiles</key>
-              <dict>
-                  <key>com.hey-journal.app</key> 
-                  <string>${PROFILE_NAME}</string>
-              </dict>
-              <key>uploadBitcode</key>
-              <false/>
-              <key>uploadSymbols</key>
-              <true/>
-          </dict>
-          </plist>
-          EOF
   
       - name: Build iOS app
         script: |
@@ -84,7 +47,7 @@ workflows:
                      archive
           xcodebuild -exportArchive \
                      -archivePath $CM_BUILD_DIR/App.xcarchive \
-                     -exportOptionsPlist $CM_BUILD_DIR/ExportOptions.plist \
+                     -exportOptionsPlist ios/App/ExportOptions.plist \
                      -exportPath $CM_BUILD_DIR
   
     artifacts:
