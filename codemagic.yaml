@@ -70,6 +70,6 @@ workflows:
       app_store_connect:
         key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
         issuer_id: $APP_STORE_CONNECT_ISSUER_ID
-        private_key: $APP_STORE_CONNECT_PUBLISHER_PRIVATE_KEY   # ✅ fixed
+        api_key: $APP_STORE_CONNECT_PUBLISHER_PRIVATE_KEY   # ✅ fixed
         submit_to_app_store: true
   
