@@ -11,7 +11,8 @@
     <key>provisioningProfiles</key>
     <dict>
         <key>com.hey-journal.app</key>
-        <string>HeyJournal Distribution</string>
+        <string>HeyJournal</string>
     </dict>
 </dict>
 </plist>
+
