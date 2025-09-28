@@ -68,7 +68,12 @@ workflows:
   
     publishing:
       app_store_connect:
-        api_key: $APP_STORE_CONNECT_PUBLISHER_PRIVATE_KEY
-        key_id: $APP_STORE_CONNECT_KEY_ID
-        issuer_id: $APP_STORE_CONNECT_ISSUER_ID
-  
+        APP_STORE_CONNECT_KEY_ID:"SZQ3HJWQJS"
+        APP_STORE_CONNECT_ISSUER_ID:"101e8066-934a-41c8-b153-d95b45a98ccf"
+        APP_STORE_CONNECT_PUBLISHER_PRIVATE_KEY: |
+          -----BEGIN PRIVATE KEY-----
+          MIGTAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBHkwdwIBAQQg5WUS5Maq9F6WKeL5
+          yFgPnkD38vUfi0lI+xdHSklH9SygCgYIKoZIzj0DAQehRANCAARUA5QPpnq/hesW
+          /aFt6+H4iKPSCKDHbGgMdqvbTlx7POBDwtGFgRPIfUcA0Kq2uewdRnqjy3X00Df1
+          nZx29Iz2
+          -----END PRIVATE KEY-----
