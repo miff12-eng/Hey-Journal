@@ -1,39 +1,74 @@
 workflows:
-  ios-capacitor:
-    name: iOS Capacitor Build
-    environment:
-      node: latest
-      xcode: latest
-      cocoapods: default
-      groups:
-        - AppStoreConnect
-    scripts:
-      - name: Install Node.js dependencies
-        script: npm install
-      - name: Build web app
-        script: npm run build
-      - name: Sync with Capacitor
-        script: npx cap sync ios
-      - name: Install CocoaPods
-        script: |
-          cd ios/App
-          pod install
-      - name: Build iOS app
-        script: |
-          cd ios/App
-          xcodebuild -workspace App.xcworkspace \
-                     -scheme App \
-                     -configuration Release \
-                     -sdk iphoneos \
-                     -archivePath $CM_BUILD_DIR/App.xcarchive archive
-          xcodebuild -exportArchive \
-                     -archivePath $CM_BUILD_DIR/App.xcarchive \
-                     -exportOptionsPlist ExportOptions.plist \
-                     -exportPath $CM_BUILD_DIR
-    artifacts:
-      - $CM_BUILD_DIR/*.ipa
-    publishing:
-      app_store_connect:
-        api_key: $APP_STORE_CONNECT_KEY
-        key_id: $APP_STORE_CONNECT_KEY_ID
-        issuer_id: $APP_STORE_CONNECT_ISSUER_ID
+ios-capacitor:
+  name: iOS Capacitor Build
+  environment:
+    node: latest
+    xcode: latest
+    cocoapods: default
+    groups:
+      - app_store_credentials   # 🔑 group where certs & provisioning live
+  scripts:
+    - name: Install Node.js dependencies
+      script: npm install
+
+    - name: Build web app
+      script: npm run build
+
+    - name: Sync with Capacitor
+      script: npx cap sync ios
+
+    - name: Install CocoaPods
+      script: |
+        cd ios/App
+        pod install
+
+    - name: Set up code signing
+      script: |
+        # Decode certificate & provisioning profile
+        echo $CM_CERTIFICATE | base64 --decode > certificate.p12
+        echo $CM_PROVISIONING_PROFILE | base64 --decode > profile.mobileprovision
+
+        # Create temporary keychain
+        security create-keychain -p "" build.keychain
+        security import certificate.p12 -k ~/Library/Keychains/build.keychain -P "$CM_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+        security list-keychains -s ~/Library/Keychains/build.keychain
+        security default-keychain -s ~/Library/Keychains/build.keychain
+        security unlock-keychain -p "" ~/Library/Keychains/build.keychain
+        security set-key-partition-list -S apple-tool:,apple: -s -k "" ~/Library/Keychains/build.keychain
+
+        # Install provisioning profile
+        mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+        cp profile.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/
+
+        # Extract provisioning profile name
+        PROFILE_NAME=$(security cms -D -i profile.mobileprovision | plutil -extract Name xml1 -o - - | xmllint --xpath "string(//string)" -)
+        echo "Provisioning profile name: $PROFILE_NAME"
+        export PROFILE_NAME
+
+    - name: Build iOS app
+      script: |
+        cd ios/App
+        # Archive the app
+        xcodebuild -workspace App.xcworkspace \
+                   -scheme App \
+                   -configuration Release \
+                   -sdk iphoneos \
+                   -archivePath $CM_BUILD_DIR/App.xcarchive \
+                   DEVELOPMENT_TEAM=526K7MWR7Y \
+                   archive
+
+        # Export using the correct ExportOptions.plist path
+        xcodebuild -exportArchive \
+                   -archivePath $CM_BUILD_DIR/App.xcarchive \
+                   -exportOptionsPlist ./App/ExportOptions.plist \
+                   -exportPath $CM_BUILD_DIR
+
+  artifacts:
+    - $CM_BUILD_DIR/*.ipa
+
+  publishing:
+    app_store_connect:
+      key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
+      issuer_id: $APP_STORE_CONNECT_ISSUER_ID
+      private_key: $APP_STORE_CONNECT_PUBLISHER_PRIVATE_KEY   # ✅ fixed
+      submit_to_app_store: true
