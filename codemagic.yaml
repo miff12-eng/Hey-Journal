@@ -22,6 +22,13 @@ workflows:
           cd ios/App
           pod install
   
+      - name: Set iOS build number
+        script: |
+          cd ios/App
+          # Auto-increment build number using Codemagic's $BUILD_NUMBER
+          agvtool new-version -all $BUILD_NUMBER
+          echo "iOS build number set to $BUILD_NUMBER"
+  
       - name: Set up code signing
         script: |
           # Decode certificate & provisioning profile
@@ -70,6 +77,6 @@ workflows:
       app_store_connect:
         key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
         issuer_id: $APP_STORE_CONNECT_ISSUER_ID
-        api_key: $APP_STORE_CONNECT_PUBLISHER_PRIVATE_KEY   # ✅ fixed
+        api_key: $APP_STORE_CONNECT_PUBLISHER_PRIVATE_KEY
         submit_to_app_store: true
   
