@@ -19,6 +19,7 @@ import { useQuery, useMutation } from '@tanstack/react-query'
 import { queryClient, apiRequest } from '@/lib/queryClient'
 import { useToast } from '@/hooks/use-toast'
 import RecordDialog from '@/components/RecordDialog'
+import logoImage from '@assets/Minimalistic _Hey JRNL_ Logo Design_1759373926780.png'
 
 // Enhanced search types for My Journal search
 interface EnhancedSearchResult {
@@ -601,22 +602,12 @@ export default function MyJournal() {
       <header className="sticky top-0 z-40 bg-background border-b border-border px-4 py-3">
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <Avatar className="h-8 w-8">
-              <AvatarImage 
-                src={user?.profileImageUrl} 
-                alt={user?.firstName || 'User'} 
-                data-testid="img-user-avatar"
-              />
-              <AvatarFallback data-testid="text-user-initials">
-                {isLoadingUser ? '...' : (user?.firstName?.[0] || 'U')}
-              </AvatarFallback>
-            </Avatar>
-            <div>
-              <h1 className="text-lg font-semibold text-foreground" data-testid="text-page-title">
-                My Journal
-              </h1>
-              <p className="text-xs text-muted-foreground">Your personal thoughts and reflections</p>
-            </div>
+            <img 
+              src={logoImage} 
+              alt="Hey JRNL" 
+              className="h-10 w-auto"
+              data-testid="img-logo"
+            />
           </div>
           
           <div className="flex items-center gap-2">
