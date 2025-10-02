@@ -605,7 +605,7 @@ export default function MyJournal() {
             <img 
               src={logoImage} 
               alt="Hey JRNL" 
-              className="h-10 w-auto"
+              className="h-10 w-10 rounded-full object-cover"
               data-testid="img-logo"
             />
           </div>
