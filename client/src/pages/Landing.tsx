@@ -3,8 +3,10 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Mic, Bot, Lock, Smartphone, Zap, Users, Globe, Heart } from 'lucide-react'
 import ThemeToggle from '@/components/ThemeToggle'
+import { useAuth } from '@/hooks/useAuth'
 
 export default function Landing() {
+  const { login } = useAuth()
   const features = [
     {
       icon: Mic,
@@ -79,7 +81,7 @@ export default function Landing() {
             <Button 
               size="lg" 
               className="text-base px-8 py-6"
-              onClick={() => window.location.href = '/api/login'}
+              onClick={login}
               data-testid="button-get-started"
             >
               Get Started Free
@@ -155,7 +157,7 @@ export default function Landing() {
             <Button 
               size="lg" 
               className="text-base px-8 py-6"
-              onClick={() => window.location.href = '/api/login'}
+              onClick={login}
               data-testid="button-start-journaling"
             >
               Start Journaling Now
@@ -183,6 +185,19 @@ export default function Landing() {
               <span>End-to-end encryption</span>
               <span>•</span>
               <span>Your data, your control</span>
+            </div>
+
+            {/* Debug Info - Temporary */}
+            <div className="mt-8 p-4 bg-card border border-border rounded-md text-xs font-mono text-left">
+              <div className="font-bold mb-2 text-foreground">Debug Info:</div>
+              <div className="space-y-1 text-muted-foreground">
+                <div>Protocol: {window.location.protocol}</div>
+                <div>Is Capacitor: {(window.location.protocol === 'capacitor:' || window.location.protocol === 'ionic:') ? 'YES' : 'NO'}</div>
+                <div>Has API Base URL: {import.meta.env.VITE_API_BASE_URL ? 'YES' : 'NO'}</div>
+                <div>API Base URL: {import.meta.env.VITE_API_BASE_URL || 'Not set'}</div>
+                <div>Has REPL ID: {import.meta.env.VITE_REPL_ID ? 'YES' : 'NO'}</div>
+                <div>User Agent: {navigator.userAgent.substring(0, 80)}...</div>
+              </div>
             </div>
           </div>
         </div>
