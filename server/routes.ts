@@ -14,6 +14,7 @@ import {
 } from "./objectStorage";
 import { ObjectPermission, ObjectAclPolicy, setObjectAclPolicy } from "./objectAcl";
 import { setupAuth, isAuthenticated } from "./replitAuth";
+import { authenticateEither } from "./tokenAuth";
 
 // Extend Express Request interface to include userId
 declare global {
@@ -129,23 +130,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     }
     
-    // Apply the isAuthenticated middleware which handles token refresh
-    isAuthenticated(req, res, (err) => {
+    // Apply combined auth middleware (supports both session and Bearer token)
+    authenticateEither(req, res, (err) => {
       if (err) {
         console.log('❌ Authentication failed:', {
           method: req.method,
           path: req.path,
           hasSession: !!req.session,
+          hasAuthHeader: !!req.headers.authorization,
           isAuthenticated: req.isAuthenticated?.(),
-          userClaimsSub: (req.user as any)?.claims?.sub
+          userClaimsSub: (req.user as any)?.claims?.sub || (req.user as any)?.sub
         });
         return res.status(401).json({ message: 'Authentication required' });
       }
       
-      // Set userId from OAuth claims (after token refresh if needed)
+      // Set userId from OAuth claims (works for both session and token auth)
       const user = req.user as any;
-      if (!user?.claims?.sub) {
-        console.log('❌ No user claims found:', {
+      const userId = user?.claims?.sub || user?.sub;
+      
+      if (!userId) {
+        console.log('❌ No user ID found:', {
           method: req.method,
           path: req.path,
           hasUser: !!user,
@@ -154,7 +158,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ message: 'Authentication required' });
       }
       
-      req.userId = user.claims.sub;
+      req.userId = userId;
       next();
     });
   });
