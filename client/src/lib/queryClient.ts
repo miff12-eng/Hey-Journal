@@ -26,15 +26,15 @@ async function getAuthHeaders(): Promise<HeadersInit> {
   
   // Check if running in Capacitor (mobile app)
   if (window.location.protocol === 'capacitor:' || window.location.protocol === 'ionic:') {
-    // Mobile app: use Bearer token authentication
+    // Mobile app: use Bearer ID token authentication (backend validates ID tokens)
     try {
-      const { getAccessToken } = await import('./oauth');
-      const token = await getAccessToken();
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
+      const { getIdToken } = await import('./oauth');
+      const idToken = await getIdToken();
+      if (idToken) {
+        headers['Authorization'] = `Bearer ${idToken}`;
       }
     } catch (error) {
-      console.error('Failed to get access token:', error);
+      console.error('Failed to get ID token:', error);
     }
   }
   // Web: uses session cookies automatically via credentials: "include"

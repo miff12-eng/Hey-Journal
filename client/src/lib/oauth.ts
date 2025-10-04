@@ -82,16 +82,22 @@ export async function performMobileOAuth(): Promise<OAuthTokens> {
   return tokens;
 }
 
-// Check if user is authenticated
+// Check if user is authenticated (checks for ID token since that's what we use for API auth)
 export async function isAuthenticated(): Promise<boolean> {
   const tokens = await tokenStorage.getTokens();
-  return tokens !== null && !!tokens.access_token;
+  return tokens !== null && !!tokens.id_token;
 }
 
 // Get access token for API requests
 export async function getAccessToken(): Promise<string | null> {
   const tokens = await tokenStorage.getTokens();
   return tokens?.access_token || null;
+}
+
+// Get ID token for API authentication (backend validates this)
+export async function getIdToken(): Promise<string | null> {
+  const tokens = await tokenStorage.getTokens();
+  return tokens?.id_token || null;
 }
 
 // Logout - clear tokens
