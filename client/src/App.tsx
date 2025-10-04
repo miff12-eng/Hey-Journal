@@ -13,6 +13,7 @@ import Profile from "@/pages/Profile"
 import PublicSearch from "@/pages/PublicSearch"
 import PublicProfile from "@/pages/PublicProfile"
 import PublicEntry from "@/pages/PublicEntry"
+import AuthCallback from "@/pages/AuthCallback"
 import BottomNavigation from "@/components/BottomNavigation"
 
 function Router() {
@@ -20,6 +21,9 @@ function Router() {
 
   return (
     <Switch>
+      {/* OAuth callback route - must be before authentication check */}
+      <Route path="/auth/callback" component={AuthCallback} />
+      
       {/* Public routes - accessible without authentication */}
       <Route path="/public" component={PublicSearch} />
       <Route path="/public/entry/:entryId" component={PublicEntry} />
