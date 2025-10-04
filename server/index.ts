@@ -11,7 +11,9 @@ const allowedOrigins = [
   'http://localhost:5000',  // Production server
   'capacitor://localhost',  // iOS Capacitor app
   'https://localhost',      // Android Capacitor app
-  // Specific Replit domain for this app (more secure than wildcard)
+  // Production deployment URL
+  'https://heyjournal.replit.app',
+  // Development Replit domain
   'https://20d6502d-bd0d-49a0-81b5-48a789e7beaa-00-190ybovf3mjps.worf.replit.dev',
   process.env.REPLIT_URL || '', // Current Replit app URL from environment
 ].filter(Boolean); // Remove empty strings
