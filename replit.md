@@ -80,9 +80,28 @@ Preferred communication style: Simple, everyday language.
 - **Database Migrations**: Drizzle Kit for schema management
 - **Development Server**: Express with Vite integration for full-stack development
 
+### Authentication System
+- **Web Authentication**: Session-based OAuth using Replit Auth with cookie storage
+- **Mobile Authentication**: Token-based OAuth using Authorization Code Flow with PKCE
+  - **OAuth Plugin**: @capacitor-community/generic-oauth2 for native OAuth handling
+  - **Token Storage**: Secure storage using capacitor-secure-storage-plugin
+  - **Token Validation**: Backend JWT validation using jose library with JWKS endpoint
+  - **User Sync**: Automatic user upsert on first token authentication
+  - **URL Scheme**: `com.voicejournal.app://oauth-callback` for iOS/Android redirect handling
+  
+### Implementation Details
+- **Backend**: Dual authentication support via `authenticateEither` middleware
+  - Session auth: Uses OpenID Connect client with automatic token refresh
+  - Token auth: Validates JWT ID tokens with Replit's JWKS endpoint
+- **Frontend**: Platform-aware authentication
+  - Web: Redirects to `/api/login` for session-based OAuth
+  - Mobile: Uses OAuth plugin to open system browser, captures tokens via URL scheme
+- **API Client**: Automatically attaches Bearer tokens for mobile requests
+  - Detects Capacitor environment via `window.location.protocol`
+  - Retrieves tokens from secure storage for each API call
+
 ### Planned Integrations
 - **AI Transcription**: Distil-Whisper or similar for voice-to-text conversion
-- **Authentication**: Session-based authentication (structure in place)
 - **Push Notifications**: For journaling reminders and social interactions
 
 ### Recent Implementation: Video Support

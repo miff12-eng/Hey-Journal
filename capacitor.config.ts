@@ -9,6 +9,7 @@ const config: CapacitorConfig = {
     // Enable live reload for development
     hostname: 'localhost'
   },
+  // Configure URL schemes for OAuth redirect handling
   plugins: {
     SplashScreen: {
       launchShowDuration: 2000,
