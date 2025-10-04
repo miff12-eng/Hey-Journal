@@ -20,6 +20,28 @@ const buildApiUrl = (url: string): string => {
   return `${API_BASE_URL}${url}`;
 };
 
+// Helper function to get auth headers (supports both session and token auth)
+async function getAuthHeaders(): Promise<HeadersInit> {
+  const headers: HeadersInit = {};
+  
+  // Check if running in Capacitor (mobile app)
+  if (window.location.protocol === 'capacitor:' || window.location.protocol === 'ionic:') {
+    // Mobile app: use Bearer token authentication
+    try {
+      const { getAccessToken } = await import('./oauth');
+      const token = await getAccessToken();
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+    } catch (error) {
+      console.error('Failed to get access token:', error);
+    }
+  }
+  // Web: uses session cookies automatically via credentials: "include"
+  
+  return headers;
+}
+
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     const text = (await res.text()) || res.statusText;
@@ -33,9 +55,14 @@ export async function apiRequest(
   data?: unknown | undefined,
 ): Promise<Response> {
   const fullUrl = buildApiUrl(url);
+  const authHeaders = await getAuthHeaders();
+  
   const res = await fetch(fullUrl, {
     method,
-    headers: data ? { "Content-Type": "application/json" } : {},
+    headers: {
+      ...(data ? { "Content-Type": "application/json" } : {}),
+      ...authHeaders
+    },
     body: data ? JSON.stringify(data) : undefined,
     credentials: "include",
   });
@@ -53,8 +80,11 @@ export const getQueryFn: <T>(options: {
     // Use only the first element as the URL, rest are for cache scoping
     const url = typeof queryKey[0] === 'string' ? queryKey[0] : String(queryKey[0]);
     const fullUrl = buildApiUrl(url);
+    const authHeaders = await getAuthHeaders();
+    
     const res = await fetch(fullUrl, {
       credentials: "include",
+      headers: authHeaders
     });
 
     if (unauthorizedBehavior === "returnNull" && res.status === 401) {
