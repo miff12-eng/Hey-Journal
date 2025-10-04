@@ -7,7 +7,7 @@ channel = "stable-24_05"
 packages = ["rubyPackages_3_3.cocoapods"]
 
 [deployment]
-deploymentTarget = "autoscale"
+deploymentTarget = "gce"
 build = ["npm", "run", "build"]
 run = ["npm", "run", "start"]
 
