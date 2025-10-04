@@ -41,9 +41,24 @@ export const tokenStorage = {
 // OAuth configuration for Capacitor mobile apps
 export async function performMobileOAuth(): Promise<OAuthTokens> {
   const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
+  const replId = import.meta.env.VITE_REPL_ID;
+  
+  console.log('🔐 Starting mobile OAuth...', {
+    hasApiBaseUrl: !!apiBaseUrl,
+    hasReplId: !!replId,
+    apiBaseUrl: apiBaseUrl,
+    protocol: window.location.protocol
+  });
+  
+  if (!replId) {
+    const error = new Error('VITE_REPL_ID environment variable is required for mobile OAuth');
+    console.error('❌ OAuth configuration error:', error);
+    alert('OAuth configuration error: Missing REPL_ID. Please check your environment variables.');
+    throw error;
+  }
   
   const oauth2Options = {
-    appId: import.meta.env.VITE_REPL_ID || '',
+    appId: replId,
     authorizationBaseUrl: `${ISSUER_URL}/authorize`,
     accessTokenEndpoint: `${ISSUER_URL}/token`,
     scope: 'openid email profile offline_access',
@@ -57,16 +72,30 @@ export async function performMobileOAuth(): Promise<OAuthTokens> {
     },
     
     ios: {
-      redirectUrl: 'com.voicejournal.app:/oauth2callback',
+      redirectUrl: 'com.voicejournal.app://oauth2callback',
       pkceEnabled: true
     },
     
     android: {
-      redirectUrl: 'com.voicejournal.app:/oauth2callback',
+      redirectUrl: 'com.voicejournal.app://oauth2callback',
     }
   };
 
-  const response = await GenericOAuth2.authenticate(oauth2Options);
+  console.log('🔐 OAuth options:', { ...oauth2Options, appId: replId ? '***' : 'missing' });
+
+  let response;
+  try {
+    response = await GenericOAuth2.authenticate(oauth2Options);
+    console.log('✅ OAuth response received:', { 
+      hasAccessToken: !!response.access_token,
+      hasIdToken: !!response.id_token,
+      hasRefreshToken: !!response.refresh_token
+    });
+  } catch (error) {
+    console.error('❌ OAuth authentication failed:', error);
+    alert(`OAuth failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    throw error;
+  }
   
   const tokens: OAuthTokens = {
     access_token: response.access_token || '',
@@ -76,9 +105,15 @@ export async function performMobileOAuth(): Promise<OAuthTokens> {
     token_type: response.token_type
   };
 
+  console.log('💾 Storing tokens...', {
+    hasAccessToken: !!tokens.access_token,
+    hasIdToken: !!tokens.id_token
+  });
+
   // Store tokens securely
   await tokenStorage.setTokens(tokens);
   
+  console.log('✅ Mobile OAuth completed successfully');
   return tokens;
 }
 

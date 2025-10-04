@@ -12,11 +12,21 @@ export function useAuth() {
     const isCapacitor = window.location.protocol === 'capacitor:' || 
                         window.location.protocol === 'ionic:';
     
+    console.log('🔑 Login requested', { 
+      protocol: window.location.protocol,
+      isCapacitor,
+      hasApiBaseUrl: !!import.meta.env.VITE_API_BASE_URL,
+      hasReplId: !!import.meta.env.VITE_REPL_ID
+    });
+    
     if (isCapacitor) {
       // Mobile: use OAuth plugin for token-based authentication
       try {
+        console.log('📱 Starting mobile OAuth flow...');
         const { performMobileOAuth } = await import('@/lib/oauth');
-        await performMobileOAuth();
+        const tokens = await performMobileOAuth();
+        
+        console.log('✅ Mobile OAuth succeeded, refreshing auth state...');
         
         // Refresh user data after successful OAuth
         queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
@@ -24,7 +34,8 @@ export function useAuth() {
         // Reload to ensure all state is fresh
         window.location.reload();
       } catch (error) {
-        console.error('OAuth failed:', error);
+        console.error('❌ Mobile OAuth failed:', error);
+        // Error already shown to user via alert in performMobileOAuth
         throw error;
       }
     } else {
@@ -32,6 +43,7 @@ export function useAuth() {
       const loginUrl = import.meta.env.VITE_API_BASE_URL 
         ? `${import.meta.env.VITE_API_BASE_URL}/api/login`
         : '/api/login';
+      console.log('🌐 Redirecting to web login:', loginUrl);
       window.location.href = loginUrl;
     }
   }
