@@ -43,6 +43,16 @@ export const authenticateToken: RequestHandler = async (req, res, next) => {
       clockTolerance: 60,
     });
 
+    // Ensure user exists in database (upsert on first token auth)
+    const { storage } = await import('./storage');
+    await storage.upsertUser({
+      id: payload.sub as string,
+      email: payload.email as string,
+      firstName: payload.first_name as string,
+      lastName: payload.last_name as string,
+      profileImageUrl: payload.profile_image_url as string,
+    });
+
     // Attach claims to request as user
     req.user = {
       claims: payload,
@@ -74,6 +84,16 @@ export const authenticateEither: RequestHandler = async (req, res, next) => {
         issuer: ISSUER_URL,
         audience: process.env.REPL_ID,
         clockTolerance: 60,
+      });
+      
+      // Ensure user exists in database (upsert on first token auth)
+      const { storage } = await import('./storage');
+      await storage.upsertUser({
+        id: payload.sub as string,
+        email: payload.email as string,
+        firstName: payload.first_name as string,
+        lastName: payload.last_name as string,
+        profileImageUrl: payload.profile_image_url as string,
       });
       
       req.user = {
