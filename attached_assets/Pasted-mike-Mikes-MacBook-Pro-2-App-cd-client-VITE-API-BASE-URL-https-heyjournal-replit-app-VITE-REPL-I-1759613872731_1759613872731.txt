@@ -1,0 +1,38 @@
+mike@Mikes-MacBook-Pro-2 App % cd client
+VITE_API_BASE_URL=https://heyjournal.replit.app VITE_REPL_ID=20d6502d-bd0d-49a0-81b5-48a789e7beaa VITE_IS_MOBILE_APP=true npm run build
+cd: no such file or directory: client
+
+> rest-express@1.0.0 build
+> vite build && esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist
+
+vite v5.4.19 building for production...
+transforming (2) ../vite/modulepreload-polyfill.jsBrowserslist: browsers data (caniuse-lite) is 12 months old. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+transforming (4) src/App.tsx
+A PostCSS plugin did not pass the `from` option to `postcss.parse`. This may cause imported assets to be incorrectly transformed. If you've recently added a PostCSS plugin that raised this warning, please contact the package author to fix the issue.
+✓ 1885 modules transformed.
+../dist/public/index.html                                                                 3.03 kB │ gzip:   1.11 kB
+../dist/public/assets/Minimalistic _Hey JRNL_ Logo Design_1759373926780-BTAOZDJ7.png  1,305.59 kB
+../dist/public/assets/index-VMSJ34gJ.css                                                 95.89 kB │ gzip:  15.06 kB
+../dist/public/assets/index-ClHpCKRt.js                                                   0.35 kB │ gzip:   0.24 kB
+../dist/public/assets/web-BPCDfSTl.js                                                     0.38 kB │ gzip:   0.25 kB
+../dist/public/assets/web-CNsEotGc.js                                                     1.00 kB │ gzip:   0.43 kB
+../dist/public/assets/oauth-3ZCffBI4.js                                                   2.30 kB │ gzip:   1.12 kB
+../dist/public/assets/index-DBSteVtt.js                                                   7.80 kB │ gzip:   3.22 kB
+../dist/public/assets/web-Ck-e5KpS.js                                                     9.83 kB │ gzip:   3.26 kB
+../dist/public/assets/index-Ci2OT6Eb.js                                                 736.45 kB │ gzip: 207.87 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 4.77s
+
+  dist/index.js  304.6kb
+
+⚡ Done in 24ms
+mike@Mikes-MacBook-Pro-2 App % npx cap sync ios
+[error] ios platform has not been added yet.
+        See the docs for adding the ios platform:
+        https://capacitorjs.com/docs/ios#adding-the-ios-platform
