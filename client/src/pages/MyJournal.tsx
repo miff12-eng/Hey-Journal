@@ -41,6 +41,7 @@ interface EnhancedSearchResponse {
 
 export default function MyJournal() {
   const [location] = useLocation()
+  const [searchParams, setSearchParams] = useState('')
   const [shareModalOpen, setShareModalOpen] = useState(false)
   const [sharingEntryId, setSharingEntryId] = useState<string | null>(null)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
@@ -74,49 +75,51 @@ export default function MyJournal() {
   
   const { toast } = useToast()
   
+  // Track URL search parameters changes
+  useEffect(() => {
+    const updateSearchParams = () => {
+      const search = typeof window !== 'undefined' ? window.location.search : ''
+      setSearchParams(search)
+    }
+    
+    // Update immediately
+    updateSearchParams()
+    
+    // Listen for popstate (back/forward buttons)
+    window.addEventListener('popstate', updateSearchParams)
+    
+    // Create an interval to poll for URL changes (handles programmatic navigation)
+    const intervalId = setInterval(updateSearchParams, 100)
+    
+    return () => {
+      window.removeEventListener('popstate', updateSearchParams)
+      clearInterval(intervalId)
+    }
+  }, [])
+  
   // Handle URL parameters for auto-opening create modal
   useEffect(() => {
-    const checkForCreateParam = () => {
-      const search = typeof window !== 'undefined' ? window.location.search : ''
-      const urlParams = new URLSearchParams(search)
-      const shouldCreate = urlParams.get('create') === 'true'
+    const urlParams = new URLSearchParams(searchParams)
+    const shouldCreate = urlParams.get('create') === 'true'
+    
+    console.log('🔍 Checking for create param:', { searchParams, shouldCreate, location, fullUrl: window.location.href })
+    
+    if (shouldCreate) {
+      console.log('✅ Opening record dialog')
+      // Auto-open create modal and clean up URL
+      setRecordDialogOpen(true)
+      setEditingEntryId(null)
       
-      if (shouldCreate) {
-        // Auto-open create modal and clean up URL
-        setRecordDialogOpen(true)
-        setEditingEntryId(null)
-        
-        // Clean up URL to remove the create parameter after a brief delay
-        setTimeout(() => {
-          if (typeof window !== 'undefined') {
-            const newUrl = window.location.pathname
-            window.history.replaceState({}, '', newUrl)
-          }
-        }, 100)
-      }
+      // Clean up URL to remove the create parameter after a brief delay
+      setTimeout(() => {
+        if (typeof window !== 'undefined') {
+          const newUrl = window.location.pathname
+          window.history.replaceState({}, '', newUrl)
+          setSearchParams('')
+        }
+      }, 100)
     }
-
-    // Check immediately
-    checkForCreateParam()
-
-    // Also listen for popstate events to catch programmatic navigation
-    const handlePopState = () => {
-      checkForCreateParam()
-    }
-
-    // Also listen for hashchange events to catch navigation changes
-    const handleHashChange = () => {
-      checkForCreateParam()
-    }
-
-    window.addEventListener('popstate', handlePopState)
-    window.addEventListener('hashchange', handleHashChange)
-
-    return () => {
-      window.removeEventListener('popstate', handlePopState)
-      window.removeEventListener('hashchange', handleHashChange)
-    }
-  }, [location])
+  }, [searchParams, location])
   
   // Fetch historical people for searchable filter
   const { data: historicalPeople = [], isLoading: isLoadingPeople } = useQuery<Array<{id: string, firstName: string, lastName: string}>>({ 
