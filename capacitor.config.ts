@@ -9,17 +9,22 @@ const config: CapacitorConfig = {
     // Enable live reload for development
     hostname: 'localhost'
   },
+  ios: {
+    contentInset: 'automatic'
+  },
   // Configure URL schemes for OAuth redirect handling
   plugins: {
     SplashScreen: {
       launchShowDuration: 2000,
       launchAutoHide: true,
-      backgroundColor: "#ffffff",
+      backgroundColor: "#FAFAFA",
       androidSplashResourceName: "splash",
       androidScaleType: "CENTER_CROP",
       showSpinner: false,
       iosSpinnerStyle: "small",
-      spinnerColor: "#999999"
+      spinnerColor: "#999999",
+      splashFullScreen: true,
+      splashImmersive: true
     }
   }
 };

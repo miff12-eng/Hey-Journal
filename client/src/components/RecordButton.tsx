@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Mic, MicOff, Square } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useHaptics } from '@/hooks/useHaptics'
 
 interface RecordButtonProps {
   onRecordingStart?: () => void
@@ -24,7 +25,8 @@ export default function RecordButton({
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const audioChunksRef = useRef<Blob[]>([])
   const analyserRef = useRef<AnalyserNode | null>(null)
-  const animationRef = useRef<number>(null)
+  const animationRef = useRef<number | null>(null)
+  const { impact } = useHaptics()
 
   const startRecording = async () => {
     try {
@@ -64,6 +66,7 @@ export default function RecordButton({
 
       mediaRecorderRef.current.start()
       setIsRecording(true)
+      impact('medium')
       onRecordingStart?.()
       updateAmplitude()
     } catch (error) {
@@ -76,6 +79,7 @@ export default function RecordButton({
       mediaRecorderRef.current.stop()
       setIsRecording(false)
       setAmplitude(0)
+      impact('light')
       if (animationRef.current) {
         cancelAnimationFrame(animationRef.current)
       }

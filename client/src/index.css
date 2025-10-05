@@ -76,20 +76,27 @@
   --chart-4: 32 70% 35%;
   --chart-5: 340 70% 35%;
 
-  --font-sans: Inter, Open Sans, sans-serif;
-  --font-serif: Georgia, serif;
-  --font-mono: Menlo, monospace;
-  --radius: .5rem; /* 8px */
-  --shadow-2xs: 0px 2px 0px 0px hsl(220 15% 20% / 0.02);
-  --shadow-xs: 0px 2px 0px 0px hsl(220 15% 20% / 0.03);
-  --shadow-sm: 0px 2px 0px 0px hsl(220 15% 20% / 0.02), 0px 1px 2px -1px hsl(220 15% 20% / 0.05);
-  --shadow: 0px 2px 0px 0px hsl(220 15% 20% / 0.02), 0px 1px 2px -1px hsl(220 15% 20% / 0.05);
-  --shadow-md: 0px 2px 0px 0px hsl(220 15% 20% / 0.02), 0px 2px 4px -1px hsl(220 15% 20% / 0.08);
-  --shadow-lg: 0px 2px 0px 0px hsl(220 15% 20% / 0.02), 0px 4px 6px -1px hsl(220 15% 20% / 0.10);
-  --shadow-xl: 0px 2px 0px 0px hsl(220 15% 20% / 0.02), 0px 8px 10px -1px hsl(220 15% 20% / 0.12);
-  --shadow-2xl: 0px 2px 0px 0px hsl(220 15% 20% / 0.15);
-  --tracking-normal: 0em;
-  --spacing: 0.25rem;
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", system-ui, sans-serif;
+  --font-serif: "New York", "SF Pro Rounded", Georgia, serif;
+  --font-mono: "SF Mono", Menlo, Monaco, "Courier New", monospace;
+  --radius: 0.75rem; /* 12px - iOS standard */
+  --shadow-2xs: 0px 1px 3px 0px hsl(220 15% 20% / 0.04);
+  --shadow-xs: 0px 1px 3px 0px hsl(220 15% 20% / 0.06);
+  --shadow-sm: 0px 2px 6px 0px hsl(220 15% 20% / 0.08);
+  --shadow: 0px 4px 12px 0px hsl(220 15% 20% / 0.10);
+  --shadow-md: 0px 6px 16px 0px hsl(220 15% 20% / 0.12);
+  --shadow-lg: 0px 8px 24px 0px hsl(220 15% 20% / 0.14);
+  --shadow-xl: 0px 12px 32px 0px hsl(220 15% 20% / 0.16);
+  --shadow-2xl: 0px 16px 48px 0px hsl(220 15% 20% / 0.20);
+  --tracking-normal: -0.01em;
+  --spacing: 0.5rem; /* 8pt iOS grid base */
+  --spacing-xs: 0.25rem; /* 4pt */
+  --spacing-sm: 0.5rem; /* 8pt */
+  --spacing-md: 0.75rem; /* 12pt */
+  --spacing-lg: 1rem; /* 16pt - standard margin */
+  --spacing-xl: 1.25rem; /* 20pt - larger margin */
+  --spacing-2xl: 1.5rem; /* 24pt */
+  --spacing-3xl: 2rem; /* 32pt */
 
   /* Automatically computed borders - intensity can be controlled by the user by the --opaque-button-border-intensity setting */
 
@@ -213,6 +220,31 @@
 
   body {
     @apply font-sans antialiased bg-background text-foreground;
+  }
+  
+  /* iOS Safe Area Support */
+  :root {
+    --safe-area-inset-top: env(safe-area-inset-top);
+    --safe-area-inset-right: env(safe-area-inset-right);
+    --safe-area-inset-bottom: env(safe-area-inset-bottom);
+    --safe-area-inset-left: env(safe-area-inset-left);
+  }
+  
+  /* Global safe area utilities */
+  .safe-area-pt {
+    padding-top: max(1rem, env(safe-area-inset-top));
+  }
+  
+  .safe-area-pb {
+    padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+  }
+  
+  .safe-area-pl {
+    padding-left: max(1rem, env(safe-area-inset-left));
+  }
+  
+  .safe-area-pr {
+    padding-right: max(1rem, env(safe-area-inset-right));
   }
 }
 

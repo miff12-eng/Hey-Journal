@@ -1,7 +1,7 @@
 import { Link, useLocation } from 'wouter'
-import { Button } from '@/components/ui/button'
 import { Home, Search, User, BookOpen, Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useHaptics } from '@/hooks/useHaptics'
 
 interface NavItem {
   icon: React.ComponentType<{ className?: string }>
@@ -18,32 +18,40 @@ const navItems: NavItem[] = [
 ]
 
 export default function BottomNavigation() {
-  const [location] = useLocation()
+  const [location, navigate] = useLocation()
+  const { selection } = useHaptics()
+
+  const handleTabClick = () => {
+    selection()
+  }
+
+  const handleNewEntry = () => {
+    handleTabClick()
+    navigate('/my-journal?create=true')
+  }
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-background border-t border-border safe-area-pb z-50">
-      <div className="flex items-center justify-around px-2 py-1">
+    <nav className="fixed bottom-0 left-0 right-0 bg-background/95 backdrop-blur-md border-t border-border safe-area-pb z-50">
+      <div className="flex items-center justify-around px-1 py-0">
         {/* My Journal */}
         {(() => {
           const item = navItems[0]
           const isActive = location === item.path || (item.path !== '/' && location.startsWith(item.path))
           const Icon = item.icon
           return (
-            <Link key={item.path} href={item.path}>
-              <Button
-                variant="ghost"
-                size="sm"
+            <Link key={item.path} href={item.path} onClick={handleTabClick}>
+              <button
                 className={cn(
-                  'flex flex-col items-center gap-1 h-auto py-2 px-3 rounded-lg transition-colors',
+                  'flex flex-col items-center justify-center gap-0.5 min-h-[44px] min-w-[44px] px-2 transition-colors no-default-hover-elevate no-default-active-elevate',
                   isActive 
-                    ? 'text-primary bg-primary/10' 
-                    : 'text-muted-foreground hover:text-foreground'
+                    ? 'text-primary' 
+                    : 'text-muted-foreground active:text-foreground'
                 )}
                 data-testid={item.testId}
               >
-                <Icon className={cn('h-5 w-5', isActive && 'text-primary')} />
-                <span className="text-xs font-medium">{item.label}</span>
-              </Button>
+                <Icon className={cn('h-6 w-6', isActive && 'text-primary')} />
+                <span className="text-[10px] font-medium leading-tight">{item.label}</span>
+              </button>
             </Link>
           )
         })()}
@@ -54,37 +62,32 @@ export default function BottomNavigation() {
           const isActive = location === item.path || (item.path !== '/' && location.startsWith(item.path))
           const Icon = item.icon
           return (
-            <Link key={item.path} href={item.path}>
-              <Button
-                variant="ghost"
-                size="sm"
+            <Link key={item.path} href={item.path} onClick={handleTabClick}>
+              <button
                 className={cn(
-                  'flex flex-col items-center gap-1 h-auto py-2 px-3 rounded-lg transition-colors',
+                  'flex flex-col items-center justify-center gap-0.5 min-h-[44px] min-w-[44px] px-2 transition-colors no-default-hover-elevate no-default-active-elevate',
                   isActive 
-                    ? 'text-primary bg-primary/10' 
-                    : 'text-muted-foreground hover:text-foreground'
+                    ? 'text-primary' 
+                    : 'text-muted-foreground active:text-foreground'
                 )}
                 data-testid={item.testId}
               >
-                <Icon className={cn('h-5 w-5', isActive && 'text-primary')} />
-                <span className="text-xs font-medium">{item.label}</span>
-              </Button>
+                <Icon className={cn('h-6 w-6', isActive && 'text-primary')} />
+                <span className="text-[10px] font-medium leading-tight">{item.label}</span>
+              </button>
             </Link>
           )
         })()}
         
         {/* Prominent New Entry Button */}
-        <Button
-          size="sm"
-          className="flex flex-col items-center gap-1 h-auto py-2 px-3 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 shadow-lg border-2 border-primary"
+        <button
+          className="flex flex-col items-center justify-center gap-0.5 min-h-[44px] min-w-[44px] px-2 rounded-full bg-primary text-primary-foreground active:opacity-80 transition-opacity shadow-md"
           data-testid="nav-new-entry"
-          onClick={() => {
-            window.location.href = '/my-journal?create=true'
-          }}
+          onClick={handleNewEntry}
         >
-          <Plus className="h-6 w-6" />
-          <span className="text-xs font-bold">New Entry</span>
-        </Button>
+          <Plus className="h-7 w-7" />
+          <span className="text-[10px] font-semibold leading-tight">New</span>
+        </button>
         
         {/* Search */}
         {(() => {
@@ -92,21 +95,19 @@ export default function BottomNavigation() {
           const isActive = location === item.path || (item.path !== '/' && location.startsWith(item.path))
           const Icon = item.icon
           return (
-            <Link key={item.path} href={item.path}>
-              <Button
-                variant="ghost"
-                size="sm"
+            <Link key={item.path} href={item.path} onClick={handleTabClick}>
+              <button
                 className={cn(
-                  'flex flex-col items-center gap-1 h-auto py-2 px-3 rounded-lg transition-colors',
+                  'flex flex-col items-center justify-center gap-0.5 min-h-[44px] min-w-[44px] px-2 transition-colors no-default-hover-elevate no-default-active-elevate',
                   isActive 
-                    ? 'text-primary bg-primary/10' 
-                    : 'text-muted-foreground hover:text-foreground'
+                    ? 'text-primary' 
+                    : 'text-muted-foreground active:text-foreground'
                 )}
                 data-testid={item.testId}
               >
-                <Icon className={cn('h-5 w-5', isActive && 'text-primary')} />
-                <span className="text-xs font-medium">{item.label}</span>
-              </Button>
+                <Icon className={cn('h-6 w-6', isActive && 'text-primary')} />
+                <span className="text-[10px] font-medium leading-tight">{item.label}</span>
+              </button>
             </Link>
           )
         })()}
@@ -117,38 +118,23 @@ export default function BottomNavigation() {
           const isActive = location === item.path || (item.path !== '/' && location.startsWith(item.path))
           const Icon = item.icon
           return (
-            <Link key={item.path} href={item.path}>
-              <Button
-                variant="ghost"
-                size="sm"
+            <Link key={item.path} href={item.path} onClick={handleTabClick}>
+              <button
                 className={cn(
-                  'flex flex-col items-center gap-1 h-auto py-2 px-3 rounded-lg transition-colors',
+                  'flex flex-col items-center justify-center gap-0.5 min-h-[44px] min-w-[44px] px-2 transition-colors no-default-hover-elevate no-default-active-elevate',
                   isActive 
-                    ? 'text-primary bg-primary/10' 
-                    : 'text-muted-foreground hover:text-foreground'
+                    ? 'text-primary' 
+                    : 'text-muted-foreground active:text-foreground'
                 )}
                 data-testid={item.testId}
               >
-                <Icon className={cn('h-5 w-5', isActive && 'text-primary')} />
-                <span className="text-xs font-medium">{item.label}</span>
-              </Button>
+                <Icon className={cn('h-6 w-6', isActive && 'text-primary')} />
+                <span className="text-[10px] font-medium leading-tight">{item.label}</span>
+              </button>
             </Link>
           )
         })()}
       </div>
     </nav>
   )
-}
-
-// Add safe area padding for iOS devices
-const style = `
-  .safe-area-pb {
-    padding-bottom: env(safe-area-inset-bottom);
-  }
-`
-
-if (typeof document !== 'undefined') {
-  const styleElement = document.createElement('style')
-  styleElement.textContent = style
-  document.head.appendChild(styleElement)
 }
