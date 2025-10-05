@@ -493,17 +493,28 @@ export default function Record() {
         </div>
       </header>
 
-      {/* Recording interface */}
-      <div className="px-4 py-6 bg-gradient-to-b from-background to-muted/30">
-        <div className="text-center space-y-4">
-          <h2 className="text-xl font-medium text-foreground">Voice Recording</h2>
-          <p className="text-sm text-muted-foreground max-w-sm mx-auto">
-            {isRecording ? 'Recording in progress... Speak clearly for better transcription' :
-             isTranscribing ? 'Processing your recording with AI transcription...' :
-             'Tap the button below to start recording your thoughts'}
+      {/* Recording interface - Primary CTA */}
+      <div className="px-4 py-8 bg-gradient-to-b from-primary/5 via-muted/30 to-background border-b border-primary/10">
+        <div className="text-center space-y-3">
+          <div className="inline-flex items-center justify-center gap-2 px-4 py-1.5 rounded-full bg-primary/10 text-primary text-xs font-medium mb-2">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
+            </span>
+            Start here - Record your voice
+          </div>
+          <h2 className="text-2xl font-semibold text-foreground">
+            {isRecording ? 'Recording in progress...' :
+             isTranscribing ? 'Transcribing with AI...' :
+             'Speak Your Thoughts'}
+          </h2>
+          <p className="text-sm text-muted-foreground max-w-md mx-auto leading-relaxed">
+            {isRecording ? 'Speak clearly for better transcription. Tap again to stop.' :
+             isTranscribing ? 'Processing your recording and converting to text...' :
+             'Tap to record. Your voice will be automatically transcribed and populate the "Your thoughts" field below.'}
           </p>
           
-          <div className="flex justify-center py-4">
+          <div className="flex justify-center py-6">
             <RecordButton
               onRecordingStart={handleRecordingStart}
               onRecordingStop={handleRecordingStop}
@@ -601,10 +612,21 @@ export default function Record() {
 
         {/* Content */}
         <div className="space-y-2">
-          <Label htmlFor="content" className="text-sm font-medium text-foreground">Your thoughts</Label>
+          <div className="flex items-center gap-2">
+            <Label htmlFor="content" className="text-sm font-medium text-foreground">Your thoughts</Label>
+            {(isRecording || isTranscribing) && (
+              <Badge variant="secondary" className="text-xs gap-1.5 animate-pulse">
+                <span className="relative flex h-1.5 w-1.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-primary"></span>
+                </span>
+                {isRecording ? 'Recording...' : 'Transcribing...'}
+              </Badge>
+            )}
+          </div>
           <Textarea
             id="content"
-            placeholder="Start typing or use voice recording above..."
+            placeholder="Voice recording will appear here automatically, or start typing..."
             value={content}
             onChange={(e) => setContent(e.target.value)}
             className="min-h-32 resize-none"
@@ -612,7 +634,7 @@ export default function Record() {
           />
         </div>
 
-        {/* Media upload */}
+        {/* Media upload - Moved above People section */}
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2">
