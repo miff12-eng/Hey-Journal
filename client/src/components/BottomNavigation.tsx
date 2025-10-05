@@ -42,14 +42,14 @@ export default function BottomNavigation() {
             <Link key={item.path} href={item.path} onClick={handleTabClick}>
               <button
                 className={cn(
-                  'flex flex-col items-center justify-center gap-0.5 min-h-[44px] min-w-[44px] px-2 transition-colors no-default-hover-elevate no-default-active-elevate',
+                  'flex flex-col items-center justify-center gap-0.5 min-h-[44px] min-w-[44px] px-3 py-1 rounded-lg transition-all no-default-hover-elevate no-default-active-elevate',
                   isActive 
-                    ? 'text-primary' 
+                    ? 'text-primary bg-primary/10' 
                     : 'text-muted-foreground active:text-foreground'
                 )}
                 data-testid={item.testId}
               >
-                <Icon className={cn('h-6 w-6', isActive && 'text-primary')} />
+                <Icon className={cn('h-6 w-6', isActive && 'stroke-[2.5]')} />
                 <span className="text-[10px] font-medium leading-tight">{item.label}</span>
               </button>
             </Link>
@@ -65,28 +65,27 @@ export default function BottomNavigation() {
             <Link key={item.path} href={item.path} onClick={handleTabClick}>
               <button
                 className={cn(
-                  'flex flex-col items-center justify-center gap-0.5 min-h-[44px] min-w-[44px] px-2 transition-colors no-default-hover-elevate no-default-active-elevate',
+                  'flex flex-col items-center justify-center gap-0.5 min-h-[44px] min-w-[44px] px-3 py-1 rounded-lg transition-all no-default-hover-elevate no-default-active-elevate',
                   isActive 
-                    ? 'text-primary' 
+                    ? 'text-primary bg-primary/10' 
                     : 'text-muted-foreground active:text-foreground'
                 )}
                 data-testid={item.testId}
               >
-                <Icon className={cn('h-6 w-6', isActive && 'text-primary')} />
+                <Icon className={cn('h-6 w-6', isActive && 'stroke-[2.5]')} />
                 <span className="text-[10px] font-medium leading-tight">{item.label}</span>
               </button>
             </Link>
           )
         })()}
         
-        {/* Prominent New Entry Button */}
+        {/* Prominent New Entry Button - Just Plus Icon */}
         <button
-          className="flex flex-col items-center justify-center gap-0.5 min-h-[44px] min-w-[44px] px-2 rounded-full bg-primary text-primary-foreground active:opacity-80 transition-opacity shadow-md"
+          className="flex items-center justify-center h-[44px] w-[44px] rounded-full bg-primary text-primary-foreground active:scale-95 transition-all shadow-md"
           data-testid="nav-new-entry"
           onClick={handleNewEntry}
         >
-          <Plus className="h-7 w-7" />
-          <span className="text-[10px] font-semibold leading-tight">New</span>
+          <Plus className="h-6 w-6 stroke-[2.5]" />
         </button>
         
         {/* Search */}
@@ -98,14 +97,14 @@ export default function BottomNavigation() {
             <Link key={item.path} href={item.path} onClick={handleTabClick}>
               <button
                 className={cn(
-                  'flex flex-col items-center justify-center gap-0.5 min-h-[44px] min-w-[44px] px-2 transition-colors no-default-hover-elevate no-default-active-elevate',
+                  'flex flex-col items-center justify-center gap-0.5 min-h-[44px] min-w-[44px] px-3 py-1 rounded-lg transition-all no-default-hover-elevate no-default-active-elevate',
                   isActive 
-                    ? 'text-primary' 
+                    ? 'text-primary bg-primary/10' 
                     : 'text-muted-foreground active:text-foreground'
                 )}
                 data-testid={item.testId}
               >
-                <Icon className={cn('h-6 w-6', isActive && 'text-primary')} />
+                <Icon className={cn('h-6 w-6', isActive && 'stroke-[2.5]')} />
                 <span className="text-[10px] font-medium leading-tight">{item.label}</span>
               </button>
             </Link>
@@ -121,14 +120,14 @@ export default function BottomNavigation() {
             <Link key={item.path} href={item.path} onClick={handleTabClick}>
               <button
                 className={cn(
-                  'flex flex-col items-center justify-center gap-0.5 min-h-[44px] min-w-[44px] px-2 transition-colors no-default-hover-elevate no-default-active-elevate',
+                  'flex flex-col items-center justify-center gap-0.5 min-h-[44px] min-w-[44px] px-3 py-1 rounded-lg transition-all no-default-hover-elevate no-default-active-elevate',
                   isActive 
-                    ? 'text-primary' 
+                    ? 'text-primary bg-primary/10' 
                     : 'text-muted-foreground active:text-foreground'
                 )}
                 data-testid={item.testId}
               >
-                <Icon className={cn('h-6 w-6', isActive && 'text-primary')} />
+                <Icon className={cn('h-6 w-6', isActive && 'stroke-[2.5]')} />
                 <span className="text-[10px] font-medium leading-tight">{item.label}</span>
               </button>
             </Link>
